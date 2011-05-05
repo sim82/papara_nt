@@ -1,13 +1,19 @@
+#include <ivymike/MultipleAlignment.h>
+
 #include <iostream>
 #include <vector>
+#include <deque>
+#include <map>
 
 #include "parsimony.h"
 #include "ivymike/tree_parser.h"
 #include "ivymike/time.h"
 
+typedef unsigned int parsimony_state;
+
 class my_adata : public ivy_mike::tree_parser_ms::adata {
     static int ct;
-    
+    std::vector<parsimony_state> m_pvec;
     
 public:
     int m_ct;
@@ -87,7 +93,8 @@ void traverse( lnode *n ) {
 int main() {
 //     getchar();
     //ivymike::TreeParser tp( "./RAxML_bipartitions.1604.BEST.WITH" );
-    
+    using namespace ivy_mike::tree_parser_ms;
+	
     ivy_mike::timer t;
     ivy_mike::tree_parser_ms::ln_pool pool( boost::shared_ptr<my_fact>( new my_fact ) );
     ivy_mike::tree_parser_ms::parser tp( "small.tree", pool );
@@ -99,16 +106,28 @@ int main() {
     
     traverse<ivy_mike::tree_parser_ms::lnode>( n );
     
-    std::vector<rooted_bifurcation<ivy_mike::tree_parser_ms::lnode> > trav_order;
+    std::deque<rooted_bifurcation<ivy_mike::tree_parser_ms::lnode> > trav_order;
     
-    std::cout << "traversal for branch: " << *n << " " << *(n->back) << "\n";
+    std::cout << "traversal for branch: " << *(n->m_data) << " " << *(n->back->m_data) << "\n";
     
     rooted_traveral_order( n, n->back, trav_order );
     
-    for( std::vector< rooted_bifurcation< ivy_mike::tree_parser_ms::lnode > >::iterator it = trav_order.begin(); it != trav_order.end(); ++it ) {
+    for( std::deque< rooted_bifurcation< ivy_mike::tree_parser_ms::lnode > >::iterator it = trav_order.begin(); it != trav_order.end(); ++it ) {
         std::cout << *it << "\n";
     }
     
+    typedef tip_collector<lnode> tc_t;
+	
+	tc_t tc;
+	
+	visit_lnode< tip_collector<ivy_mike::tree_parser_ms::lnode> >( n, tc );
+
+	std::map<std::string, ivy_mike::tree_parser_ms::lnode *> name_to_lnode;
+	
+	for( std::vector< ivy_mike::tree_parser_ms::lnode* >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+		std::cout << (*it)->m_data->tipName << "\n";
+		name_to_lnode[(*it)->m_data->tipName] = *it;
+	}
     
     printf( "n: %f %d\n", n->backLen, n->m_data->isTip );
     

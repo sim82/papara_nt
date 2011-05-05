@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <vector>
+#include <set>
 
 template<class lnode>
 struct rooted_bifurcation {
@@ -46,7 +48,7 @@ inline std::ostream &operator<<( std::ostream &os, const rooted_bifurcation<lnod
         break;
     }
     
-    os << tc << " " << *rb.parent << " " << *rb.child1 << " " << *rb.child2;
+    os << tc << " " << *(rb.parent->m_data) << " " << *(rb.child1->m_data) << " " << *(rb.child2->m_data);
     
 }
 
@@ -56,16 +58,16 @@ void rooted_traveral_order_rec( lnode *n, container &cont ) {
     lnode *n2 = n->next->next->back;
     
     if( n1->m_data->isTip && n2->m_data->isTip ) {
-        cont.push_back( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_TIP ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_TIP ));
 
     } else if( n1->m_data->isTip && !n2->m_data->isTip ) {
-        cont.push_back( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_INNER ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_INNER ));
         rooted_traveral_order_rec( n2, cont );
     } else if( !n1->m_data->isTip && n2->m_data->isTip ) {
-        cont.push_back( rooted_bifurcation<lnode>( n, n2, n1, rooted_bifurcation<lnode>::TIP_INNER ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n2, n1, rooted_bifurcation<lnode>::TIP_INNER ));
         rooted_traveral_order_rec( n1, cont );
     } else {
-        cont.push_back( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::INNER_INNER ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::INNER_INNER ));
         rooted_traveral_order_rec( n1, cont );
         rooted_traveral_order_rec( n2, cont );
     }
@@ -82,7 +84,7 @@ void rooted_traveral_order( lnode *n1, lnode *n2, container &cont ) {
     }
     
     
-    std::reverse( cont.begin(), cont.end());
+    //std::reverse( cont.begin(), cont.end());
 }
 
 template <class lnode>
@@ -103,5 +105,39 @@ lnode *towards_tree( lnode *n ) {
     return n;
     
 }
+
+template <class visitor>
+void visit_lnode( typename visitor::lnode *n, visitor &v, bool go_back = true ) {
+    v( n );
+    
+    if( go_back && n->back != 0 ) {
+        visit_lnode( n->back, v, false );
+    }
+    if( n->next->back != 0 ) {
+        visit_lnode( n->next->back, v, false );    
+    }
+
+    if( n->next->next->back != 0 ) {
+        visit_lnode( n->next->next->back, v, false );
+    }
+};
+
+template <class LNODE, class CONT = std::vector<LNODE *> >
+struct tip_collector {
+	typedef LNODE lnode;
+	typedef CONT container;
+	
+    //container<lnode *> m_nodes;
+  
+	container m_nodes;
+	
+public:
+    void operator()( lnode *n ) {
+        if( n->m_data->isTip ) {
+            m_nodes.push_back(n);
+        }
+    }
+};
+
 
 #endif
