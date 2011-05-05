@@ -122,11 +122,11 @@ int main() {
 	
 	visit_lnode< tip_collector<ivy_mike::tree_parser_ms::lnode> >( n, tc );
 
-	std::map<std::string, ivy_mike::tree_parser_ms::lnode *> name_to_lnode;
+	std::map<std::string, boost::shared_ptr<lnode> > name_to_lnode;
 	
 	for( std::vector< ivy_mike::tree_parser_ms::lnode* >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
 		std::cout << (*it)->m_data->tipName << "\n";
-		name_to_lnode[(*it)->m_data->tipName] = *it;
+		name_to_lnode[(*it)->m_data->tipName] = boost::shared_ptr<lnode>((*it)->get_smart_ptr());
 	}
     
     printf( "n: %f %d\n", n->backLen, n->m_data->isTip );
