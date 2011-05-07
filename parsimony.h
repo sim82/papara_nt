@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 #include <set>
+#include <boost/shared_ptr.hpp>
 
 template<class lnode>
 struct rooted_bifurcation {
@@ -20,6 +21,8 @@ struct rooted_bifurcation {
     lnode * child2;
     
     tip_case tc;
+    
+    rooted_bifurcation() : parent(0), child1(0), child2(0) {}
     
     rooted_bifurcation( lnode *p, lnode *c1, lnode *c2, tip_case t ) 
         : parent(p),
@@ -49,38 +52,55 @@ inline std::ostream &operator<<( std::ostream &os, const rooted_bifurcation<lnod
     }
     
     os << tc << " " << *(rb.parent->m_data) << " " << *(rb.child1->m_data) << " " << *(rb.child2->m_data);
-    
+    return os;
 }
 
 template <class lnode, class container>
-void rooted_traveral_order_rec( lnode *n, container &cont ) {
+void rooted_traveral_order_rec( lnode *n, container &cont, bool incremental = false ) {
     lnode *n1 = n->next->back;
     lnode *n2 = n->next->next->back;
     
+    n->towards_root = true;
+    n->next->towards_root = false;
+    n->next->next->towards_root = false;
+    
+    
+    
     if( n1->m_data->isTip && n2->m_data->isTip ) {
         cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_TIP ));
-
     } else if( n1->m_data->isTip && !n2->m_data->isTip ) {
         cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_INNER ));
-        rooted_traveral_order_rec( n2, cont );
+        
+        if( !incremental || !n2->towards_root ) {
+            rooted_traveral_order_rec( n2, cont );
+        }
     } else if( !n1->m_data->isTip && n2->m_data->isTip ) {
         cont.push_front( rooted_bifurcation<lnode>( n, n2, n1, rooted_bifurcation<lnode>::TIP_INNER ));
-        rooted_traveral_order_rec( n1, cont );
+        
+        if( !incremental || !n1->towards_root ) {
+            rooted_traveral_order_rec( n1, cont );    
+        }
+        
     } else {
         cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::INNER_INNER ));
-        rooted_traveral_order_rec( n1, cont );
-        rooted_traveral_order_rec( n2, cont );
+        
+        if( !incremental || !n1->towards_root ) {
+            rooted_traveral_order_rec( n1, cont );
+        }
+        if( !incremental || !n2->towards_root ) {
+            rooted_traveral_order_rec( n2, cont );
+        }
     }
 }
 
 template <class lnode, class container>
-void rooted_traveral_order( lnode *n1, lnode *n2, container &cont ) {
+void rooted_traveral_order( lnode *n1, lnode *n2, container &cont, bool incremental ) {
     
     if( !n1->m_data->isTip ) {
-        rooted_traveral_order_rec<lnode, container>( n1, cont );
+        rooted_traveral_order_rec<lnode, container>( n1, cont, incremental );
     }
     if( !n2->m_data->isTip ) {
-        rooted_traveral_order_rec<lnode, container>( n2, cont );
+        rooted_traveral_order_rec<lnode, container>( n2, cont, incremental );
     }
     
     
@@ -114,7 +134,7 @@ void visit_lnode( typename visitor::lnode *n, visitor &v, bool go_back = true ) 
         visit_lnode( n->back, v, false );
     }
     if( n->next->back != 0 ) {
-        visit_lnode( n->next->back, v, false );    
+        visit_lnode( n->next->back, v, false );   
     }
 
     if( n->next->next->back != 0 ) {
@@ -122,7 +142,7 @@ void visit_lnode( typename visitor::lnode *n, visitor &v, bool go_back = true ) 
     }
 };
 
-template <class LNODE, class CONT = std::vector<LNODE *> >
+template <class LNODE, class CONT = std::vector<boost::shared_ptr<LNODE> > >
 struct tip_collector {
 	typedef LNODE lnode;
 	typedef CONT container;
@@ -134,8 +154,42 @@ struct tip_collector {
 public:
     void operator()( lnode *n ) {
         if( n->m_data->isTip ) {
-            m_nodes.push_back(n);
+            m_nodes.push_back(n->get_smart_ptr().lock());
         }
+    }
+};
+
+
+template <class visitor>
+void visit_edges( typename visitor::lnode *n, visitor &v, bool go_back = true ) {
+    assert( n->back != 0 );
+    
+    v( n, n->back );
+    
+    if( go_back && n->back != 0 ) {
+        visit_edges( n->back, v, false );
+    }
+    if( n->next->back != 0 ) {
+        visit_edges( n->next->back, v, false );   
+    }
+
+    if( n->next->next->back != 0 ) {
+        visit_edges( n->next->next->back, v, false );
+    }
+};
+
+template <class LNODE>
+struct edge_collector {
+    typedef LNODE lnode;
+    
+    typedef std::pair<LNODE *, LNODE *> edge;
+    std::vector<edge> m_edges;
+    
+public:
+    void operator()( lnode *n1, lnode *n2 ) {
+//         std::cout << "edge: " << n1 << " " << n2 << "\n";
+        m_edges.push_back( edge( n1, n2 ) );
+        
     }
 };
 
