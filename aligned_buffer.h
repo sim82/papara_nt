@@ -33,21 +33,23 @@ struct aligned_buffer {
                 
     }
     
-    void resize( size_t size ) {
+    void resize( size_t ns ) {
     
-        free( m_ptr );
-
-        m_size = size;
-        int ret = posix_memalign( (void**)&m_ptr, align, byte_size() );
         
-        if( ret != 0 ) {
-            throw std::runtime_error( "posix_memalign failed" );
+        if( ns != size() ) {
+            free( m_ptr );
+            
+            m_size = ns;
+            int ret = posix_memalign( (void**)&m_ptr, align, byte_size() );
+            
+            if( ret != 0 ) {
+                throw std::runtime_error( "posix_memalign failed" );
+            }
         }
-
         
     }
     
-    size_t size() {
+    size_t size() const {
         return m_size;
     }
     
@@ -59,11 +61,11 @@ struct aligned_buffer {
         free( m_ptr );
     }
     
-    T *begin() {
+    T *begin() const {
         return m_ptr;
     }
     
-    T* end() {
+    T* end() const {
         return begin() + m_size;
     }
     
@@ -71,9 +73,22 @@ struct aligned_buffer {
         return begin() + o;
     }
     
-private:
-    aligned_buffer( const aligned_buffer &other ) {}
-    aligned_buffer &operator=( const aligned_buffer &other ) {}
+    inline T& operator[](ptrdiff_t o) {
+        return *(begin() + o);
+   }
+    
+    aligned_buffer &operator=( const aligned_buffer &other ) {
+        resize(other.size());
+        std::copy( other.begin(), other.end(), begin() );
+        
+        return *this;
+    }
+    
+    aligned_buffer( const aligned_buffer &other ) : m_ptr(0), m_size(0) {
+        resize(other.size());
+        std::copy( other.begin(), other.end(), begin() );
+    }
+        
     
 };
 

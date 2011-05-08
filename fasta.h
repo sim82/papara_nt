@@ -42,8 +42,8 @@ class mapped_file {
     size_t m_ptr;
     
     mapped_file() {}
-    mapped_file( const mapped_file &mf ) {}
-    const mapped_file &operator=(const mapped_file &other ) {}
+    mapped_file( const mapped_file &mf );
+    const mapped_file &operator=(const mapped_file &other );
 public:
     
     mapped_file( const char *name ) 
@@ -300,8 +300,8 @@ private:
         m_cmatrix.resize( asize * asize );
         
         
-        for( int i = 0; i < asize; i++ ) {
-            for( int j = 0; j < asize; j++ ) {
+        for( uint i = 0; i < asize; i++ ) {
+            for( uint j = 0; j < asize; j++ ) {
                 m_cmatrix.m_ptr[caddr(i,j)] = m_matrix[addr(m_alphabet[i], m_alphabet[j])];
             }
         }

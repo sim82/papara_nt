@@ -53,22 +53,43 @@ static inline parsimony_state dna_to_parsimony_state( uint8_t c ) {
 }
 
 
-class pvec_vanilla {
-    std::vector<parsimony_state> v;
-    
+static inline int dna_to_cgap( uint8_t c ) {
+    switch( c ) {
+    case 'A':
+    case 'a':
+    case 'C':
+    case 'c':
+    case 'G':
+    case 'g':
+    case 'T':
+    case 't':
+        return 0x0;
+        
+    default:
+        return 0x1;
+    };
+}
+
+class pvec_cgap {
+//     aligned_buffer<parsimony_state> v;
+      std::vector<parsimony_state> v;
+      std::vector<int> auxv;
+      
 public:
     void init( const std::vector<uint8_t> &seq ) {
         assert( v.size() == 0 );
         v.resize(seq.size());
+        auxv.resize( seq.size() );
         std::transform( seq.begin(), seq.end(), v.begin(), dna_to_parsimony_state );
+        std::transform( seq.begin(), seq.end(), auxv.begin(), dna_to_cgap );
     }
     
-    static void newview( pvec_vanilla &p, pvec_vanilla &c1, pvec_vanilla &c2 ) {
+    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2 ) {
         assert( c1.v.size() == c2.v.size() );
         
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
-        
+        p.auxv.resize(c1.auxv.size());
         
         for( size_t i = 0; i < c1.v.size(); i++ ) {
             parsimony_state ps = c1.v[i] & c2.v[i];
@@ -79,6 +100,21 @@ public:
             
             //p.v.push_back( ps );
             p.v[i] = ps;
+            
+            
+            int a1 = c1.auxv[i];
+            int a2 = c2.auxv[i];
+            
+            if( a1  == 1 && a2 == 1 ) {
+                p.auxv[i] = 1;
+            } else if( a1 == 1 || a2 == 1 ) {
+                p.auxv[i] = 3;
+            } else {
+                p.auxv[i] = 0;
+            }
+            
+            
+            
         
         }
     }
@@ -91,6 +127,11 @@ public:
         outv.resize( v.size() );
         
         std::copy( v.begin(), v.end(), outv.begin() );
+    }
+    
+    inline void to_aux_vec( std::vector<unsigned int> &outv ) {
+        outv.resize( v.size() );
+        std::copy( auxv.begin(), auxv.end(), outv.begin() );
     }
   
   
@@ -251,8 +292,10 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
         my_adata *p = dynamic_cast<my_adata *>( it->parent->m_data.get());
         my_adata *c1 = dynamic_cast<my_adata *>( it->child1->m_data.get());
         my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
+//         rooted_bifurcation<ivy_mike::tree_parser_ms::lnode>::tip_case tc = it->tc;
         
-        pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec() );
+        
+        pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec());
         
     }
     
@@ -264,6 +307,9 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
         my_adata *c1 = dynamic_cast<my_adata *>( n1->m_data.get());
         my_adata *c2 = dynamic_cast<my_adata *>( n2->m_data.get());
         
+//         if( c1->m_data.isTip && c2->m_data.isTip ) {
+//             
+//         }
         
         pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec() );
         
@@ -322,7 +368,7 @@ int mainx() {
     //ivymike::TreeParser tp( "./RAxML_bipartitions.1604.BEST.WITH" );
     
     
-    typedef pvec_vanilla pvec_t;
+    typedef pvec_cgap pvec_t;
 	
     typedef my_adata_gen<pvec_t> my_adata;
     
@@ -408,14 +454,16 @@ int mainx() {
     
         for( uint i = 0; i < VW; i++ ) {
             
-            int edge = j * VW + i;
+            uint edge = j * VW + i;
             if( edge < ec.m_edges.size() ) {
                 
                 
                 do_newview( root_pvec, ec.m_edges[edge].first, ec.m_edges[edge].second, true );
                 root_pvec.to_int_vec(seqlist[i]);
+                root_pvec.to_aux_vec(auxlist[i]);
                 
                 seqptrs[i] = seqlist[i].data();
+                auxptrs[i] = auxlist[i].data();
                 num_valid++;
             } else {
                 if( i < 1 ) {
@@ -423,8 +471,7 @@ int mainx() {
                 }
                 seqlist[i] = seqlist[i-1];
             }
-            auxlist[i].resize(seqlist[i].size());
-            auxptrs[i] = auxlist[i].data();
+            
         }
         
         
@@ -449,7 +496,7 @@ int mainx() {
      
     }
     
-    for( int i = 0; i < qs_names.size(); i++ ) {
+    for( uint i = 0; i < qs_names.size(); i++ ) {
         std::cout << qs_names[i] << " " << qs_bestedge[i] << " " << qs_bestscore[i] << "\n";
         
     }
