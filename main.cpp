@@ -1,13 +1,14 @@
-#include <ivymike/multiple_alignment.h>
+#include "ivymike/multiple_alignment.h"
 #include <stdexcept>
 #include <iostream>
 #include <vector>
 #include <deque>
 #include <map>
-#include <boost/foreach.hpp>
+
 #include "parsimony.h"
 #include "pars_align_vec.h"
 #include "fasta.h"
+
 
 #include "ivymike/tree_parser.h"
 #include "ivymike/time.h"
@@ -66,7 +67,7 @@ static inline int dna_to_cgap( uint8_t c ) {
         return 0x0;
         
     default:
-        return 0x1;
+        return AUX_CGAP;
     };
 }
 
@@ -84,12 +85,13 @@ public:
         std::transform( seq.begin(), seq.end(), auxv.begin(), dna_to_cgap );
     }
     
-    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2 ) {
+    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, tip_case tc ) {
         assert( c1.v.size() == c2.v.size() );
         
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
         p.auxv.resize(c1.auxv.size());
+        
         
         for( size_t i = 0; i < c1.v.size(); i++ ) {
             parsimony_state ps = c1.v[i] & c2.v[i];
@@ -101,21 +103,39 @@ public:
             //p.v.push_back( ps );
             p.v[i] = ps;
             
-            
-            int a1 = c1.auxv[i];
-            int a2 = c2.auxv[i];
-            
-            if( a1  == 1 && a2 == 1 ) {
-                p.auxv[i] = 1;
-            } else if( a1 == 1 || a2 == 1 ) {
-                p.auxv[i] = 3;
-            } else {
-                p.auxv[i] = 0;
-            }
-            
-            
-            
         
+            
+            const int a1 = c1.auxv[i];
+            const int a2 = c2.auxv[i];
+            
+            const bool cgap1 = (a1 & AUX_CGAP) != 0;
+            const bool cgap2 = (a2 & AUX_CGAP) != 0;
+            
+//             const bool open1 = (a1 & AUX_OPEN) != 0;
+//             const bool open2 = (a2 & AUX_OPEN) != 0;
+            
+            p.auxv[i] = 0;
+            
+            if( tc == TIP_TIP ) {
+                if( cgap1 && cgap2 ) {
+                    p.auxv[i] = AUX_CGAP;
+                } else if( cgap1 != cgap2 ) {
+                    p.auxv[i] = AUX_CGAP | AUX_OPEN;
+                }
+            } else if( tc == TIP_INNER ) {
+                if( cgap1 && cgap2 ) {
+                    p.auxv[i] = AUX_CGAP;
+                } else if( cgap1 != cgap2 ) {
+                    p.auxv[i] = AUX_CGAP | AUX_OPEN;
+                }
+            } else {
+                if( a1 == AUX_CGAP && a2 == AUX_CGAP ) {
+                    p.auxv[i] = AUX_CGAP;
+                } else if( a1 == AUX_CGAP || a2 == AUX_CGAP ) {
+                    p.auxv[i] = AUX_CGAP | AUX_OPEN;
+                }
+            }
+
         }
     }
     
@@ -132,6 +152,11 @@ public:
     inline void to_aux_vec( std::vector<unsigned int> &outv ) {
         outv.resize( v.size() );
         std::copy( auxv.begin(), auxv.end(), outv.begin() );
+        
+         
+//         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
+        
+        
     }
   
   
@@ -257,24 +282,24 @@ void traverse_rec( lnode *n ) {
     }
 }
 
-template<class lnode>
-void traverse( lnode *n ) {
-    n->m_data->visit();
-    
-    if( n->back != 0 ) {
-        traverse_rec(n->back);    
-    }
-    
-    if( n->next->back != 0 ) {
-        traverse_rec(n->next->back);    
-    }
-    
-    if( n->next->next->back != 0 ) {
-        traverse_rec(n->next->next->back);    
-    }
-    
-    
-}
+// template<class lnode>
+// void traverse( lnode *n ) {
+//     n->m_data->visit();
+//
+//     if( n->back != 0 ) {
+//         traverse_rec(n->back);
+//     }
+//
+//     if( n->next->back != 0 ) {
+//         traverse_rec(n->next->back);
+//     }
+//
+//     if( n->next->next->back != 0 ) {
+//         traverse_rec(n->next->next->back);
+//     }
+//
+//
+// }
 
 template<class pvec_t>
 void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
@@ -295,7 +320,7 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 //         rooted_bifurcation<ivy_mike::tree_parser_ms::lnode>::tip_case tc = it->tc;
         
         
-        pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec());
+        pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->tc);
         
     }
     
@@ -307,11 +332,18 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
         my_adata *c1 = dynamic_cast<my_adata *>( n1->m_data.get());
         my_adata *c2 = dynamic_cast<my_adata *>( n2->m_data.get());
         
-//         if( c1->m_data.isTip && c2->m_data.isTip ) {
-//             
-//         }
+//         tip_case tc;
         
-        pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec() );
+        if( c1->isTip && c2->isTip ) {
+        
+            pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), TIP_TIP );
+        } else if( c1->isTip && !c2->isTip ) {
+            pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), TIP_INNER );
+        } else if( !c1->isTip && c2->isTip ) {
+            pvec_t::newview(root_pvec, c2->get_pvec(), c1->get_pvec(), TIP_INNER );
+        } else {
+            pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), INNER_INNER );
+        }
         
         
     }
@@ -325,7 +357,7 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 }
 
 
-static void seq_to_nongappy_pvec( std::string &seq, std::vector<uint8_t> &pvec ) {
+static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t> &pvec ) {
     pvec.resize( 0 );
     
     for( uint i = 0; i < seq.size(); i++ ) {
@@ -363,9 +395,11 @@ static void seq_to_nongappy_pvec( std::string &seq, std::vector<uint8_t> &pvec )
     
 }
 
+void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq );
+
+
 int mainx() {
-//     getchar();
-    //ivymike::TreeParser tp( "./RAxML_bipartitions.1604.BEST.WITH" );
+
     
     
     typedef pvec_cgap pvec_t;
@@ -373,7 +407,7 @@ int mainx() {
     typedef my_adata_gen<pvec_t> my_adata;
     
     ivy_mike::timer t;
-    ivy_mike::tree_parser_ms::ln_pool pool( boost::shared_ptr<my_fact<my_adata> >( new my_fact<my_adata> ) );
+    ivy_mike::tree_parser_ms::ln_pool pool( sptr::shared_ptr<my_fact<my_adata> >( new my_fact<my_adata> ) );
     ivy_mike::tree_parser_ms::parser tp( "test_1604/RAxML_bestTree.ref_orig", pool );
     ivy_mike::tree_parser_ms::lnode * n = tp.parse();
     
@@ -384,35 +418,35 @@ int mainx() {
     
     
     typedef tip_collector<lnode> tc_t;
-	
-	tc_t tc;
-	
-	visit_lnode( n, tc );
-
-	std::map<std::string, boost::shared_ptr<lnode> > name_to_lnode;
-	
-	for( std::vector< boost::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-// 		std::cout << (*it)->m_data->tipName << "\n";
-		name_to_lnode[(*it)->m_data->tipName] = *it;
-	}
+    
+    tc_t tc;
+    
+    visit_lnode( n, tc );
+    
+    std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
+    
+    for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        // 		std::cout << (*it)->m_data->tipName << "\n";
+        name_to_lnode[(*it)->m_data->tipName] = *it;
+    }
     
     multiple_alignment ma;
-	ma.load_phylip( "test_1604/orig.phy.1" );
+    ma.load_phylip( "test_1604/orig.phy.1" );
     for( uint i = 0; i < ma.names.size(); i++ ) {
-		
-		
-		boost::shared_ptr< lnode > ln = name_to_lnode[ma.names[i]];
-// 		adata *ad = ln->m_data.get();
+        
+        
+        sptr::shared_ptr< lnode > ln = name_to_lnode[ma.names[i]];
+        // 		adata *ad = ln->m_data.get();
         
         assert( typeid(*ln->m_data.get()) == typeid(my_adata ) );
-		my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
-		
-		adata->init_pvec( ma.data[i] );
-
-	}
+        my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
+        
+        adata->init_pvec( ma.data[i] );
+        
+    }
     
     
-//     traverse( n );
+    //     traverse( n );
     
     edge_collector<lnode> ec;
     visit_edges( n, ec );
@@ -425,7 +459,7 @@ int mainx() {
     
     mapped_file qsf( "test_1604/qs.fa" );
     std::vector<std::string> qs_names;
-    std::vector<std::string> qs_seqs;
+    std::vector<std::vector<uint8_t> > qs_seqs;
     
     std::vector<std::vector <uint8_t> > qs_nongappy;
     
@@ -433,6 +467,9 @@ int mainx() {
     
     
     read_fasta( qsf, qs_names, qs_seqs);
+    
+    
+    
     qs_nongappy.resize( qs_names.size() );
     std::vector <int> qs_bestscore(qs_names.size());
     std::fill( qs_bestscore.begin(), qs_bestscore.end(), 32000);
@@ -502,38 +539,7 @@ int mainx() {
     }
     
     
-    
-    
-
-//     do_newview( n, n->back, false );
-//     
-//     
-//     std::cout << "new traversal\n";
-//     do_newview( n->next->next, n->next->next->back, true );
-    
-    
-    
-    
-#if 0    
-    printf( "n: %f %d\n", n->backLen, n->m_data->isTip );
-    
-    assert( n->next->back != 0 && n->next->next->back != 0 );
-    
-    n->next->back->back = n->next->next->back;
-    n->next->next->back->back = n->next->back;
-    n = n->next->back;
-    
-    
-    {
-        ivy_mike::timer t2;
-        pool.clear();
-        pool.mark(n);
-        pool.sweep();
-        
-        std::cout << t2.elapsed() << std::endl;
-    }
-    
-#endif    
+  
     {
         ivy_mike::timer t2;
         pool.clear();

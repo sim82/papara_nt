@@ -12,6 +12,9 @@
  *  for more details.
  */
 
+#ifndef __fasta_h
+#define __fasta_h
+
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -24,6 +27,7 @@
 #include <cstdlib>
 #include <cstddef>
 #include <stdexcept>
+#include <sstream>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -31,6 +35,63 @@
 #include <fcntl.h>
 #include "aligned_buffer.h"
 
+// template<class T>
+// struct aligned_buffer {
+//     T* m_ptr;
+//     size_t m_size;
+//     const static size_t align = 32;
+//     
+//     aligned_buffer() : m_ptr(0), m_size(0) {}
+//     
+//     aligned_buffer( size_t size ) : m_ptr(0), m_size(0) {
+//          
+//         resize( size );
+//                 
+//     }
+//     
+//     void resize( size_t size ) {
+//     
+//         free( m_ptr );
+// 
+//         m_size = size;
+//         int ret = posix_memalign( (void**)&m_ptr, align, byte_size() );
+//         
+//         if( ret != 0 ) {
+//             throw std::runtime_error( "posix_memalign failed" );
+//         }
+// 
+//         
+//     }
+//     
+//     size_t size() {
+//         return m_size;
+//     }
+//     
+//     size_t byte_size() {
+//         return m_size * sizeof(T);
+//     }
+//     
+//     ~aligned_buffer() {
+//         free( m_ptr );
+//     }
+//     
+//     T *begin() {
+//         return m_ptr;
+//     }
+//     
+//     T* end() {
+//         return begin() + m_size;
+//     }
+//     
+//     inline T* operator() (ptrdiff_t o) {
+//         return begin() + o;
+//     }
+//     
+// private:
+//     aligned_buffer( const aligned_buffer &other ) {}
+//     aligned_buffer &operator=( const aligned_buffer &other ) {}
+//     
+// };
 
 
 
@@ -126,14 +187,14 @@ static inline bool xisspace( int c ) {
 }
 
 template<class input>
-static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::string> &data ) {
+static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
  
 //     std::vector<char> linebuf;//1024 * 1024); // uhm, this is ugly...
     //std::string linebuf;
     
     names.clear();
     data.clear();
-    std::string *data_accum = 0;
+    std::vector<uint8_t> *data_accum = 0;
     
     while( is.good() && !is.eof() ) {
     
@@ -165,7 +226,7 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
         
 //             std::cout << "name: " << names.back() << std::endl;
             
-            data.push_back( std::string() );
+            data.push_back( std::vector<uint8_t>() );
             //data_accum = &data.back();
             data_accum = &data.back();
         } else {
@@ -212,7 +273,7 @@ public:
         m_input.seekg(0);   
     }
     
-    bool next_seq( std::string &name, std::vector<char> &seq ) {
+    bool next_seq( std::string &name, std::vector<uint8_t> &seq ) {
         while( !m_input.eof() && m_input.get() != '>' ) {}
 
         if( m_input.eof() ) {
@@ -282,7 +343,9 @@ private:
     
     const static size_t MAX_SIZE = 256;
     
-    aligned_buffer<score_t> m_cmatrix;
+    aligned_buffer<char> m_cmatrix;
+    size_t m_cmatrixsize;
+    
     //std::vector<score_t> m_cmatrix;
     std::vector<score_t> m_matrix;
     std::vector<int> m_backmap;
@@ -292,22 +355,64 @@ private:
     }
     
     size_t caddr( int a, int b ) {
-        return a + b * m_alphabet.size();
+        return a + b * m_cmatrixsize;
     }
     
     void compress() {
+        
+        
+        
+        // the cmatrix is always at least one column/row larger than the number of state. The last row/column is for a 'zero-state'
+        // which returns a score of 0 agains all states, to make qprofile padding easier.
         const size_t asize = m_alphabet.size();
-        m_cmatrix.resize( asize * asize );
+        
+        // the pysical dimension of the cmatrix are different from the alphabet size, for better cache-line alignment.
+        // 32 should give good alignment on current hardware (two cachelines per row?)
+        //m_cmatrixsize = asize+1;
+        m_cmatrixsize = 32;
+        if( m_cmatrixsize < asize + 1 ) {
+            // the current standard of 32ytes is large enough for protein sequences
+            throw std::runtime_error( "m_cmatrixsize < asize. alphabet too large." );
+            
+        }
         
         
-        for( uint i = 0; i < asize; i++ ) {
-            for( uint j = 0; j < asize; j++ ) {
+        //const size_t asize = m_alphabet.size() + 1;
+        m_cmatrix.resize( m_cmatrixsize * m_cmatrixsize );
+        std::fill( m_cmatrix.begin(), m_cmatrix.end(), 0 );
+        std::cout << "cmatrix: " << m_cmatrix.size() << " " << m_cmatrixsize << "\n";
+        for( size_t i = 0; i < asize; i++ ) {
+            for( size_t j = 0; j < asize; j++ ) {
+                
                 m_cmatrix.m_ptr[caddr(i,j)] = m_matrix[addr(m_alphabet[i], m_alphabet[j])];
+                
             }
         }
     }
 public:
-    inline size_t num_states() {
+    template<typename cont>
+    class valid_state_appender {
+        cont &m_cont;
+        scoring_matrix &m_sm;
+    public:
+        valid_state_appender<cont>( scoring_matrix &sm, cont &container ) : m_cont(container), m_sm(sm) {
+            
+        }
+        
+        inline void operator()( int c ) {
+            if( c >= 0 && c < scoring_matrix::MAX_SIZE ) {
+                if( m_sm.m_backmap[c] != -1 ) {
+                    m_cont.push_back( m_sm.m_backmap[c] );
+//                     std::cout << int(m_cont.back()) << "\n";
+                }
+            }
+        }
+        
+       
+        
+    };
+    
+    inline size_t num_states() const {
         return m_alphabet.size();
         
     }
@@ -317,6 +422,21 @@ public:
     }
 
     inline int state_backmap( int s ) {
+        if( s < 0 || size_t(s) >= MAX_SIZE ) {
+            throw std::runtime_error( "sequence character out of bounds" );
+        }
+        
+        if( m_backmap[s] == -1 ) {
+            std::stringstream ss;
+            ss << "invalid sequence character " << int(s);
+            
+            if( std::isprint(s) ) {
+                ss << "(" << char(s) << ")"; 
+            }
+            
+            throw std::runtime_error( ss.str() );
+        }
+        
         return m_backmap[s];
     }
 
@@ -329,10 +449,51 @@ public:
         return &m_matrix[a * MAX_SIZE];
     }
     
-    inline score_t *get_cslice( int a ) {
-        //return &m_cmatrix[a * m_alphabet.size()];
-        return m_cmatrix(a * m_alphabet.size());
+    inline int get_zero_state() const {
+        return m_alphabet.size();
     }
+    
+    inline char *get_cslice( int a ) const {
+        //return &m_cmatrix[a * m_alphabet.size()];
+        return m_cmatrix(a * m_cmatrixsize);
+    }
+    
+    scoring_matrix( int match, int mismatch )
+        : m_matrix( MAX_SIZE * MAX_SIZE ),
+            m_backmap(MAX_SIZE)
+    {
+                
+        std::fill(m_backmap.begin(), m_backmap.end(), -1);
+        
+        char *acgt = "ACGT";
+        
+        for( int i = 0; i < 4; i++ ) {
+            const char ci = acgt[i];
+            m_backmap[ci] = m_alphabet.size();
+            m_alphabet.push_back(ci);
+            
+            
+            for( int j = 0; j < 4; j++ ) {
+                const char cj = acgt[j];
+                
+                int score;
+                if( i == j ) {
+                    score = match;
+                } else {
+                    score = mismatch;
+                }
+                
+                m_matrix[addr( ci, cj )] = score;
+                m_matrix[addr( cj, ci )] = score;
+                
+            }
+            
+        }
+        
+        compress();
+    
+    }
+    
     
     scoring_matrix( std::istream &is ) 
         : m_matrix( MAX_SIZE * MAX_SIZE ),
@@ -343,7 +504,7 @@ public:
         std::vector<char> linebuf;
         
         bool have_firstline = false;
-        size_t mline = 0;
+//         size_t mline = 0;
         while( is.good() && !is.eof() ) {
             
             char c;
@@ -406,7 +567,7 @@ public:
                 }
             }
         }
-     
+        
         compress();
 //         for( size_t i = 0; i < m_alphabet.size(); i++ ) {
 //             for( size_t j = 0; j < m_alphabet.size(); j++ ) {
@@ -418,4 +579,11 @@ public:
 //         }
      
     }
+    
+    inline int operator()( int c ) {
+        return state_backmap(c);
+    }
 };
+
+
+#endif

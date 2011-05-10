@@ -5,16 +5,32 @@
 #include <stdexcept>
 #include <vector>
 #include <set>
+#include <cassert>
+
+#if 0
 #include <boost/shared_ptr.hpp>
+
+namespace sptr = boost;
+#else
+#include <tr1/memory>
+namespace sptr = std::tr1;
+#endif
+
+enum tip_case {
+    TIP_TIP,
+    TIP_INNER,
+    INNER_INNER
+    
+};
+
+enum aux_data {
+    AUX_CGAP = 0x1,
+    AUX_OPEN = 0x2
+};
 
 template<class lnode>
 struct rooted_bifurcation {
-    enum tip_case {
-        TIP_TIP,
-        TIP_INNER,
-        INNER_INNER
-        
-    };
+    
     
     lnode * parent;
     lnode * child1;
@@ -38,15 +54,15 @@ inline std::ostream &operator<<( std::ostream &os, const rooted_bifurcation<lnod
     const char *tc;
     
     switch( rb.tc ) {
-    case rooted_bifurcation<lnode>::TIP_TIP:
+    case TIP_TIP:
         tc = "TIP_TIP";
         break;
         
-    case rooted_bifurcation<lnode>::TIP_INNER:
+    case TIP_INNER:
         tc = "TIP_INNER";
         break;
         
-        case rooted_bifurcation<lnode>::INNER_INNER:
+        case INNER_INNER:
         tc = "INNER_INNER";
         break;
     }
@@ -67,22 +83,22 @@ void rooted_traveral_order_rec( lnode *n, container &cont, bool incremental = fa
     
     
     if( n1->m_data->isTip && n2->m_data->isTip ) {
-        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_TIP ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, TIP_TIP ));
     } else if( n1->m_data->isTip && !n2->m_data->isTip ) {
-        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::TIP_INNER ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, TIP_INNER ));
         
         if( !incremental || !n2->towards_root ) {
             rooted_traveral_order_rec( n2, cont );
         }
     } else if( !n1->m_data->isTip && n2->m_data->isTip ) {
-        cont.push_front( rooted_bifurcation<lnode>( n, n2, n1, rooted_bifurcation<lnode>::TIP_INNER ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n2, n1, TIP_INNER ));
         
         if( !incremental || !n1->towards_root ) {
             rooted_traveral_order_rec( n1, cont );    
         }
         
     } else {
-        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, rooted_bifurcation<lnode>::INNER_INNER ));
+        cont.push_front( rooted_bifurcation<lnode>( n, n1, n2, INNER_INNER ));
         
         if( !incremental || !n1->towards_root ) {
             rooted_traveral_order_rec( n1, cont );
@@ -142,7 +158,7 @@ void visit_lnode( typename visitor::lnode *n, visitor &v, bool go_back = true ) 
     }
 };
 
-template <class LNODE, class CONT = std::vector<boost::shared_ptr<LNODE> > >
+template <class LNODE, class CONT = std::vector<sptr::shared_ptr<LNODE> > >
 struct tip_collector {
 	typedef LNODE lnode;
 	typedef CONT container;

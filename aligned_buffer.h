@@ -69,7 +69,7 @@ struct aligned_buffer {
         return begin() + m_size;
     }
     
-    inline T* operator() (ptrdiff_t o) {
+    inline T* operator() (ptrdiff_t o) const {
         return begin() + o;
     }
     
