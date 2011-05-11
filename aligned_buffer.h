@@ -25,6 +25,37 @@ struct aligned_buffer {
     size_t m_size;
     const static size_t align = 32;
     
+#ifndef WIN32
+	struct allocator_posix {
+		static inline void *alloc( size_t align, size_t size ) {
+			void *ptr;
+			int ret = posix_memalign( (void**)&ptr, align, byte_size() );
+            
+            if( ret != 0 ) {
+                throw std::runtime_error( "posix_memalign failed" );
+            }
+			return ptr;
+		}
+
+		static inline void free( void *ptr ) {
+			free( ptr );
+		}
+	};
+	typedef allocator_posix allocator;
+#endif
+#ifdef WIN32
+	struct allocator_ugly {
+		static inline void *alloc( size_t align, size_t size ) {
+			return _aligned_malloc( size, align );
+		}
+
+		static inline void free( void *ptr ) {
+			_aligned_free(ptr);
+		}
+	};
+	typedef allocator_ugly allocator;
+#endif
+
     aligned_buffer() : m_ptr(0), m_size(0) {}
     
     aligned_buffer( size_t size ) : m_ptr(0), m_size(0) {
@@ -37,14 +68,12 @@ struct aligned_buffer {
     
         
         if( ns != size() ) {
-            free( m_ptr );
+            allocator::free( m_ptr );
             
             m_size = ns;
-            int ret = posix_memalign( (void**)&m_ptr, align, byte_size() );
+			m_ptr = (T*)allocator::alloc( align, byte_size() );
+
             
-            if( ret != 0 ) {
-                throw std::runtime_error( "posix_memalign failed" );
-            }
         }
         
     }
@@ -58,7 +87,7 @@ struct aligned_buffer {
     }
     
     ~aligned_buffer() {
-        free( m_ptr );
+        allocator::free( m_ptr );
     }
     
     T *begin() const {

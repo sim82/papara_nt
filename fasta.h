@@ -17,6 +17,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -31,7 +32,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
+
 #include <fcntl.h>
 #include "aligned_buffer.h"
 
@@ -92,8 +93,8 @@
 //     aligned_buffer &operator=( const aligned_buffer &other ) {}
 //     
 // };
-
-
+#ifndef WIN32
+#include <sys/mman.h>
 
 class mapped_file {
     int m_fd;
@@ -167,7 +168,7 @@ public:
         
     }
 };
-
+#endif
 
 template<class input>
 static inline void get_line( input &is, std::vector<char> &linebuf ) {

@@ -71,7 +71,7 @@ private:
     const size_t m_nb;
     
     const int **m_seqlist_a;
-    const uint **m_auxlist_a;
+    const unsigned int **m_auxlist_a;
     const unsigned char *m_seq_b;
     
     

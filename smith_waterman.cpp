@@ -117,8 +117,8 @@ int main( int argc, char *argv[] ) {
     seqs sq;
     seqs sd;
     
-    typedef mapped_file file_input;
-    
+   // typedef mapped_file file_input;
+    typedef std::ifstream file_input;
     
     if( argc != 6 ) {
      

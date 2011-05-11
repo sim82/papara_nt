@@ -360,7 +360,7 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t> &pvec ) {
     pvec.resize( 0 );
     
-    for( uint i = 0; i < seq.size(); i++ ) {
+    for( unsigned int i = 0; i < seq.size(); i++ ) {
         uint8_t ps;
         
         switch( seq[i] ) {
@@ -432,7 +432,7 @@ int mainx() {
     
     multiple_alignment ma;
     ma.load_phylip( "test_1604/orig.phy.1" );
-    for( uint i = 0; i < ma.names.size(); i++ ) {
+    for( unsigned int i = 0; i < ma.names.size(); i++ ) {
         
         
         sptr::shared_ptr< lnode > ln = name_to_lnode[ma.names[i]];
@@ -457,7 +457,8 @@ int mainx() {
     m_parsvecs.resize( ec.m_edges.size() );
     
     
-    mapped_file qsf( "test_1604/qs.fa" );
+//    mapped_file qsf( "test_1604/qs.fa" );
+	std::ifstream qsf( "test_1604/qs.fa" );
     std::vector<std::string> qs_names;
     std::vector<std::vector<uint8_t> > qs_seqs;
     
@@ -489,9 +490,9 @@ int mainx() {
     for ( int j = 0; j < n_groups; j++ ) {
         int num_valid = 0;
     
-        for( uint i = 0; i < VW; i++ ) {
+        for( unsigned int i = 0; i < VW; i++ ) {
             
-            uint edge = j * VW + i;
+            unsigned int edge = j * VW + i;
             if( edge < ec.m_edges.size() ) {
                 
                 
@@ -513,7 +514,7 @@ int mainx() {
         
         
         
-        for( uint i = 0; i < qs_names.size(); i++ ) {
+        for( unsigned int i = 0; i < qs_names.size(); i++ ) {
             if( qs_nongappy[i].size() == 0 ) {
                 seq_to_nongappy_pvec( qs_seqs[i], qs_nongappy[i] );    
             }
@@ -533,7 +534,7 @@ int mainx() {
      
     }
     
-    for( uint i = 0; i < qs_names.size(); i++ ) {
+    for( unsigned int i = 0; i < qs_names.size(); i++ ) {
         std::cout << qs_names[i] << " " << qs_bestedge[i] << " " << qs_bestscore[i] << "\n";
         
     }

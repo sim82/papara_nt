@@ -2,6 +2,7 @@
 #include <deque>
 #include <boost/bind.hpp>
 #include "align_vec.h"
+#define BOOST_LIB_DIAGNOSTIC
 #include <boost/thread.hpp>
 #include "ivymike/time.h"
 
@@ -198,7 +199,7 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw ) {
     
     scoring_matrix sm( 3, 0 );
     std::vector< std::vector<uint8_t> > seq( seq_raw.size() );
-//     seq.resize(400);
+    seq.resize(400);
     for( int i = 0; i < seq.size(); i++ ) {
         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
     }
@@ -244,7 +245,7 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw ) {
             
             have_input = (i_seq1 != seq.size());
 //             have_input = i_seq1 < 30;
-            std::cout << "have_input " << have_input << " " << seq.size() << "\n";
+           // std::cout << "have_input " << have_input << " " << seq.size() << "\n";
             
             
             

@@ -311,11 +311,11 @@ struct vector_unit<unsigned char, 16> {
         }
         //std::cout << "store to: " << addr << "\n";
         
-        _mm_store_ps( (float*)addr, (__m128)v );
+        _mm_store_si128( (__m128i*)addr, v );
     }
     
     static inline const vec_t load( T* addr ) {
-        return (vec_t)_mm_load_ps( (float *) addr );
+        return (vec_t)_mm_load_si128( (__m128i *) addr );
     }
     
     static inline const vec_t bit_and( const vec_t &a, const vec_t &b ) {

@@ -7,7 +7,7 @@
 #include <set>
 #include <cassert>
 
-#if 0
+#if WIN32
 #include <boost/shared_ptr.hpp>
 
 namespace sptr = boost;
