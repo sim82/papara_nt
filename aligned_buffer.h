@@ -29,7 +29,7 @@ struct aligned_buffer {
 	struct allocator_posix {
 		static inline void *alloc( size_t align, size_t size ) {
 			void *ptr;
-			int ret = posix_memalign( (void**)&ptr, align, byte_size() );
+			int ret = posix_memalign( (void**)&ptr, align, size );
             
             if( ret != 0 ) {
                 throw std::runtime_error( "posix_memalign failed" );
@@ -38,7 +38,7 @@ struct aligned_buffer {
 		}
 
 		static inline void free( void *ptr ) {
-			free( ptr );
+			std::free( ptr );
 		}
 	};
 	typedef allocator_posix allocator;

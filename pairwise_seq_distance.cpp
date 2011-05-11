@@ -199,7 +199,7 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
     
     
     std::vector< std::vector<uint8_t> > seq( seq_raw.size() );
-   // seq.resize(400);
+    seq.resize(400);
     for( int i = 0; i < seq.size(); i++ ) {
         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
     }
@@ -301,6 +301,8 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
     
     while( tg.size() < n_thread ) {
         lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq, gap_open, gap_extend );
+        
+        std::cout << "thread " << tg.size() << "\n";
         
         tg.create_thread( lw );
     }

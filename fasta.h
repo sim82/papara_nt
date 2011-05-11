@@ -225,7 +225,7 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
             }
             
         
-//             std::cout << "name: " << names.back() << std::endl;
+            std::cout << "name: " << names.back() << std::endl;
             
             data.push_back( std::vector<uint8_t>() );
             //data_accum = &data.back();
@@ -237,17 +237,23 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
             }
             
             while( xisspace( is.get() )) {}
-         
-            is.unget();
             
-            while( true ) {
-                c = is.get();
+            if( !is.eof() ) {
                 
-                if( xisspace(c) || is.eof() ) {
-                    break;   
+                is.unget();
+                
+                while( true ) {
+                    c = is.get();
+                    
+                    if( c == -1 ) {
+                        std::cout << " c:" << int(c) << " " << is.eof() ;
+                    }
+                    if( xisspace(c) || is.eof() ) {
+                        break;   
+                    }
+                    data_accum->push_back(c); 
+                    
                 }
-                data_accum->push_back(c); 
-                
             }
        }
     }
