@@ -45,7 +45,7 @@ struct lworker {
     const int m_nthreads;
     const int m_rank;
     
-    lworker( int nthreads, int rank, block_queue<block_t>&q, scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_ ) 
+    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_ ) 
     : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq(seq_), gap_open(gap_open_), gap_extend(gap_extend_) {}
     
     void operator()() {
@@ -181,7 +181,7 @@ struct lworker {
     }
 };
 
-void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw ) {
+void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm ) {
  #if 1
     const int W = 8;
     typedef short score_t;
@@ -197,9 +197,9 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw ) {
 
     ivy_mike::timer t1;
     
-    scoring_matrix sm( 3, 0 );
+    
     std::vector< std::vector<uint8_t> > seq( seq_raw.size() );
-    seq.resize(400);
+   // seq.resize(400);
     for( int i = 0; i < seq.size(); i++ ) {
         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
     }

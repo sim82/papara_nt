@@ -8,7 +8,7 @@
 
 
 
-void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw );
+void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm );
 
 int main() {
     //mapped_file qsf( "test_1604/1604.fa" );
@@ -22,7 +22,7 @@ int main() {
     
     
     read_fasta( qsf, qs_names, qs_seqs);
-    
-    pairwise_seq_distance(qs_seqs);
+    scoring_matrix sm( 3, 0 );
+    pairwise_seq_distance(qs_seqs, sm);
     
 }

@@ -394,9 +394,9 @@ public:
     template<typename cont>
     class valid_state_appender {
         cont &m_cont;
-        scoring_matrix &m_sm;
+        const scoring_matrix &m_sm;
     public:
-        valid_state_appender<cont>( scoring_matrix &sm, cont &container ) : m_cont(container), m_sm(sm) {
+        valid_state_appender<cont>( const scoring_matrix &sm, cont &container ) : m_cont(container), m_sm(sm) {
             
         }
         
@@ -422,7 +422,7 @@ public:
         return m_alphabet[i];
     }
 
-    inline int state_backmap( int s ) {
+    inline int state_backmap( int s ) const {
         if( s < 0 || size_t(s) >= MAX_SIZE ) {
             throw std::runtime_error( "sequence character out of bounds" );
         }
@@ -581,7 +581,7 @@ public:
      
     }
     
-    inline int operator()( int c ) {
+    inline int operator()( int c ) const {
         return state_backmap(c);
     }
 };
