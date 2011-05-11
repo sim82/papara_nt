@@ -225,7 +225,7 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
             }
             
         
-            std::cout << "name: " << names.back() << std::endl;
+//             std::cout << "name: " << names.back() << std::endl;
             
             data.push_back( std::vector<uint8_t>() );
             //data_accum = &data.back();
@@ -387,7 +387,7 @@ private:
         //const size_t asize = m_alphabet.size() + 1;
         m_cmatrix.resize( m_cmatrixsize * m_cmatrixsize );
         std::fill( m_cmatrix.begin(), m_cmatrix.end(), 0 );
-        std::cout << "cmatrix: " << m_cmatrix.size() << " " << m_cmatrixsize << "\n";
+        std::cerr << "cmatrix: " << m_cmatrix.size() << " " << m_cmatrixsize << "\n";
         for( size_t i = 0; i < asize; i++ ) {
             for( size_t j = 0; j < asize; j++ ) {
                 
@@ -472,7 +472,7 @@ public:
                 
         std::fill(m_backmap.begin(), m_backmap.end(), -1);
         
-        char *acgt = "ACGT";
+        const char *acgt = "ACGT";
         
         for( int i = 0; i < 4; i++ ) {
             const char ci = acgt[i];

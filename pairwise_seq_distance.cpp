@@ -4,8 +4,9 @@
 #include "align_vec.h"
 #define BOOST_LIB_DIAGNOSTIC
 #include <boost/thread.hpp>
+#include <boost/multi_array.hpp>
 #include "ivymike/time.h"
-
+#include "ivymike/write_png.h"
 
 template <size_t W, typename seq_char_t>
 struct db_block {
@@ -45,8 +46,10 @@ struct lworker {
     const int m_nthreads;
     const int m_rank;
     
-    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_ ) 
-    : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq(seq_), gap_open(gap_open_), gap_extend(gap_extend_) {}
+    boost::multi_array<int,2> &m_outscore;
+    
+    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_, boost::multi_array<int,2>&outscore ) 
+    : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq(seq_), gap_open(gap_open_), gap_extend(gap_extend_), m_outscore(outscore) {}
     
     void operator()() {
         
@@ -85,7 +88,7 @@ struct lworker {
             
             
             //         std::cout << "sdis: " << sdi.size() << "\n";
-            std::cout << "asize: " << m_sm.num_states() << " " << block.maxlen << std::endl;
+//             std::cout << "asize: " << m_sm.num_states() << " " << block.maxlen << std::endl;
             aligned_buffer<sscore_t> qprofile( block.maxlen * W * m_sm.num_states());
             sscore_t *qpi = qprofile.begin();
             
@@ -153,9 +156,9 @@ struct lworker {
                 
                 for ( int j = 0; j <= block.lj; j++ ) {
                     //                 std::cout << out[j] << "\t" << dname[j] << " " << qname << " " << ddata[j].size() << "\n";
-//                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
-                    
-             
+                    //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
+                    m_outscore[block.didx[j]][i_seq2] = out[j];
+                   
                 }
                 
                 
@@ -173,7 +176,7 @@ struct lworker {
         }
         
         {
-            std::cout << n_qchar << " x " << n_dchar << "\n";
+            std::cerr << n_qchar << " x " << n_dchar << "\n";
             boost::lock_guard<boost::mutex> lock( m_queue.m_mtx );
             m_queue.m_ncup += n_qchar * n_dchar;
         }
@@ -181,7 +184,7 @@ struct lworker {
     }
 };
 
-void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm ) {
+void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
  #if 1
     const int W = 8;
     typedef short score_t;
@@ -199,13 +202,13 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
     
     
     std::vector< std::vector<uint8_t> > seq( seq_raw.size() );
-    seq.resize(400);
+//     seq.resize(400);
     for( int i = 0; i < seq.size(); i++ ) {
         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
     }
     
-    const sscore_t gap_open = -5;
-    const sscore_t gap_extend = -2;
+//     const sscore_t gap_open = -5;
+//     const sscore_t gap_extend = -2;
     
     typedef uint8_t seq_char_t;
     
@@ -292,17 +295,18 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
     
     
     
-    
+    boost::multi_array<int,2> out_scores;
+    out_scores.resize( boost::extents[seq.size()][seq.size()] );
     
         
-    const size_t n_thread = 4;
+    
     
     boost::thread_group tg;
     
     while( tg.size() < n_thread ) {
-        lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq, gap_open, gap_extend );
+        lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq, gap_open, gap_extend, out_scores );
         
-        std::cout << "thread " << tg.size() << "\n";
+        std::cerr << "thread " << tg.size() << "\n";
         
         tg.create_thread( lw );
     }
@@ -310,6 +314,15 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
     tg.join_all();
     
     
-    std::cout << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
+    std::cerr << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
     
+    
+//     for( int i = 0; i < seq.size(); i++ ) {
+//         for( int j = 0; j < seq.size(); j++ ) {
+//             std::cout << out_scores[i][j] << "\t";
+//         }
+//         std::cout << "\n";
+//     }
+    
+    ivy_mike::write_png( out_scores, std::cout );
 }
