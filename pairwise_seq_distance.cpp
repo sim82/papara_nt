@@ -73,7 +73,7 @@ struct lworker {
 //         
 //         
 //             block_t block = m_queue.m_blocks[i];
-        
+        size_t ncups = 0;
         while(true) {
             block_t block;
             {
@@ -140,9 +140,10 @@ struct lworker {
             
             std::vector<int> out(W);
             
+            const size_t i_max = block.didx[block.lj];
+//             const size_t i_max = m_seq.size() - 1;
             
-            
-            for ( size_t i_seq2 = 0; i_seq2 < m_seq.size(); ++i_seq2 ) {
+            for ( size_t i_seq2 = 0; i_seq2 <= i_max; ++i_seq2 ) {
                 const std::vector<uint8_t> &qdata = m_seq[i_seq2];
                 
                 if ( first_block ) {
@@ -154,11 +155,14 @@ struct lworker {
                 
                 align_vec<score_t,sscore_t,W>( ps, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
                 
+                
+                
                 for ( int j = 0; j <= block.lj; j++ ) {
                     //                 std::cout << out[j] << "\t" << dname[j] << " " << qname << " " << ddata[j].size() << "\n";
                     //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
-                    m_outscore[block.didx[j]][i_seq2] = out[j];
-                   
+//                     m_outscore[block.didx[j]][i_seq2] = out[j];
+                    m_outscore[i_seq2][block.didx[j]] = out[j];
+                    ncups += m_seq[i_seq2].size() * m_seq[block.didx[j]].size();
                 }
                 
                 
@@ -178,13 +182,40 @@ struct lworker {
         {
             std::cerr << n_qchar << " x " << n_dchar << "\n";
             boost::lock_guard<boost::mutex> lock( m_queue.m_mtx );
-            m_queue.m_ncup += n_qchar * n_dchar;
+            m_queue.m_ncup += ncups;
         }
         
     }
 };
 
-void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
+void write_phylip_distmatrix( const boost::multi_array<int,2> &ma, const std::vector<std::string> &names, std::ostream &os ) {
+    if( names.size() != ma.size() || ma.size() != ma[0].size() ) {
+        throw std::runtime_error( "distance matrix seems fishy" );
+    }
+    os << ma.size() << "\n";
+    os << std::setiosflags(std::ios::fixed) << std::setprecision(4);
+    for( int i = 0; i < ma.size(); i++ ) {
+        os << names[i] << "\t";
+        for( int j = 0; j < ma.size(); j++ ) {
+            const float norm = std::max( ma[i][i], ma[j][j] );
+            
+            int mae;
+            if( i <= j ) {
+                mae = ma[i][j];
+            } else {
+                mae = ma[j][i];
+            }
+            
+            const float dist = 1.0 - (mae / norm);
+            
+            os << dist << "\t";
+        }
+        os << "\n";
+    }
+}
+
+
+void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
  #if 1
     const int W = 8;
     typedef short score_t;
@@ -245,8 +276,8 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
         for( int j = 0; j < W; j++ ) {
 //             dname[j].resize(0);
             //ddata[j].resize(0);
-            
-            have_input = (i_seq1 != seq.size());
+//             have_input = (i_seq1 != seq.size());                       
+           have_input = (i_seq1 != seq.size());
 //             have_input = i_seq1 < 30;
            // std::cout << "have_input " << have_input << " " << seq.size() << "\n";
             
@@ -287,8 +318,11 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
         if( block.lj == -1 ) {
             break;
         }
+       
         blocks.push_back(block);
     }
+    
+    std::cerr << "blocks: " << blocks.size() << "\n";
     //throw std::runtime_error( "exit" );
     
  
@@ -316,6 +350,7 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
     
     std::cerr << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
     
+    write_phylip_distmatrix( out_scores, names, std::cout );
     
 //     for( int i = 0; i < seq.size(); i++ ) {
 //         for( int j = 0; j < seq.size(); j++ ) {
@@ -324,5 +359,5 @@ void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const 
 //         std::cout << "\n";
 //     }
     
-    ivy_mike::write_png( out_scores, std::cout );
+//     ivy_mike::write_png( out_scores, std::cout );
 }

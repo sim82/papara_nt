@@ -4,7 +4,7 @@
 #include "fasta.h"
 #include "ivymike/write_png.h"
 
-void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
+void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
 
 int main( int argc, char *argv[] ) {
     
@@ -16,7 +16,7 @@ int main( int argc, char *argv[] ) {
     int opt_mismatch;
     int opt_gap_open;
     int opt_gap_extend;
-    
+    int opt_threads;
     std::string opt_scoring_matrix;
     
     desc.add_options()
@@ -26,7 +26,8 @@ int main( int argc, char *argv[] ) {
         ("mismatch,n", po::value<int>(&opt_mismatch)->default_value(0), "mismatch score" )
         ("gap-open,o", po::value<int>(&opt_gap_open)->default_value(-5), "gap open score (default: -5, negtive means penalize)")
         ("gap-extend,o", po::value<int>(&opt_gap_extend)->default_value(-3), "gap extend score (default: -3)")
-        ("scoring-matrix,s", po::value<std::string>(&opt_scoring_matrix), "scoring matrix (optional)");
+        ("scoring-matrix,s", po::value<std::string>(&opt_scoring_matrix), "scoring matrix (optional)")
+        ("threads,t", po::value<int>(&opt_threads)->default_value(1), "number of threads (default: 1)" );
 //     po::positional_options_description p;
 //     p.add( "sdf-file", -1 );
     
@@ -92,6 +93,8 @@ int main( int argc, char *argv[] ) {
     
     read_fasta( qsf, qs_names, qs_seqs);
     
-    pairwise_seq_distance(qs_seqs, *sm, opt_gap_open, opt_gap_extend, 4);
+    std::cerr << "using " << opt_threads << " threads\n";
+
+    pairwise_seq_distance(qs_names, qs_seqs, *sm, opt_gap_open, opt_gap_extend, opt_threads);
     
 }
