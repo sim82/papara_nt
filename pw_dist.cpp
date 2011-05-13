@@ -1,12 +1,29 @@
 #include <fstream>
 #include <memory>
+#include <deque>
 #include <boost/program_options.hpp>
 #include "fasta.h"
 #include "ivymike/write_png.h"
+#include <ivymike/statistics.h>
 
 void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
 
 int main( int argc, char *argv[] ) {
+
+    std::deque<float> v1;
+    std::deque<float> v2;
+    
+    for( int i = 0; i < 1000; i++ ) {
+        v1.push_back(sin(i));
+        v2.push_back(sin(i + 3.1415/2));
+    }
+//     std::reverse( v2.begin(), v2.end() );
+//     v2.push_back(4000);
+    
+    float cor = ivy_mike::correlation(v1, v2);
+    std::cout << "cor: " << cor << "\n";
+    
+//    return 0;
     
     namespace po = boost::program_options;
     po::options_description desc( "Allowed options" );
