@@ -11,7 +11,7 @@
 template <size_t W, typename seq_char_t>
 struct db_block {
     int didx[W];
-    std::vector<seq_char_t> *ddata[W];
+//     std::vector<seq_char_t> *ddata[W];
     size_t dpad[W];    
     size_t maxlen;
     int lj;
@@ -105,7 +105,7 @@ struct lworker {
             const int zero_state = m_sm.get_zero_state();
             for ( int i = 0; i < block.maxlen; i++ ) {
                 for ( int j = 0; j < W; j++ ) {
-                    std::vector<seq_char_t> &sdi = *(block.ddata[j]);
+                    const std::vector<seq_char_t> &sdi = m_seq[block.didx[j]];//*(block.ddata[j]);
                     if ( i < sdi.size() ) {
                         *dint_iter = sdi[i];
                         
@@ -174,7 +174,7 @@ struct lworker {
 //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
                     
                 n_dseq++;
-                n_dchar += block.ddata[j]->size();
+                n_dchar += m_seq[block.didx[j]].size();
             }
             first_block = false;
         }
@@ -202,8 +202,10 @@ void write_phylip_distmatrix( const boost::multi_array<int,2> &ma, const std::ve
             int mae;
             if( i <= j ) {
                 mae = ma[i][j];
+//                 mae = ma[j][i];
             } else {
                 mae = ma[j][i];
+
             }
             
             const float dist = 1.0 - (mae / norm);
@@ -290,12 +292,12 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
                 if( j == 0 ) {
                     break;
                 } else {
-                    block.ddata[j] = block.ddata[block.lj];
-                    block.didx[j] = -1;
+//                     block.ddata[j] = block.ddata[block.lj];
+                    block.didx[j] = block.didx[block.lj];
                 }
             } else {
                 block.didx[j] = i_seq1;
-                block.ddata[j] = &seq[i_seq1];
+//                 block.ddata[j] = &seq[i_seq1];
                 ++i_seq1;
                 
                 
@@ -311,7 +313,7 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
 //             dmask[j].resize(ddata[j].length(), 0xffff );
             
             
-            block.maxlen = std::max( block.maxlen, block.ddata[j]->size() );
+            block.maxlen = std::max( block.maxlen, seq[block.didx[j]].size() );
         }
         
         // jf == -1 at this point means that the block is empty (#db-seqs % W == 0)
