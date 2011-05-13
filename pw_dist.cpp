@@ -3,10 +3,31 @@
 #include <boost/program_options.hpp>
 #include "fasta.h"
 #include "ivymike/write_png.h"
+#include "ivymike/thread.h"
 
 void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
 
+class bla {
+public:
+    void operator()() {
+        std::cout << "running\n";
+    }
+};
+
 int main( int argc, char *argv[] ) {
+    
+//     bla b;
+//     
+//     //ivy_mike::thread t(b);
+//     ivy_mike::thread_group tg;
+//     
+//     while( tg.size() < 2 ) {
+//         bla b;
+//         
+//         tg.create_thread(b);
+//     }
+//     tg.join_all();
+//     return 0;
     
     namespace po = boost::program_options;
     po::options_description desc( "Allowed options" );

@@ -1,9 +1,21 @@
 #include <algorithm>
 #include <deque>
-#include <boost/bind.hpp>
+#include <iomanip>
+
+//#include <boost/bind.hpp>
 #include "align_vec.h"
+#define USE_BOOST_THREADS
+#ifdef USE_BOOST_THREADS
 #define BOOST_LIB_DIAGNOSTIC
 #include <boost/thread.hpp>
+
+namespace timpl = boost;
+
+#else
+#include "ivymike/thread.h"
+namespace timpl = ivy_mike;
+#endif
+
 #include <boost/multi_array.hpp>
 #include "ivymike/time.h"
 #include "ivymike/write_png.h"
@@ -20,7 +32,7 @@ struct db_block {
 template <typename block>
 struct block_queue {
     std::deque<block> m_blocks;
-    boost::mutex m_mtx;
+    timpl::mutex m_mtx;
     size_t m_ncup;
     block_queue() : m_ncup(0) {}
 };
@@ -38,13 +50,14 @@ struct worker {
 template <size_t W, typename seq_char_t, typename score_t, typename sscore_t>
 struct lworker {
     typedef db_block<W, seq_char_t> block_t;
+    const int m_nthreads;
+    const int m_rank;
     block_queue<block_t> &m_queue;
     const scoring_matrix &m_sm;
     const std::vector< std::vector<uint8_t> > &m_seq;
     const sscore_t gap_open;
     const sscore_t gap_extend;
-    const int m_nthreads;
-    const int m_rank;
+    
     
     boost::multi_array<int,2> &m_outscore;
     
@@ -77,7 +90,7 @@ struct lworker {
         while(true) {
             block_t block;
             {
-                boost::lock_guard<boost::mutex> lock( m_queue.m_mtx );
+                timpl::lock_guard<timpl::mutex> lock( m_queue.m_mtx );
                 
                 if ( m_queue.m_blocks.empty() ) {
                     break;
@@ -181,7 +194,7 @@ struct lworker {
         
         {
             std::cerr << n_qchar << " x " << n_dchar << "\n";
-            boost::lock_guard<boost::mutex> lock( m_queue.m_mtx );
+            timpl::lock_guard<timpl::mutex> lock( m_queue.m_mtx );
             m_queue.m_ncup += ncups;
         }
         
@@ -335,7 +348,7 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
         
     
     
-    boost::thread_group tg;
+    timpl::thread_group tg;
     
     while( tg.size() < n_thread ) {
         lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq, gap_open, gap_extend, out_scores );
