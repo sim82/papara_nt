@@ -20,10 +20,12 @@ namespace timpl = ivy_mike;
 #include "ivymike/time.h"
 #include "ivymike/write_png.h"
 
+#include <pthread.h>
+
 template <size_t W, typename seq_char_t>
 struct db_block {
     int didx[W];
-    std::vector<seq_char_t> *ddata[W];
+//     std::vector<seq_char_t> *ddata[W];
     size_t dpad[W];    
     size_t maxlen;
     int lj;
@@ -76,7 +78,19 @@ struct lworker {
         aligned_buffer<seq_char_t> ddata_int;
         persistent_state<score_t> ps;
     
-        
+//         {
+//             cpu_set_t cs;
+//             CPU_ZERO( &cs );
+//             CPU_SET( 0, &cs );
+//             if(pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cs) != 0)
+//             {
+//                 printf("\n\nThere was a problem finding a physical core for thread number %d to run on.\n", 0);
+//                 
+//                 assert(0);
+//             }
+//             
+//             
+//         }
         
 //         for( int i = 0; i < m_queue.m_blocks.size(); i++ ) {
 //             
@@ -118,7 +132,7 @@ struct lworker {
             const int zero_state = m_sm.get_zero_state();
             for ( int i = 0; i < block.maxlen; i++ ) {
                 for ( int j = 0; j < W; j++ ) {
-                    std::vector<seq_char_t> &sdi = *(block.ddata[j]);
+                    const std::vector<seq_char_t> &sdi = m_seq[block.didx[j]];//*(block.ddata[j]);
                     if ( i < sdi.size() ) {
                         *dint_iter = sdi[i];
                         
@@ -187,7 +201,7 @@ struct lworker {
 //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
                     
                 n_dseq++;
-                n_dchar += block.ddata[j]->size();
+                n_dchar += m_seq[block.didx[j]].size();
             }
             first_block = false;
         }
@@ -215,8 +229,10 @@ void write_phylip_distmatrix( const boost::multi_array<int,2> &ma, const std::ve
             int mae;
             if( i <= j ) {
                 mae = ma[i][j];
+//                 mae = ma[j][i];
             } else {
                 mae = ma[j][i];
+
             }
             
             const float dist = 1.0 - (mae / norm);
@@ -303,12 +319,12 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
                 if( j == 0 ) {
                     break;
                 } else {
-                    block.ddata[j] = block.ddata[block.lj];
-                    block.didx[j] = -1;
+//                     block.ddata[j] = block.ddata[block.lj];
+                    block.didx[j] = block.didx[block.lj];
                 }
             } else {
                 block.didx[j] = i_seq1;
-                block.ddata[j] = &seq[i_seq1];
+//                 block.ddata[j] = &seq[i_seq1];
                 ++i_seq1;
                 
                 
@@ -324,9 +340,9 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
 //             dmask[j].resize(ddata[j].length(), 0xffff );
             
             
-            block.maxlen = std::max( block.maxlen, block.ddata[j]->size() );
+            block.maxlen = std::max( block.maxlen, seq[block.didx[j]].size() );
         }
-        
+//         std::cout << "maxlen; " << block.maxlen << "\n";
         // jf == -1 at this point means that the block is empty (#db-seqs % W == 0)
         if( block.lj == -1 ) {
             break;
@@ -363,14 +379,14 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
     
     std::cerr << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
     
-    write_phylip_distmatrix( out_scores, names, std::cout );
+//     write_phylip_distmatrix( out_scores, names, std::cout );
     
-//     for( int i = 0; i < seq.size(); i++ ) {
-//         for( int j = 0; j < seq.size(); j++ ) {
-//             std::cout << out_scores[i][j] << "\t";
-//         }
-//         std::cout << "\n";
-//     }
+    for( int i = 0; i < seq.size(); i++ ) {
+        for( int j = 0; j < seq.size(); j++ ) {
+            std::cout << out_scores[i][j] << "\t";
+        }
+        std::cout << "\n";
+    }
     
 //     ivy_mike::write_png( out_scores, std::cout );
 }

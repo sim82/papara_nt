@@ -190,6 +190,8 @@ static inline bool xisspace( int c ) {
 template<class input>
 static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
  
+    // WARNING: this whole fasta reader is utter crap. I am very ashamed of it...
+    
 //     std::vector<char> linebuf;//1024 * 1024); // uhm, this is ugly...
     //std::string linebuf;
     
@@ -205,6 +207,10 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
         int c = is.get();
 //         get_line( is, linebuf );
 //         std::vector< char >::const_iterator li = linebuf.begin();
+        
+        if( is.eof() ) {
+            break;
+        }
         
         if( c == '>' ) {
             
@@ -231,12 +237,14 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
             //data_accum = &data.back();
             data_accum = &data.back();
         } else {
-      
+            is.unget();
             if( data_accum == 0 ) {
                 throw std::runtime_error( "data_accum == 0. probably bad fasta file\n" );
             }
             
             while( xisspace( is.get() )) {}
+            
+//             std::cout << "xxx: " << int(xxx) << "\n";
             
             if( !is.eof() ) {
                 
@@ -244,7 +252,7 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
                 
                 while( true ) {
                     c = is.get();
-                    
+//                     std::cout << "c: " << int(c) << "\n";
                     if( c == -1 ) {
                         std::cout << " c:" << int(c) << " " << is.eof() ;
                     }
@@ -318,7 +326,7 @@ public:
                 break;
             }
                 
-                
+//             std::cout << "c: " << int(c) << "\n";
             if( !isspace(c) ) {
                 seq.push_back( m_state_map.state_backmap(c)); 
             }
