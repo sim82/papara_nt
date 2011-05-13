@@ -8,6 +8,8 @@
 #include "ivymike/time.h"
 #include "ivymike/write_png.h"
 
+#include <pthread.h>
+
 template <size_t W, typename seq_char_t>
 struct db_block {
     int didx[W];
@@ -63,7 +65,19 @@ struct lworker {
         aligned_buffer<seq_char_t> ddata_int;
         persistent_state<score_t> ps;
     
-        
+//         {
+//             cpu_set_t cs;
+//             CPU_ZERO( &cs );
+//             CPU_SET( 0, &cs );
+//             if(pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cs) != 0)
+//             {
+//                 printf("\n\nThere was a problem finding a physical core for thread number %d to run on.\n", 0);
+//                 
+//                 assert(0);
+//             }
+//             
+//             
+//         }
         
 //         for( int i = 0; i < m_queue.m_blocks.size(); i++ ) {
 //             
@@ -315,7 +329,7 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
             
             block.maxlen = std::max( block.maxlen, seq[block.didx[j]].size() );
         }
-        
+//         std::cout << "maxlen; " << block.maxlen << "\n";
         // jf == -1 at this point means that the block is empty (#db-seqs % W == 0)
         if( block.lj == -1 ) {
             break;
@@ -352,14 +366,14 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
     
     std::cerr << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
     
-    write_phylip_distmatrix( out_scores, names, std::cout );
+//     write_phylip_distmatrix( out_scores, names, std::cout );
     
-//     for( int i = 0; i < seq.size(); i++ ) {
-//         for( int j = 0; j < seq.size(); j++ ) {
-//             std::cout << out_scores[i][j] << "\t";
-//         }
-//         std::cout << "\n";
-//     }
+    for( int i = 0; i < seq.size(); i++ ) {
+        for( int j = 0; j < seq.size(); j++ ) {
+            std::cout << out_scores[i][j] << "\t";
+        }
+        std::cout << "\n";
+    }
     
 //     ivy_mike::write_png( out_scores, std::cout );
 }

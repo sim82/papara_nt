@@ -81,6 +81,7 @@ void align_vec( persistent_state<score_t> &ps, size_t asize, const std::vector<u
         score_t * __restrict s_end = s_iter + (asize * W);
         
         for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
+            
             const vec_t match_vec = vu::load( (score_t*) qpp_iter );
             
 //             getchar();
