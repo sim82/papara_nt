@@ -4,7 +4,7 @@
 
 //#include <boost/bind.hpp>
 #include "align_vec.h"
-#define USE_BOOST_THREADS
+// #define USE_BOOST_THREADS
 #ifdef USE_BOOST_THREADS
 #define BOOST_LIB_DIAGNOSTIC
 #include <boost/thread.hpp>

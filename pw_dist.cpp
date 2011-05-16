@@ -18,33 +18,7 @@ public:
 
 int main( int argc, char *argv[] ) {
     
-//     bla b;
-//     
-//     //ivy_mike::thread t(b);
-//     ivy_mike::thread_group tg;
-//     
-//     while( tg.size() < 2 ) {
-//         bla b;
-//         
-//         tg.create_thread(b);
-//     }
-//     tg.join_all();
-//     return 0;
 
-    std::deque<float> v1;
-    std::deque<float> v2;
-    
-    for( int i = 0; i < 1000; i++ ) {
-        v1.push_back(sin(i));
-        v2.push_back(sin(i + 3.1415/2));
-    }
-//     std::reverse( v2.begin(), v2.end() );
-//     v2.push_back(4000);
-    
-    float cor = ivy_mike::correlation(v1, v2);
-    std::cout << "cor: " << cor << "\n";
-    
-//    return 0;
     
     namespace po = boost::program_options;
     po::options_description desc( "Allowed options" );
