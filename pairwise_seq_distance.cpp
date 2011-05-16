@@ -22,6 +22,19 @@ namespace timpl = ivy_mike;
 
 #include <pthread.h>
 
+float read_temp() {
+    std::ifstream is("/sys/class/hwmon/hwmon0/temp1_input" );
+    
+    if( is.good() ) {
+        int temp;
+        is >> temp;
+        
+        return temp * 1e-3;
+    } else {
+        return -1;
+    }
+}
+
 template <size_t W, typename seq_char_t>
 struct db_block {
     int didx[W];
@@ -101,6 +114,10 @@ struct lworker {
 //         
 //             block_t block = m_queue.m_blocks[i];
         size_t ncups = 0;
+        
+        ivy_mike::timer t1;
+        ivy_mike::timer t2;
+        size_t ncups_last = 0;
         while(true) {
             block_t block;
             {
@@ -204,6 +221,13 @@ struct lworker {
                 n_dchar += m_seq[block.didx[j]].size();
             }
             first_block = false;
+            if( m_rank == 0 && t1.elapsed() > 2 ) {
+                size_t dncup = ncups - ncups_last;
+                
+                std::cout << t2.elapsed() << " " << dncup << " in " << t1.elapsed() << " s " << dncup / (t1.elapsed() * 1e6) << " " << read_temp() << std::endl;
+                t1 = ivy_mike::timer();
+                ncups_last = ncups;
+            }
         }
         
         {
@@ -211,6 +235,8 @@ struct lworker {
             timpl::lock_guard<timpl::mutex> lock( m_queue.m_mtx );
             m_queue.m_ncup += ncups;
         }
+        
+        
         
     }
 };
