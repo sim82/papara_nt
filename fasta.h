@@ -377,8 +377,8 @@ private:
         
         
         
-        // the cmatrix is always at least one column/row larger than the number of state. The last row/column is for a 'zero-state'
-        // which returns a score of 0 agains all states, to make qprofile padding easier.
+        // the cmatrix is always at least one column/row larger than the number of states. The last row/column is for a 'zero-state'
+        // which returns a score of 0 against all states, to make qprofile padding easier.
         const size_t asize = m_alphabet.size();
         
         // the pysical dimension of the cmatrix are different from the alphabet size, for better cache-line alignment.
@@ -386,7 +386,7 @@ private:
         //m_cmatrixsize = asize+1;
         m_cmatrixsize = 32;
         if( m_cmatrixsize < asize + 1 ) {
-            // the current standard of 32ytes is large enough for protein sequences
+            // the current standard of 32 bytes is large enough for protein sequences
             throw std::runtime_error( "m_cmatrixsize < asize. alphabet too large." );
             
         }
@@ -396,6 +396,8 @@ private:
         m_cmatrix.resize( m_cmatrixsize * m_cmatrixsize );
         std::fill( m_cmatrix.begin(), m_cmatrix.end(), 0 );
         std::cerr << "cmatrix: " << m_cmatrix.size() << " " << m_cmatrixsize << "\n";
+        
+        // copy scores from the raw scoring matrix to the compressed matrix
         for( size_t i = 0; i < asize; i++ ) {
             for( size_t j = 0; j < asize; j++ ) {
                 

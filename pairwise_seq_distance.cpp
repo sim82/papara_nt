@@ -62,6 +62,9 @@ struct worker {
     }
 };
 
+
+// alignmetn wirker thread. consumes block objects from the block-queue and writes results to the 2d matrix (m_outscore)
+
 template <size_t W, typename seq_char_t, typename score_t, typename sscore_t>
 struct lworker {
     typedef db_block<W, seq_char_t> block_t;
@@ -80,6 +83,8 @@ struct lworker {
     : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq(seq_), gap_open(gap_open_), gap_extend(gap_extend_), m_outscore(outscore) {}
     
     void operator()() {
+        
+        // thread entry point
         
         size_t n_qseq = 0;
         size_t n_qchar = 0;
@@ -119,6 +124,8 @@ struct lworker {
         ivy_mike::timer t2;
         size_t ncups_last = 0;
         while(true) {
+            // get next block from the queue
+            
             block_t block;
             {
                 timpl::lock_guard<timpl::mutex> lock( m_queue.m_mtx );
@@ -131,8 +138,7 @@ struct lworker {
             }
             
             
-            //         std::cout << "sdis: " << sdi.size() << "\n";
-//             std::cout << "asize: " << m_sm.num_states() << " " << block.maxlen << std::endl;
+
             aligned_buffer<sscore_t> qprofile( block.maxlen * W * m_sm.num_states());
             sscore_t *qpi = qprofile.begin();
             
@@ -187,6 +193,8 @@ struct lworker {
             const size_t i_max = block.didx[block.lj];
 //             const size_t i_max = m_seq.size() - 1;
             
+            // loop over all sequences and align them against the current profile
+            
             for ( size_t i_seq2 = 0; i_seq2 <= i_max; ++i_seq2 ) {
                 const std::vector<uint8_t> &qdata = m_seq[i_seq2];
                 
@@ -196,10 +204,12 @@ struct lworker {
                 }
                 
                 
-                
+                // call the alignment kernel 
                 align_vec<score_t,sscore_t,W>( ps, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
                 
                 
+                
+                // write output scores to the output matrix. no lock necessary, as writes are independent.
                 
                 for ( int j = 0; j <= block.lj; j++ ) {
                     //                 std::cout << out[j] << "\t" << dname[j] << " " << qname << " " << ddata[j].size() << "\n";
@@ -313,15 +323,18 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
     
     size_t i_seq1 = 0;
     
+
+    // the following code basically consists of two nested loops which align all elements in seq against each other (N*N alignments).
     
-    
+    // It is a bit hard to recognize, though as the alignments operations are distributed to 'blocks' (=independent work units)
+    // consumed by the worker threads.
+
+    // each block normally consists of W (=vector unit width) sequences to be aligned agains all other sequences
     block_queue<db_block<W, seq_char_t> > q;
     std::deque<db_block<W, seq_char_t> > &blocks = q.m_blocks;
+    
+    // generate the block objects and put them in the queue.
     while( have_input ) {
-        
-        
-        
-        
         
         // determine db sequences for the current block
         db_block<W, seq_char_t> block;
@@ -389,7 +402,8 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
     
         
     
-    
+    // spawn the worker threads. Each of them will consume blocks from the block-queue until it is empty.
+    // the results are concurrently written to the 2d matrix out_scores
     timpl::thread_group tg;
     
     while( tg.size() < n_thread ) {
