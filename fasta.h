@@ -418,6 +418,9 @@ public:
         
         inline void operator()( int c ) {
             if( c >= 0 && c < scoring_matrix::MAX_SIZE ) {
+                
+                c = toupper(c);
+                
                 if( m_sm.m_backmap[c] != -1 ) {
                     m_cont.push_back( m_sm.m_backmap[c] );
 //                     std::cout << int(m_cont.back()) << "\n";
@@ -546,6 +549,8 @@ public:
             
             if( !have_firstline ) {
                 while( c != '\n' ) {
+                    c = toupper(c);
+                    
                     m_backmap[c] = m_alphabet.size();
                     m_alphabet.push_back(c);
                     
@@ -570,7 +575,7 @@ public:
                 
 //                 std::cout << "name: " << lname << "\n";
                 
-                char lnc = lname[0];
+                char lnc = toupper(lname[0]);
                 
                 for( size_t i = 0; i < m_alphabet.size(); i++ ) {
                  

@@ -1,14 +1,14 @@
 
+#include "pairwise_seq_distance.h"
 
-
-
+#include "ivymike/tdmatrix.h"
 
 
 #include "fasta.h"
 
 
 
-void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
+void pairwise_seq_distance(std::vector< std::vector<uint8_t> > &seq_raw, ivy_mike::tdmatrix<int> &, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
 
 int main() {
     //mapped_file qsf( "test_1604/1604.fa" );
@@ -23,6 +23,8 @@ int main() {
     
     read_fasta( qsf, qs_names, qs_seqs);
     scoring_matrix sm( 3, 0 );
-    pairwise_seq_distance(qs_names,qs_seqs, sm, -5, -2, 4);
+    
+    ivy_mike::tdmatrix<int> out_scores(qs_seqs.size(), qs_seqs.size());
+    pairwise_seq_distance(qs_seqs, out_scores, sm, -5, -2, 4);
     
 }

@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <deque>
-#include <iomanip>
+
 
 //#include <boost/bind.hpp>
 #include "align_vec.h"
@@ -16,13 +16,27 @@ namespace timpl = boost;
 namespace timpl = ivy_mike;
 #endif
 
-#include <boost/multi_array.hpp>
+
 #include "ivymike/time.h"
 #include "ivymike/write_png.h"
+#include "ivymike/tdmatrix.h"
+
+#ifndef PWDIST_INLINE 
+// this means this file is not included by pairwise_seq_distance.h itself...
+#include "pairwise_seq_distance.h"
+#endif
 
 #include <pthread.h>
 
-float read_temp() {
+
+#ifndef PSD_DECLARE_INLINE
+#define PSD_DECLARE_INLINE
+#endif
+
+//typedef boost::multi_array<int,2> pw_score_matrix;
+typedef ivy_mike::tdmatrix<int> pw_score_matrix;
+
+static float read_temp() {
     std::ifstream is("/sys/class/hwmon/hwmon0/temp1_input" );
     
     if( is.good() ) {
@@ -63,7 +77,7 @@ struct worker {
 };
 
 
-// alignmetn wirker thread. consumes block objects from the block-queue and writes results to the 2d matrix (m_outscore)
+// alignment worker thread. consumes block objects from the block-queue and writes results to the 2d matrix (m_outscore)
 
 template <size_t W, typename seq_char_t, typename score_t, typename sscore_t>
 struct lworker {
@@ -77,9 +91,9 @@ struct lworker {
     const sscore_t gap_extend;
     
     
-    boost::multi_array<int,2> &m_outscore;
+    pw_score_matrix &m_outscore;
     
-    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_, boost::multi_array<int,2>&outscore ) 
+    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore ) 
     : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq(seq_), gap_open(gap_open_), gap_extend(gap_extend_), m_outscore(outscore) {}
     
     void operator()() {
@@ -251,36 +265,9 @@ struct lworker {
     }
 };
 
-void write_phylip_distmatrix( const boost::multi_array<int,2> &ma, const std::vector<std::string> &names, std::ostream &os ) {
-    if( names.size() != ma.size() || ma.size() != ma[0].size() ) {
-        throw std::runtime_error( "distance matrix seems fishy" );
-    }
-    os << ma.size() << "\n";
-    os << std::setiosflags(std::ios::fixed) << std::setprecision(4);
-    for( int i = 0; i < ma.size(); i++ ) {
-        os << names[i] << "\t";
-        for( int j = 0; j < ma.size(); j++ ) {
-            const float norm = std::max( ma[i][i], ma[j][j] );
-            
-            int mae;
-            if( i <= j ) {
-                mae = ma[i][j];
-//                 mae = ma[j][i];
-            } else {
-                mae = ma[j][i];
-
-            }
-            
-            const float dist = 1.0 - (mae / norm);
-            
-            os << dist << "\t";
-        }
-        os << "\n";
-    }
-}
 
 
-void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
+PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
  #if 1
     const int W = 8;
     typedef short score_t;
@@ -301,6 +288,10 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
 //     seq.resize(400);
     for( int i = 0; i < seq.size(); i++ ) {
         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
+    }
+    
+    if( seq_raw.size() != out_scores.size() || seq_raw.size() != out_scores[0].size() ) {
+        throw std::runtime_error( "out_scores matrix is too small" );
     }
     
 //     const sscore_t gap_open = -5;
@@ -397,8 +388,7 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
     
     
     
-    boost::multi_array<int,2> out_scores;
-    out_scores.resize( boost::extents[seq.size()][seq.size()] );
+    //pw_score_matrix out_scores(boost::extents[seq.size()][seq.size()]) ;
     
         
     
@@ -419,14 +409,5 @@ void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< 
     
     std::cerr << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
     
-//     write_phylip_distmatrix( out_scores, names, std::cout );
-    
-    for( int i = 0; i < seq.size(); i++ ) {
-        for( int j = 0; j < seq.size(); j++ ) {
-            std::cout << out_scores[i][j] << "\t";
-        }
-        std::cout << "\n";
-    }
-    
-//     ivy_mike::write_png( out_scores, std::cout );
+
 }
