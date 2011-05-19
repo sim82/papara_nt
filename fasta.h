@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Simon A. Berger
+ * Copyright (C) 2011 Simon A. Berger
  *
  *  This program is free software; you may redistribute it and/or modify its
  *  under the terms of the GNU General Public License as published by the Free
