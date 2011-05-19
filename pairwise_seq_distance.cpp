@@ -4,7 +4,7 @@
 
 //#include <boost/bind.hpp>
 #include "align_vec.h"
-// #define USE_BOOST_THREADS
+//#define USE_BOOST_THREADS
 #ifdef USE_BOOST_THREADS
 #define BOOST_LIB_DIAGNOSTIC
 #include <boost/thread.hpp>
@@ -26,7 +26,7 @@ namespace timpl = ivy_mike;
 #include "pairwise_seq_distance.h"
 #endif
 
-#include <pthread.h>
+
 
 
 #ifndef PSD_DECLARE_INLINE

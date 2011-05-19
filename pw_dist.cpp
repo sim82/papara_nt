@@ -1,13 +1,13 @@
 #include <fstream>
 #include <memory>
 #include <deque>
-#include <boost/program_options.hpp>
+
 #include "fasta.h"
 #include "ivymike/write_png.h"
 #include <ivymike/statistics.h>
 #include "ivymike/thread.h"
 #include "ivymike/getopt.h"
-#include <sys/mman.h>
+
 #include <functional>
 #include <iomanip>
 // #define PWDIST_INLINE
