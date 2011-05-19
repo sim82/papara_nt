@@ -230,6 +230,7 @@ struct lworker {
                     //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
 //                     m_outscore[block.didx[j]][i_seq2] = out[j];
                     m_outscore[i_seq2][block.didx[j]] = out[j];
+                    m_outscore[block.didx[j]][i_seq2] = out[j];
                     ncups += m_seq[i_seq2].size() * m_seq[block.didx[j]].size();
                 }
                 
@@ -248,7 +249,7 @@ struct lworker {
             if( m_rank == 0 && t1.elapsed() > 2 ) {
                 size_t dncup = ncups - ncups_last;
                 
-                std::cout << t2.elapsed() << " " << dncup << " in " << t1.elapsed() << " s " << dncup / (t1.elapsed() * 1e6) << " " << read_temp() << std::endl;
+                std::cerr << t2.elapsed() << " " << dncup << " in " << t1.elapsed() << " s " << dncup / (t1.elapsed() * 1e6) << " " << read_temp() << std::endl;
                 t1 = ivy_mike::timer();
                 ncups_last = ncups;
             }

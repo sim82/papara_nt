@@ -81,6 +81,11 @@ int main( int argc, char *argv[] ) {
     std::string opt_sm_name;
     int opt_threads;
     
+    bool opt_out_dist_matrix;
+    bool opt_out_score_matrix;
+    bool opt_out_pgm_image;
+    bool opt_out_none;
+    
     igp.add_opt('h', false );
     
     igp.add_opt('f', ivy_mike::getopt::value<std::string>(opt_seq_file) );
@@ -90,18 +95,23 @@ int main( int argc, char *argv[] ) {
     igp.add_opt('e', ivy_mike::getopt::value<int>(opt_gap_extend).set_default(-3) );
     igp.add_opt('s', ivy_mike::getopt::value<std::string>(opt_sm_name) );
     igp.add_opt('t', ivy_mike::getopt::value<int>(opt_threads).set_default(1) );
-    igp.add_opt('1', false );
-    igp.add_opt('2', false );
-    igp.add_opt('3', false );
+    igp.add_opt('1', ivy_mike::getopt::value<bool>(opt_out_dist_matrix, true).set_default(false) );
+    igp.add_opt('2', ivy_mike::getopt::value<bool>(opt_out_score_matrix, true).set_default(false) );
+    igp.add_opt('3', ivy_mike::getopt::value<bool>(opt_out_pgm_image, true).set_default(false) );
+    igp.add_opt('4', ivy_mike::getopt::value<bool>(opt_out_none, true).set_default(false) );
     
-    igp.parse(argc, argv);
+    bool ret = igp.parse(argc, argv);
     
+    
+    if( !opt_out_dist_matrix && !opt_out_score_matrix && !opt_out_pgm_image && !opt_out_none) {
+        opt_out_dist_matrix = true;
+    }
     
 //     std::cout << "opt_match: " << &opt_seq_file << "\n";
     
 //     return 0;
     
-    if( igp.opt_count('h') != 0 ) {
+    if( igp.opt_count('h') != 0 || !ret ) {
         std::cout << 
         "  -h        print help message\n" <<
         "  -f arg    input sequence file (fasta)\n" <<
@@ -114,6 +124,7 @@ int main( int argc, char *argv[] ) {
         "  -1        output distance matrix (PHYLIP format, e.g. for nj-tree building with ninja)\n" <<
         "  -2        output raw score matrix\n" <<
         "  -3        output greyscale pgm image (gimmick)\n" <<
+        "  -4        output no results (e.g., for benchmark)\n" <<
         " In any case, the output will be written to stdout.\n\n" <<
         "The algorithm doesn't distinguish between DNA and AA data, as long as the\n" <<
         "input sequences are consistent with the scoring matrix. The use of the -m\n" <<
@@ -269,15 +280,18 @@ int main( int argc, char *argv[] ) {
     ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs.size() );
     pairwise_seq_distance( qs_seqs, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
     
-    //     write_phylip_distmatrix( out_scores, names, std::cout );
-    
-    for( int i = 0; i < qs_seqs.size(); i++ ) {
-        for( int j = 0; j < qs_seqs.size(); j++ ) {
-            std::cout << out_scores[i][j] << "\t";
+    if( opt_out_dist_matrix ) {
+        write_phylip_distmatrix( out_scores, qs_names, std::cout );
+    } else if( opt_out_score_matrix ) {
+        for( int i = 0; i < qs_seqs.size(); i++ ) {
+            for( int j = 0; j < qs_seqs.size(); j++ ) {
+                std::cout << out_scores[i][j] << "\t";
+            }
+            std::cout << "\n";
         }
-        std::cout << "\n";
+    } else if( opt_out_pgm_image ) {
+        ivy_mike::write_png( out_scores, std::cout );        
     }
-    
-//     ivy_mike::write_png( out_scores, std::cout );
+
     
 }
