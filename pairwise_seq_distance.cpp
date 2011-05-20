@@ -19,7 +19,7 @@
 
 //#include <boost/bind.hpp>
 #include "align_vec.h"
-//#define USE_BOOST_THREADS
+// #define USE_BOOST_THREADS
 #ifdef USE_BOOST_THREADS
 #define BOOST_LIB_DIAGNOSTIC
 #include <boost/thread.hpp>
@@ -187,7 +187,12 @@ struct lworker {
                     const std::vector<seq_char_t> &sdi = m_seq[block.didx[j]];//*(block.ddata[j]);
                     if ( i < sdi.size() ) {
                         *dint_iter = sdi[i];
-                        
+                        // the aligner will catch this later if assertions are enabled
+// #ifdef DEBUG
+//                         if( *dint_iter >= m_sm.num_states() ) {
+//                             throw std::runtime_error( "meeeep. illegal character in input sequences\n" );
+//                         }
+// #endif                   
                     } else {
                         *dint_iter = zero_state;
                     }
@@ -220,6 +225,8 @@ struct lworker {
             std::vector<int> out(W);
             
             const size_t i_max = block.didx[block.lj];
+//             std::cout << "i_max: " << i_max << " " << block.maxlen << "\n";
+            
 //             const size_t i_max = m_seq.size() - 1;
             
             // loop over all sequences and align them against the current profile
@@ -282,8 +289,10 @@ struct lworker {
 };
 
 
-
-PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq_raw, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
+// WARNING: the sequences are expected to be transformed to 'compressed states' (= 0, 1, 2 ...) rather than characters.
+// The state mapping must be consistent with the supplied scoring matrix and its compressed form.
+// Sequences containing numbers >= sm.num_states() will likely blow up the aligner, as there are no checks after this point!
+PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
  #if 1
     const int W = 8;
     typedef short score_t;
@@ -300,13 +309,13 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
     ivy_mike::timer t1;
     
     
-    std::vector< std::vector<uint8_t> > seq( seq_raw.size() );
+//     std::vector< std::vector<uint8_t> > seq( seq_raw.size() );
 //     seq.resize(400);
-    for( int i = 0; i < seq.size(); i++ ) {
-        std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
-    }
+//     for( int i = 0; i < seq.size(); i++ ) {
+//         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
+//     }
     
-    if( seq_raw.size() != out_scores.size() || seq_raw.size() != out_scores[0].size() ) {
+    if( seq.size() != out_scores.size() || seq.size() != out_scores[0].size() ) {
         throw std::runtime_error( "out_scores matrix is too small" );
     }
     
@@ -393,15 +402,18 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
         if( block.lj == -1 ) {
             break;
         }
-       
+        
+//         std::cout << "block: " << block.didx[block.lj] << "\n";
+        
         blocks.push_back(block);
+        
     }
     
     std::cerr << "blocks: " << blocks.size() << "\n";
     //throw std::runtime_error( "exit" );
     
  
-    
+//     return;
     
     
     //pw_score_matrix out_scores(boost::extents[seq.size()][seq.size()]) ;

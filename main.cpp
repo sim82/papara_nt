@@ -12,7 +12,7 @@
 
 #include "ivymike/tree_parser.h"
 #include "ivymike/time.h"
-
+#include "ivymike/getopt.h"
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
@@ -43,6 +43,8 @@ static inline parsimony_state dna_to_parsimony_state( uint8_t c ) {
         case 'g':
             return 0x4;
         
+        case 'U':
+        case 'u':
         case 'T':
         case 't':
             return 0x8;
@@ -64,6 +66,8 @@ static inline int dna_to_cgap( uint8_t c ) {
     case 'g':
     case 'T':
     case 't':
+    case 'U':
+    case 'u':
         return 0x0;
         
     default:
@@ -378,6 +382,8 @@ static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t
             ps = 0x4;
             break;
             
+        case 'U':
+        case 'u':
         case 'T':
         case 't':
             ps = 0x8;
@@ -398,157 +404,253 @@ static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t
 void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq );
 
 
-int mainx() {
+
+
+class papara_nt {
+    
+    typedef pvec_cgap pvec_t;
+    typedef my_adata_gen<pvec_t> my_adata;
+    
+        
+    papara_nt( const papara_nt &other );
+    papara_nt & operator=( const papara_nt &other );
+    
+    
+    
+    multiple_alignment m_ref_ma;
+    std::auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
+    edge_collector<lnode> m_ec;
+    
+    std::vector<std::string> m_qs_names;
+    std::vector<std::vector<uint8_t> > m_qs_seqs;
+        
+    std::vector<std::vector <uint8_t> > m_qs_pvecs;
+    
+    std::vector<std::vector <int> > m_ref_pvecs;
+    std::vector<std::vector <unsigned int> > m_ref_aux;
+    
+public:    
+    
+    
+    
+    papara_nt( const char* opt_tree_name, const char *opt_alignment_name, const char *opt_qs_name ) 
+      : m_ln_pool(new ivy_mike::tree_parser_ms::ln_pool( sptr::shared_ptr<my_fact<my_adata> >( new my_fact<my_adata> ))) 
+    {
+            
+        //
+        // parse the reference tree
+        //
+        
+        
+        ln_pool &pool = *m_ln_pool;
+        tree_parser_ms::parser tp( opt_tree_name, pool );
+        tree_parser_ms::lnode * n = tp.parse();
+        
+        n = towards_tree( n );
+        //
+        // create map from tip names to tip nodes
+        //
+        typedef tip_collector<lnode> tc_t;
+        tc_t tc;
+        
+        visit_lnode( n, tc );
+        
+        std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
+        
+        for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+            //      std::cout << (*it)->m_data->tipName << "\n";
+            name_to_lnode[(*it)->m_data->tipName] = *it;
+        }
+        
+        //
+        // read reference alignment
+        //
+        m_ref_ma.load_phylip( opt_alignment_name );
+        for( unsigned int i = 0; i < m_ref_ma.names.size(); i++ ) {
+            
+            
+            sptr::shared_ptr< lnode > ln = name_to_lnode[m_ref_ma.names[i]];
+            //      adata *ad = ln->m_data.get();
+            
+            assert( typeid(*ln->m_data.get()) == typeid(my_adata ) );
+            my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
+            
+            adata->init_pvec( m_ref_ma.data[i] );
+            
+        }
+        
+        //
+        // collect list of edges
+        //
+        
+        visit_edges( n, m_ec );
+        
+        std::cout << "edges: " << m_ec.m_edges.size() << "\n";
+        
+//         std::vector< pvec_t > m_parsvecs;
+//         m_parsvecs.resize( m_ec.m_edges.size() );
+        
+        
+        //
+        // read query sequences
+        //
+        std::ifstream qsf( opt_qs_name );
+        
+        
+        read_fasta( qsf, m_qs_names, m_qs_seqs);
+        
+        //
+        // setup qs best-score/best-edge lists
+        //
+        
+        
+        m_qs_pvecs.resize( m_qs_names.size() );
+        std::vector <int> qs_bestscore(m_qs_names.size());
+        std::fill( qs_bestscore.begin(), qs_bestscore.end(), 32000);
+        std::vector <int> qs_bestedge(m_qs_names.size());
+        
+        //
+        // create the reference pvecs/auxvecs
+        //
+        
+        m_ref_pvecs.reserve( m_ec.m_edges.size() );
+        m_ref_aux.reserve( m_ec.m_edges.size() );
+        
+        
+        for( size_t i = 0; i < m_ec.m_edges.size(); i++ ) {
+            pvec_t root_pvec;
+            
+            do_newview( root_pvec, m_ec.m_edges[i].first, m_ec.m_edges[i].second, true );
+            
+            // TODO: try something fancy with rvalue refs...
+            
+            m_ref_pvecs.push_back( std::vector<int>() );
+            m_ref_aux.push_back( std::vector<unsigned int>() );
+            
+            root_pvec.to_int_vec(m_ref_pvecs.back());
+            root_pvec.to_aux_vec(m_ref_aux.back());
+                    
+            
+        }
+        
+        
+        //
+        // do the alignments
+        //
+        
+        const size_t VW = pars_align_vec::WIDTH;
+        pars_align_vec::arrays<VW> arrays;
+        
+        int n_groups = (m_ec.m_edges.size() / VW) + 1;
+        
+        std::vector<int> seqlist[VW];
+        const int *seqptrs[VW];
+        std::vector<unsigned int> auxlist[VW];
+        const unsigned int *auxptrs[VW];
+        
+        
+        for ( int j = 0; j < n_groups; j++ ) {
+            int num_valid = 0;
+            
+            for( unsigned int i = 0; i < VW; i++ ) {
+            
+                unsigned int edge = j * VW + i;
+                if( edge < m_ec.m_edges.size() ) {
+//                     do_newview( root_pvec, m_ec.m_edges[edge].first, m_ec.m_edges[edge].second, true );
+//                     root_pvec.to_int_vec(seqlist[i]);
+//                     root_pvec.to_aux_vec(auxlist[i]);
+                    
+                    seqptrs[i] = m_ref_pvecs[edge].data();
+                    auxptrs[i] = m_ref_aux[edge].data();
+                    num_valid++;
+                } else {
+                    if( i < 1 ) {
+                        throw std::runtime_error( "bad integer mathematics" );
+                    }
+                    seqlist[i] = seqlist[i-1];
+                }
+                
+            }
+            
+            
+            
+            for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
+                if( m_qs_pvecs[i].size() == 0 ) {
+                    seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );    
+                }
+                size_t stride = 1;
+                size_t aux_stride = 1;
+                pars_align_vec pa( seqptrs, m_qs_pvecs[i].data(), seqlist[0].size(), m_qs_pvecs[i].size(), stride, auxptrs, aux_stride, arrays, 0 );
+                
+                
+                pars_align_vec::score_t *score_vec = pa.align_freeshift();
+                for( int k = 0; k < num_valid; k++ ) {
+                    if( score_vec[k] < qs_bestscore[i] ) {
+                        qs_bestscore[i] = score_vec[k];
+                        qs_bestedge[i] = j * VW + k;
+                    }
+                }
+            }
+            
+        }
+        
+        for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
+            std::cout << m_qs_names[i] << " " << qs_bestedge[i] << " " << qs_bestscore[i] << "\n";
+        
+        }
+        
+        
+        
+        
+    
+        
+    }
+    
+    
+    ~papara_nt() {
+        
+        ivy_mike::timer t2;
+        m_ln_pool->clear();
+        //   pool.mark(n);
+        m_ln_pool->sweep();
+        
+        std::cout << t2.elapsed() << std::endl;
+
+}
+};
+
+int main( int argc, char *argv[] ) {
+
+    namespace igo = ivy_mike::getopt;
+    
+    ivy_mike::getopt::parser igp;
+    
+    std::string opt_tree_name;
+    std::string opt_alignment_name;
+    std::string opt_qs_name;
+    igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
+    igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
+    igp.add_opt( 'q', igo::value<std::string>(opt_qs_name) );
+    
+    igp.parse(argc,argv);
+    
+    if( igp.opt_count('t') != 1 || igp.opt_count('s') != 1 || igp.opt_count('q') != 1 ) {
+        std::cerr << "missing options -t, -q and/or -s\n";
+        return 0;
+    }
+    ivy_mike::timer t;
+    
+    papara_nt pnt( opt_tree_name.c_str(), opt_alignment_name.c_str(), opt_qs_name.c_str() );
+
+    
 
     
     
-    typedef pvec_cgap pvec_t;
-	
-    typedef my_adata_gen<pvec_t> my_adata;
-    
-    ivy_mike::timer t;
-    ivy_mike::tree_parser_ms::ln_pool pool( sptr::shared_ptr<my_fact<my_adata> >( new my_fact<my_adata> ) );
-    ivy_mike::tree_parser_ms::parser tp( "test_1604/RAxML_bestTree.ref_orig", pool );
-    ivy_mike::tree_parser_ms::lnode * n = tp.parse();
-    
-    n = towards_tree( n );
     
     
     
     
-    
-    typedef tip_collector<lnode> tc_t;
-    
-    tc_t tc;
-    
-    visit_lnode( n, tc );
-    
-    std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
-    
-    for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-        // 		std::cout << (*it)->m_data->tipName << "\n";
-        name_to_lnode[(*it)->m_data->tipName] = *it;
-    }
-    
-    multiple_alignment ma;
-    ma.load_phylip( "test_1604/orig.phy.1" );
-    for( unsigned int i = 0; i < ma.names.size(); i++ ) {
-        
-        
-        sptr::shared_ptr< lnode > ln = name_to_lnode[ma.names[i]];
-        // 		adata *ad = ln->m_data.get();
-        
-        assert( typeid(*ln->m_data.get()) == typeid(my_adata ) );
-        my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
-        
-        adata->init_pvec( ma.data[i] );
-        
-    }
-    
-    
-    //     traverse( n );
-    
-    edge_collector<lnode> ec;
-    visit_edges( n, ec );
-    
-    std::cout << "edges: " << ec.m_edges.size() << "\n";
-    
-    std::vector< pvec_t > m_parsvecs;
-    m_parsvecs.resize( ec.m_edges.size() );
-    
-    
-//    mapped_file qsf( "test_1604/qs.fa" );
-	std::ifstream qsf( "test_1604/qs.fa" );
-    std::vector<std::string> qs_names;
-    std::vector<std::vector<uint8_t> > qs_seqs;
-    
-    std::vector<std::vector <uint8_t> > qs_nongappy;
-    
-    
-    
-    
-    read_fasta( qsf, qs_names, qs_seqs);
-    
-    
-    
-    qs_nongappy.resize( qs_names.size() );
-    std::vector <int> qs_bestscore(qs_names.size());
-    std::fill( qs_bestscore.begin(), qs_bestscore.end(), 32000);
-    std::vector <int> qs_bestedge(qs_names.size());
-    
-    const size_t VW = pars_align_vec::WIDTH;
-    pars_align_vec::arrays<VW> arrays;
-    
-    int n_groups = (ec.m_edges.size() / VW) + 1;
-    
-    std::vector<int> seqlist[VW];
-    const int *seqptrs[VW];
-    std::vector<unsigned int> auxlist[VW];
-    const unsigned int *auxptrs[VW];
-    pvec_t root_pvec;
-    
-    for ( int j = 0; j < n_groups; j++ ) {
-        int num_valid = 0;
-    
-        for( unsigned int i = 0; i < VW; i++ ) {
-            
-            unsigned int edge = j * VW + i;
-            if( edge < ec.m_edges.size() ) {
-                
-                
-                do_newview( root_pvec, ec.m_edges[edge].first, ec.m_edges[edge].second, true );
-                root_pvec.to_int_vec(seqlist[i]);
-                root_pvec.to_aux_vec(auxlist[i]);
-                
-                seqptrs[i] = seqlist[i].data();
-                auxptrs[i] = auxlist[i].data();
-                num_valid++;
-            } else {
-                if( i < 1 ) {
-                    throw std::runtime_error( "bad integer mathematics" );
-                }
-                seqlist[i] = seqlist[i-1];
-            }
-            
-        }
-        
-        
-        
-        for( unsigned int i = 0; i < qs_names.size(); i++ ) {
-            if( qs_nongappy[i].size() == 0 ) {
-                seq_to_nongappy_pvec( qs_seqs[i], qs_nongappy[i] );    
-            }
-            size_t stride = 1;
-            size_t aux_stride = 1;
-            pars_align_vec pa( seqptrs, qs_nongappy[i].data(), seqlist[0].size(), qs_nongappy[i].size(), stride, auxptrs, aux_stride, arrays, 0 );
-            
-            
-            pars_align_vec::score_t *score_vec = pa.align_freeshift();
-            for( int k = 0; k < num_valid; k++ ) {
-                if( score_vec[k] < qs_bestscore[i] ) {
-                    qs_bestscore[i] = score_vec[k];
-                    qs_bestedge[i] = j * VW + k;
-                }
-            }
-        }
-     
-    }
-    
-    for( unsigned int i = 0; i < qs_names.size(); i++ ) {
-        std::cout << qs_names[i] << " " << qs_bestedge[i] << " " << qs_bestscore[i] << "\n";
-        
-    }
-    
-    
-  
-    {
-        ivy_mike::timer t2;
-        pool.clear();
-     //   pool.mark(n);
-        pool.sweep();
-        
-        std::cout << t2.elapsed() << std::endl;
-    }
+
     //ivymike::LN *n = tp.parse();
     
 //     getchar();
@@ -561,8 +663,3 @@ int mainx() {
 //     getchar();
 }
 
-
-int main() {
-    mainx();
-    return 0;
-}

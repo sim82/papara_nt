@@ -291,7 +291,7 @@ int main( int argc, char *argv[] ) {
         return -1;
     }
     
-    read_fasta( qsf, qs_names, qs_seqs);
+    read_fasta( qsf, *sm, qs_names, qs_seqs);
     
     std::cerr << "using " << opt_threads << " threads\n";
 //     return 0;

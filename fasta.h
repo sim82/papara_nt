@@ -187,98 +187,98 @@ static inline bool xisspace( int c ) {
     return c == ' ' || c == '\n';   
 }
 
-template<class input>
-static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
- 
-    // WARNING: this whole fasta reader is utter crap. I am very ashamed of it...
-    
-//     std::vector<char> linebuf;//1024 * 1024); // uhm, this is ugly...
-    //std::string linebuf;
-    
-    names.clear();
-    data.clear();
-    std::vector<uint8_t> *data_accum = 0;
-    
-    while( is.good() && !is.eof() ) {
-    
-        //is.getline( linebuf.data(), linebuf.size() );
-            
-            
-        int c = is.get();
-//         get_line( is, linebuf );
-//         std::vector< char >::const_iterator li = linebuf.begin();
-        
-        if( is.eof() ) {
-            break;
-        }
-        
-        if( c == '>' ) {
-            
-            
-            while( isspace(is.get()) ) {}
-            is.unget();
-            
-            names.push_back(std::string());
-            std::string &str = names.back();
-        
-            while( true ) {
-                c = is.get();
-                
-                if( xisspace(c) || is.eof() ) {
-                    break;   
-                }
-                str.push_back(c); 
-            }
-            
-        
-//             std::cout << "name: " << names.back() << std::endl;
-            
-            data.push_back( std::vector<uint8_t>() );
-            //data_accum = &data.back();
-            data_accum = &data.back();
-        } else {
-            is.unget();
-            if( data_accum == 0 ) {
-                throw std::runtime_error( "data_accum == 0. probably bad fasta file\n" );
-            }
-            
-            while( xisspace( is.get() )) {}
-            
-//             std::cout << "xxx: " << int(xxx) << "\n";
-            
-            if( !is.eof() ) {
-                
-                is.unget();
-                
-                while( true ) {
-                    c = is.get();
-//                     std::cout << "c: " << int(c) << "\n";
-                    if( c == -1 ) {
-                        std::cout << " c:" << int(c) << " " << is.eof() ;
-                    }
-                    if( xisspace(c) || is.eof() ) {
-                        break;   
-                    }
-                    data_accum->push_back(c); 
-                    
-                }
-            }
-       }
-    }
-    
-//     std::cout << "size: " << names.size() << " " << data.size() << "\n";
-    data.resize( names.size() );
-    
-}
+// template<class input>
+// static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
+//  
+//     // WARNING: this whole fasta reader is utter crap. I am very ashamed of it...
+//     
+// //     std::vector<char> linebuf;//1024 * 1024); // uhm, this is ugly...
+//     //std::string linebuf;
+//     
+//     names.clear();
+//     data.clear();
+//     std::vector<uint8_t> *data_accum = 0;
+//     
+//     while( is.good() && !is.eof() ) {
+//     
+//         //is.getline( linebuf.data(), linebuf.size() );
+//             
+//             
+//         int c = is.get();
+// //         get_line( is, linebuf );
+// //         std::vector< char >::const_iterator li = linebuf.begin();
+//         
+//         if( is.eof() ) {
+//             break;
+//         }
+//         
+//         if( c == '>' ) {
+//             
+//             
+//             while( isspace(is.get()) ) {}
+//             is.unget();
+//             
+//             names.push_back(std::string());
+//             std::string &str = names.back();
+//         
+//             while( true ) {
+//                 c = is.get();
+//                 
+//                 if( xisspace(c) || is.eof() ) {
+//                     break;   
+//                 }
+//                 str.push_back(c); 
+//             }
+//             
+//         
+// //             std::cout << "name: " << names.back() << std::endl;
+//             
+//             data.push_back( std::vector<uint8_t>() );
+//             //data_accum = &data.back();
+//             data_accum = &data.back();
+//         } else {
+//             is.unget();
+//             if( data_accum == 0 ) {
+//                 throw std::runtime_error( "data_accum == 0. probably bad fasta file\n" );
+//             }
+//             
+//             while( xisspace( is.get() )) {}
+//             
+// //             std::cout << "xxx: " << int(xxx) << "\n";
+//             
+//             if( !is.eof() ) {
+//                 
+//                 is.unget();
+//                 
+//                 while( true ) {
+//                     c = is.get();
+// //                     std::cout << "c: " << int(c) << "\n";
+//                     if( c == -1 ) {
+//                         std::cout << " c:" << int(c) << " " << is.eof() ;
+//                     }
+//                     if( xisspace(c) || is.eof() ) {
+//                         break;   
+//                     }
+//                     data_accum->push_back(c); 
+//                     
+//                 }
+//             }
+//        }
+//     }
+//     
+// //     std::cout << "size: " << names.size() << " " << data.size() << "\n";
+//     data.resize( names.size() );
+//     
+// }
 
 template<class input, class StateMap>
 class inc_fasta {
     input &m_input;
     
-    StateMap &m_state_map;
+    const StateMap &m_state_map;
     
 public:
-    inc_fasta( input &inp, StateMap &state_map ) : m_input(inp), m_state_map(state_map) {
+    inc_fasta( input &inp, const StateMap &state_map ) : m_input(inp), m_state_map(state_map) {
         reset(); 
      
     }
@@ -327,7 +327,7 @@ public:
             }
                 
 //             std::cout << "c: " << int(c) << "\n";
-            if( !isspace(c) ) {
+            if( !isspace(c) && m_state_map.state_valid(c) ) {
                 seq.push_back( m_state_map.state_backmap(c)); 
             }
                 
@@ -336,6 +336,62 @@ public:
     }   
     
 };
+
+namespace waiting_for_N1427 {
+struct null_backmap {
+    
+    inline uint8_t state_backmap( uint8_t c ) const {
+        return c;
+    }
+    
+    inline bool state_valid( int ) const {
+        return true; // everything goes...
+    }
+};
+}
+
+template<class input>
+static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
+    
+    // optionally read_fasta can take a state-map object (i.e., normally a scoring_matrix object).
+    // use 'neutral' mapping if none explicitely given
+    waiting_for_N1427::null_backmap nb;
+    
+    inc_fasta<input,waiting_for_N1427::null_backmap> f(is, nb );
+    
+    while( true ) {
+        names.push_back(std::string());
+        data.push_back(std::vector<uint8_t>());
+        
+        bool success = f.next_seq( names.back(), data.back() );
+        
+        if( !success ) {
+            names.pop_back();
+            data.pop_back();
+            break;
+        }
+    }
+}
+
+template<typename input, typename StateMap>
+static void read_fasta( input &is, const StateMap &sm, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
+    inc_fasta<input,StateMap> f(is, sm );
+    
+    while( true ) {
+        names.push_back(std::string());
+        data.push_back(std::vector<uint8_t>());
+        
+        bool success = f.next_seq( names.back(), data.back() );
+        
+        if( !success ) {
+            names.pop_back();
+            data.pop_back();
+            break;
+        }
+    }
+}
+
+
 
 static void write_fasta( std::ostream &os, std::vector<std::string> &names, std::vector<std::string> &data ) {
  
@@ -439,6 +495,14 @@ public:
     
     inline int get_state( int i ) {
         return m_alphabet[i];
+    }
+    
+    inline bool state_valid( int s ) const {
+        if( s > 0 && size_t(s) < MAX_SIZE ) {
+            return m_backmap[s] != -1;
+        } else {
+            return false;
+        }
     }
 
     inline int state_backmap( int s ) const {
