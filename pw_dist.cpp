@@ -42,7 +42,12 @@ void write_phylip_distmatrix( const ivy_mike::tdmatrix<int> &ma, const std::vect
     for( int i = 0; i < ma.size(); i++ ) {
         os << names[i] << "\t";
         for( int j = 0; j < ma.size(); j++ ) {
-            const float norm = std::max( ma[i][i], ma[j][j] );
+            
+            // three modes for normalizing: min, max and mean
+            //const float norm = std::min( ma[i][i], ma[j][j] );
+//             const float norm = std::max( ma[i][i], ma[j][j] );
+            const float norm = (ma[i][i] + ma[j][j]) * 0.5;
+            
             
             int mae;
             if( i <= j ) {
