@@ -4,7 +4,7 @@
 #include <vector>
 #include <deque>
 #include <map>
-
+#include <cstring>
 #include "parsimony.h"
 #include "pars_align_vec.h"
 #include "fasta.h"
@@ -13,6 +13,8 @@
 #include "ivymike/tree_parser.h"
 #include "ivymike/time.h"
 #include "ivymike/getopt.h"
+#include "ivymike/thread.h"
+
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
@@ -148,12 +150,15 @@ public:
     }
     
     inline void to_int_vec( std::vector<int> &outv ) {
+        
         outv.resize( v.size() );
         
         std::copy( v.begin(), v.end(), outv.begin() );
     }
     
     inline void to_aux_vec( std::vector<unsigned int> &outv ) {
+//         std::cout << "v: " << v.size() << "\n";
+
         outv.resize( v.size() );
         std::copy( auxv.begin(), auxv.end(), outv.begin() );
         
@@ -412,6 +417,22 @@ class papara_nt {
     typedef my_adata_gen<pvec_t> my_adata;
     
         
+    const static size_t VW = pars_align_vec::WIDTH;
+    
+    struct block_t {
+        block_t() {
+            memset( this, 0, sizeof( block_t )); // FIXME: hmm, this is still legal?
+        }
+        
+        // WARNING: these are pointers into m_ref_pvecs and m_ref_aux
+        // make sure they stay valid!
+        const int *seqptrs[VW];
+        const unsigned int *auxptrs[VW];
+        size_t ref_len;
+        int edges[VW];
+        int num_valid;
+    };
+    
     papara_nt( const papara_nt &other );
     papara_nt & operator=( const papara_nt &other );
     
@@ -428,6 +449,64 @@ class papara_nt {
     
     std::vector<std::vector <int> > m_ref_pvecs;
     std::vector<std::vector <unsigned int> > m_ref_aux;
+    
+    ivy_mike::mutex m_qmtx; // mutex for the block queue and the qs best score/edge arrays
+    std::deque<block_t> m_blockqueue;
+    std::vector <int> qs_bestscore;
+    std::vector <int> qs_bestedge;
+        
+    
+    
+    
+    class worker {
+        papara_nt &m_pnt;
+    public:
+        worker( papara_nt & pnt ) : m_pnt(pnt) {}
+        void operator()() {
+            
+            pars_align_vec::arrays<VW> arrays;
+            
+            while( true ) {
+                block_t block;
+                
+                {
+                    ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
+                    if( m_pnt.m_blockqueue.empty() ) {
+                        break;
+                    }
+                    block = m_pnt.m_blockqueue.front();
+                    m_pnt.m_blockqueue.pop_front();
+                }
+                
+                
+                
+                
+                for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
+                        
+                    size_t stride = 1;
+                    size_t aux_stride = 1;
+                    pars_align_vec pa( block.seqptrs, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, block.auxptrs, aux_stride, arrays, 0 );
+                    
+                    
+                    pars_align_vec::score_t *score_vec = pa.align_freeshift();
+                
+                    {
+                        ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
+                        
+                        for( int k = 0; k < block.num_valid; k++ ) {
+                            if( score_vec[k] < m_pnt.qs_bestscore[i] ) {
+                                m_pnt.qs_bestscore[i] = score_vec[k];
+                                m_pnt.qs_bestedge[i] = block.edges[k];
+                            }
+                        }
+                    }
+                }
+                
+            }
+            
+            
+        }
+    };
     
 public:    
     
@@ -458,7 +537,7 @@ public:
         std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
         
         for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-            //      std::cout << (*it)->m_data->tipName << "\n";
+            std::cout << (*it)->m_data->tipName << "\n";
             name_to_lnode[(*it)->m_data->tipName] = *it;
         }
         
@@ -505,9 +584,10 @@ public:
         
         
         m_qs_pvecs.resize( m_qs_names.size() );
-        std::vector <int> qs_bestscore(m_qs_names.size());
+        
+        qs_bestscore.resize(m_qs_names.size());
         std::fill( qs_bestscore.begin(), qs_bestscore.end(), 32000);
-        std::vector <int> qs_bestedge(m_qs_names.size());
+        qs_bestedge.resize(m_qs_names.size());
         
         //
         // create the reference pvecs/auxvecs
@@ -535,75 +615,82 @@ public:
         
         
         //
-        // do the alignments
+        // build the alignment blocks
         //
         
-        const size_t VW = pars_align_vec::WIDTH;
-        pars_align_vec::arrays<VW> arrays;
+        
         
         int n_groups = (m_ec.m_edges.size() / VW) + 1;
         
-        std::vector<int> seqlist[VW];
+//         std::vector<int> seqlist[VW];
         const int *seqptrs[VW];
-        std::vector<unsigned int> auxlist[VW];
+//         std::vector<unsigned int> auxlist[VW];
         const unsigned int *auxptrs[VW];
         
+        std::vector<block_t> blocks;
         
         for ( int j = 0; j < n_groups; j++ ) {
             int num_valid = 0;
             
+            size_t ref_size = 0;
+            
+            block_t block;
+            
             for( unsigned int i = 0; i < VW; i++ ) {
             
                 unsigned int edge = j * VW + i;
-                if( edge < m_ec.m_edges.size() ) {
-//                     do_newview( root_pvec, m_ec.m_edges[edge].first, m_ec.m_edges[edge].second, true );
+                if( edge < m_ec.m_edges.size()) {
+                    block.edges[i] = edge;
+                    block.num_valid++;
+                    
+                    block.seqptrs[i] = m_ref_pvecs[edge].data();
+                    block.auxptrs[i] = m_ref_aux[edge].data();
+                    block.ref_len = m_ref_pvecs[edge].size();
+                    //                     do_newview( root_pvec, m_ec.m_edges[edge].first, m_ec.m_edges[edge].second, true );
 //                     root_pvec.to_int_vec(seqlist[i]);
 //                     root_pvec.to_aux_vec(auxlist[i]);
-                    
-                    seqptrs[i] = m_ref_pvecs[edge].data();
-                    auxptrs[i] = m_ref_aux[edge].data();
+//                     
+//                     seqptrs[i] = seqlist[i].data();
+//                     auxptrs[i] = auxlist[i].data();\
+
                     num_valid++;
                 } else {
                     if( i < 1 ) {
                         throw std::runtime_error( "bad integer mathematics" );
                     }
-                    seqlist[i] = seqlist[i-1];
+                    block.edges[i] = block.edges[i-1];
+                    
+                    block.seqptrs[i] = block.seqptrs[i-1];
+                    block.auxptrs[i] = block.auxptrs[i-1];
                 }
                 
             }
-            
-            
-            
-            for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
-                if( m_qs_pvecs[i].size() == 0 ) {
-                    seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );    
-                }
-                size_t stride = 1;
-                size_t aux_stride = 1;
-                pars_align_vec pa( seqptrs, m_qs_pvecs[i].data(), seqlist[0].size(), m_qs_pvecs[i].size(), stride, auxptrs, aux_stride, arrays, 0 );
-                
-                
-                pars_align_vec::score_t *score_vec = pa.align_freeshift();
-                for( int k = 0; k < num_valid; k++ ) {
-                    if( score_vec[k] < qs_bestscore[i] ) {
-                        qs_bestscore[i] = score_vec[k];
-                        qs_bestedge[i] = j * VW + k;
-                    }
-                }
-            }
-            
+            m_blockqueue.push_back(block);
         }
+        
+        //
+        // preprocess query sequences
+        //
+        
+        for( int i = 0; i < m_qs_seqs.size(); i++ ) {
+            seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );    
+        }
+        
+        //
+        // work
+        //
+        
+        ivy_mike::thread_group tg;
+        
+        while( tg.size() < 2 ) {
+            tg.create_thread(worker(*this));
+        }
+        tg.join_all();
         
         for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
             std::cout << m_qs_names[i] << " " << qs_bestedge[i] << " " << qs_bestscore[i] << "\n";
         
         }
-        
-        
-        
-        
-    
-        
     }
     
     

@@ -21,7 +21,7 @@ add_executable(smith_waterman smith_waterman.cpp )
 add_executable(stepwise_addition stepwise_addition.cpp pars_align_vec.cpp pairwise_seq_distance.cpp )
 add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
-target_link_libraries(papara_nt ivymike)
+target_link_libraries(papara_nt ivymike pthread)
 #target_link_libraries(stepwise_addition ivymike)
 target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS})
 target_link_libraries(pw_dist ivymike ${BOOST_LIBS})
