@@ -16,7 +16,7 @@ set( BOOST_LIBS boost_thread boost_program_options)
 ENDIF()
 
 
-add_executable(papara_nt main.cpp pars_align_vec.cpp)
+add_executable(papara_nt main.cpp pars_align_vec.cpp pars_align_seq.cpp)
 add_executable(smith_waterman smith_waterman.cpp )
 add_executable(stepwise_addition stepwise_addition.cpp pars_align_vec.cpp pairwise_seq_distance.cpp )
 add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )

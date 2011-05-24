@@ -139,7 +139,7 @@ private:
 public:
     pars_align_vec( const int** seqA, unsigned char* seqB, int n_a, int n_b, int aStride, 
                     const unsigned int **aAux, int aAuxStride, arrays<WIDTH> &arr, const unsigned int *bvtrans,
-                    score_t gapOpen = 1, score_t gapExtend = 1, score_t mismatch = 4, score_t matchCGap = 10 );
+                    score_t gapOpen = 1, score_t gapExtend = 1, score_t mismatch = 3, score_t matchCGap = 10 );
     
     ~pars_align_vec() {}
     
