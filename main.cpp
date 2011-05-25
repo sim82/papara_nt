@@ -615,10 +615,7 @@ class papara_nt {
                         }
                     }
                 }
-                
             }
-            
-            
         }
     };
     

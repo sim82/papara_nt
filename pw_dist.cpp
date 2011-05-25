@@ -28,7 +28,8 @@
 // #define PWDIST_INLINE
 #include "pairwise_seq_distance.h"
 //void pairwise_seq_distance( const std::vector<std::string> &names, std::vector< std::vector<uint8_t> > &seq_raw, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
-
+#include "dtw.h"
+#include <ivymike/time.h>
 
 
 
@@ -74,8 +75,12 @@ public:
     }
 };
 
+
+// #define XSIZE(x) (sizeof(x) / sizeof(*x))
 int main( int argc, char *argv[] ) {
 
+
+    
 //     tdmatrix<int> tdm( 10, 10 );
 // 
 //     std::fill( tdm.begin(), tdm.end(), 33 );
