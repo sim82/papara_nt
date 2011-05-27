@@ -22,11 +22,39 @@ int main() {
 //     
 //     std::vector<float> a( ax, ax + ax_s );
 //     std::vector<float> b( bx, bx + bx_s );
+    if(0)
+    {
+        aligned_buffer<float> a(4);
+        aligned_buffer<float> b(8);
+        
+        float bx[] = {1,-1,1234,-1234,1e6,-1e6,1e16,-1e16,1e-16,-1e-16};
+        float ax[] = {0,0,0,0};
+        
+        std::copy( ax, ax + 4, a.begin() );
+        std::copy( bx, bx + 8, b.begin() );
+        
+        typedef vector_unit<float,4> vu;
+        typedef typename vu::vec_t vec_t;
+        
+        vec_t av = vu::load( a(0) );
+        vec_t v1 = vu::load( b(0) );
+        vec_t v2 = vu::load( b(4) );
+        
+        vec_t u1 = vu::abs_diff(v1,av);
+        vec_t u2 = vu::abs_diff(v2,av);
+        
+        vu::store( u1, b(0) );
+        vu::store( u2, b(4) );
+        
+        std::copy( b.begin(), b.end(), std::ostream_iterator<float>( std::cout, "\n" ));
+        return 0;
+    }
+
 
     short v = -1234;
     std::cout << (~v & 0x7fff) << "\n";
     
-    typedef short value_t;
+    typedef int value_t;
 //     typedef int value_t;
     const size_t VW = 16 / sizeof(value_t);
     
@@ -42,11 +70,13 @@ int main() {
     for( int i = 0; i < a.size(); i++ ) {
         //a[i] = (value_t)(sin( (i / float(a.size())) * (16 + 16 * (i/float(a.size()))) * 3.14159) * 128) + i * 0.1;
         if( i % 32 < 16 ) {
-            a[i] = 128;
+            a[i] = -127;
         } else {
-            a[i] = 0;
+            a[i] = 127;
         }
         b[i] = (value_t)(sin( (i / float(a.size())) * 32 * 3.14159) * 128);
+        
+        
         
         //         if( i > 0 ) {
             //             a[i] = a0[i-1] - a0[i];
@@ -65,8 +95,8 @@ int main() {
         ivy_mike::timer t1;
         for( int i = 0; i < 1; i++ ) {
             
-            const value_t large_float = 0x7fff;
-            float res = dtw_align( a.begin(), a.end(), b.begin(), b.end(), large_float, fabsf, my_min3<float> );
+            const value_t large_value = 0x7fff;
+            float res = dtw_align( a.begin(), a.end(), b.begin(), b.end(), large_value, fabsf, my_min3<float> );
             ncup += a.size() * b.size();
             std::cout << "res: " << res << "\n";
         }
@@ -79,7 +109,7 @@ int main() {
     std::vector<value_t> out(VW);
     dtw_align_ps<value_t> ps;
     aligned_buffer<value_t> aprofile;
-    for( int i = 0; i < 1000; i++ ) 
+    for( int i = 0; i < 10000; i++ ) 
     {
      
         

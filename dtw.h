@@ -101,9 +101,9 @@ static value_t dtw_align( const vec_iter_t &a_begin, const vec_iter_t &a_end, co
             
             const value_t min = my_min3( sd, su, sl );
             
-            if( int(min) + cost > 0x7fff ) {
+            if( int(min) + cost > large_value ) {
                 std::cout << "overflow\n";
-                cost = 0x7fff - min;
+                cost = large_value - min;
             } 
             
             *upper = last_s = cost + min;
