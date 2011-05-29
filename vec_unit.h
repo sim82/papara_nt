@@ -204,7 +204,9 @@ struct vector_unit<int, 4> {
 #ifdef __SSE4_1__
         return _mm_min_epi32( a, b );
 #else
-#error missing SSE4.1, find some workaround...
+        throw std::runtime_error( "missing sse4.1" );
+        
+// #error missing SSE4.1, find some workaround...
 #endif
         
     }
@@ -212,8 +214,9 @@ struct vector_unit<int, 4> {
     static inline const vec_t max( const vec_t &a, const vec_t &b ) {
 #ifdef __SSE4_1__
         return _mm_max_epi32( a, b );
-#else        
-#error missing SSE4.1, find some workaround...
+#else      
+        throw std::runtime_error( "missing sse4.1" );
+// #error missing SSE4.1, find some workaround...
 #endif
     }
     

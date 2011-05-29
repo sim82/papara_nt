@@ -54,7 +54,7 @@ int main() {
     short v = -1234;
     std::cout << (~v & 0x7fff) << "\n";
     
-    typedef int value_t;
+    typedef short value_t;
 //     typedef int value_t;
     const size_t VW = 16 / sizeof(value_t);
     
@@ -71,9 +71,13 @@ int main() {
         //a[i] = (value_t)(sin( (i / float(a.size())) * (16 + 16 * (i/float(a.size()))) * 3.14159) * 128) + i * 0.1;
         if( i % 32 < 16 ) {
             a[i] = -127;
+//             b[i] = 127;
         } else {
             a[i] = 127;
+//             b[i] = -127;
         }
+//         a[i] = (value_t)(sin( (i / float(a.size())) * 32 * 3.14159) * 128);
+//         
         b[i] = (value_t)(sin( (i / float(a.size())) * 32 * 3.14159) * 128);
         
         
