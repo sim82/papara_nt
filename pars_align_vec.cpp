@@ -61,7 +61,7 @@ void pars_align_vec::align_freeshift_s11() {
 }
 void pars_align_vec::align_freeshift_s3() {
     score_t best = LARGE_VALUE;
-    const int band_width = m_na - m_nb;
+    const size_t band_width = m_na - m_nb;
     
     #define AUX_CGAP ( 0x1 )
     
@@ -174,7 +174,7 @@ void pars_align_vec::align_freeshift_s3() {
     //const int tb_start_b = -1;
     vu_t::vec_t best_score = vu_t::set1( LARGE_VALUE );
 //         std::cout << "find best\n";
-    for ( int a = m_na - 1; a >= m_nb - 1; a-- ) {
+    for ( size_t a = m_na - 1; a >= m_nb - 1; a-- ) {
         vu_t::vec_t cand = vu_t::load(m_arrays.m_score(svaddr ( a, tb_start_b )));
         
 //         std::cout << " " << a << ":" << _mm_extract_epi16(cand, 0) << "\n";
@@ -189,8 +189,8 @@ void pars_align_vec::align_freeshift_s3() {
 //     std::cout << "best: " << m_best.m_ptr[0] << "\n";
 }
 
-pars_align_vec::pars_align_vec(const int** seqA, unsigned char* seqB, int n_a, int n_b, int aStride, const unsigned int** aAux,
-                               int aAuxStride, pars_align_vec::arrays<WIDTH>& arr, const unsigned int* bvtrans,
+pars_align_vec::pars_align_vec(const int** seqA, unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const unsigned int** aAux,
+                               size_t aAuxStride, pars_align_vec::arrays<WIDTH>& arr, const unsigned int* bvtrans,
                                pars_align_vec::score_t gapOpen, pars_align_vec::score_t gap_extend,
                                pars_align_vec::score_t mismatch, pars_align_vec::score_t match_cgap) 
 

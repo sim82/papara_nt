@@ -61,11 +61,11 @@ public:
     };
     size_t m_ncups;
 private:
-    int m_na;
-    int m_nb;
+    size_t m_na;
+    size_t m_nb;
 
-    int m_ma;
-    int m_mb;
+    size_t m_ma;
+    size_t m_mb;
 
     size_t m_msize;
 
@@ -73,16 +73,16 @@ private:
     const unsigned char *m_b;
     const unsigned int *m_aAux;
 
-    int m_aStride;
-    int m_aAuxStride;
+    size_t m_aStride;
+    size_t m_aAuxStride;
 
     arrays &m_arr;
-    int m_tbStartA;
-    int m_tbStartB;
+    ptrdiff_t m_tbStartA;
+    ptrdiff_t m_tbStartB;
 
     const unsigned int *m_bvtrans;
 
-    inline size_t addr( int a, int b ) {
+    inline size_t addr( size_t a, size_t b ) {
 #if 1
         return a + b * m_ma;
 #else
@@ -90,7 +90,7 @@ private:
 #endif
     }
 
-    inline size_t saddr( int a, int b ) {
+    inline size_t saddr( ptrdiff_t a, ptrdiff_t b ) {
         return addr( a + 1, (b + 1));
     }
 
@@ -98,18 +98,18 @@ private:
 //      return addr( a + 1, (b + 1) % 2 );
 //     }
 
-    inline pars_state_t getSeqA ( int a ) {
+    inline pars_state_t getSeqA ( size_t a ) {
         return pars_state_t(m_a[a * m_aStride]);
     }
 
 
-    inline int getAuxA ( int a ) {
+    inline int getAuxA ( size_t a ) {
         return m_aAux[a * m_aAuxStride];
     }
 
 public:
 
-    pars_align_seq( const int* seqA, unsigned char* seqB, int n_a, int n_b, int aStride, const unsigned int *aAux, int aAuxStride, arrays &arr, const unsigned int *bvtrans = 0,
+    pars_align_seq( const int* seqA, unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const unsigned int *aAux, size_t aAuxStride, arrays &arr, const unsigned int *bvtrans = 0,
                score_t gapOpen = 1, score_t gapExtend = 1, score_t mismatch = 3, score_t matchCGap = 10 )
     // : LARGE_VALUE(std::numeric_limits<score_t>::max() - 100)
     //: LARGE_VALUE(32000),
@@ -158,7 +158,7 @@ public:
 
 #define AUX_CGAP ( 0x1 )
         score_t best = LARGE_VALUE;
-        const int band_width = m_na - m_nb;
+        const size_t band_width = m_na - m_nb;
         score_t * __restrict sp = m_arr.score;
         score_t * __restrict sLp = m_arr.scoreL;
         uint8_t * __restrict dir = m_arr.dir;
@@ -311,7 +311,7 @@ public:
         m_tbStartB = m_nb - 1;
         m_tbStartA = -1;
 
-        for ( int a = m_na - 1; a >= m_nb - 1; a-- ) {
+        for ( size_t a = m_na - 1; a >= m_nb - 1; a-- ) {
 
             //assert(0); // bogus! use float. look if this caused errors!
             float s = m_arr.score[saddr ( a, m_tbStartB ) ];

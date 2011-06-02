@@ -77,8 +77,8 @@ private:
     
     
     
-    const int m_stride_a;
-    const int m_stride_aux_a;
+    const size_t m_stride_a;
+    const size_t m_stride_aux_a;
     
     aligned_buffer<score_t> m_best;
     
@@ -106,29 +106,29 @@ private:
     
     
     
-    inline size_t addr( int a, int b ) {
+    inline size_t addr( size_t a, size_t b ) {
         return a + b * ma();
     }
     
 
-    inline size_t saddr( int a, int b ) {
+    inline size_t saddr( ptrdiff_t a, ptrdiff_t b ) {
         return addr( a + 1, (b + 1));
     }
     
-    inline size_t vaddr( int a, int b ) {
+    inline size_t vaddr( size_t a, size_t b ) {
         return (a + b * ma()) * WIDTH;
     }
     
 
-    inline size_t svaddr( int a, int b ) {
+    inline size_t svaddr( ptrdiff_t a, ptrdiff_t b ) {
         return vaddr( a + 1, (b + 1));
     }
     
-    inline pars_state_t get_seq_a ( int idx, int a ) {
+    inline pars_state_t get_seq_a ( size_t idx, size_t a ) {
         return pars_state_t(m_seqlist_a[idx][a * m_stride_a]);
     }
     
-    inline int get_aux_a( int idx, int a ) {
+    inline int get_aux_a( size_t idx, size_t a ) {
         return m_auxlist_a[idx][a * m_stride_aux_a];
     }
     
@@ -137,8 +137,8 @@ private:
 
     
 public:
-    pars_align_vec( const int** seqA, unsigned char* seqB, int n_a, int n_b, int aStride, 
-                    const unsigned int **aAux, int aAuxStride, arrays<WIDTH> &arr, const unsigned int *bvtrans,
+    pars_align_vec( const int** seqA, unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, 
+                    const unsigned int **aAux, size_t aAuxStride, arrays<WIDTH> &arr, const unsigned int *bvtrans,
                     score_t gapOpen = 1, score_t gapExtend = 1, score_t mismatch = 3, score_t matchCGap = 10 );
     
     ~pars_align_vec() {}

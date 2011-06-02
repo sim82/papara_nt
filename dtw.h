@@ -11,8 +11,8 @@
 
 template<typename vec_iter_t>
 static void traceback( ivy_mike::tdmatrix<uint8_t> &tbmat, vec_iter_t a_end, vec_iter_t b_end ) {
-    int a = tbmat.size() - 1;
-    int b = tbmat[0].size() - 1;
+    ptrdiff_t a = tbmat.size() - 1;
+    ptrdiff_t b = tbmat[0].size() - 1;
     int len = 0;
     std:: ofstream os( "tb.txt" );
     while( a > 0 || b > 0 ) {

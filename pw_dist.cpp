@@ -161,7 +161,8 @@ int main( int argc, char *argv[] ) {
     
     if( igp.opt_count('f') != 1 ) {
         std::cerr << "missing option -f\n";
-        return 0;
+        //return 0;
+		opt_seq_file = "c:\\src\\papara_nt\\test_1604\\1604.fa.400";
     }
     
    // std::string opt_seq_file = igp.get_string('f');

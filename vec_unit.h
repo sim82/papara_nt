@@ -235,7 +235,7 @@ struct vector_unit<int, 4> {
     }
     
 };
-
+#ifndef WIN32
 template<>
 struct vector_unit<float, 4> {
 
@@ -335,7 +335,7 @@ struct vector_unit<float, 4> {
     
 };
 
-
+#endif
 #ifdef HAVE_AVX
 // AVX is the most pointless thin in the world, as fas as integers are concerned.
 // waiting for AVX5.7

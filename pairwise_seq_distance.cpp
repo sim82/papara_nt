@@ -51,7 +51,7 @@ namespace timpl = ivy_mike;
 //typedef boost::multi_array<int,2> pw_score_matrix;
 typedef ivy_mike::tdmatrix<int> pw_score_matrix;
 
-static float read_temp() {
+static double read_temp() {
     std::ifstream is("/sys/class/hwmon/hwmon0/temp1_input" );
     
     if( is.good() ) {
@@ -66,7 +66,7 @@ static float read_temp() {
 
 template <size_t W, typename seq_char_t>
 struct db_block {
-    int didx[W];
+    size_t didx[W];
 //     std::vector<seq_char_t> *ddata[W];
     size_t dpad[W];    
     size_t maxlen;

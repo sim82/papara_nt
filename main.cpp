@@ -5,6 +5,7 @@
 #include <vector>
 #include <deque>
 #include <map>
+#include <functional>
 #include <cstring>
 #include <boost/io/ios_state.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
@@ -364,7 +365,7 @@ public:
         {
             ublas::matrix<double> A(m_evecs);
             ublas::permutation_matrix<size_t> pm( A.size1() );
-            int res = ublas::lu_factorize(A,pm);
+            size_t res = ublas::lu_factorize(A,pm);
             if( res != 0 ) {
                 throw std::runtime_error( " ublas::lu_factorize failed" );
             }
@@ -516,7 +517,7 @@ public:
         for( ublas::matrix< double >::iterator2 tit = t.begin2(); tit != t.end2(); ++tit ) {
             odds.push_back( *tit / *(tit.begin()+1));
         }
-        std::transform( odds.begin(), odds.end(), odds.begin(), log );
+        std::transform( odds.begin(), odds.end(), odds.begin(), std::ptr_fun<double>(log) );
         
         std::vector<bool> bias(odds.size());
         std::transform( odds.begin(), odds.end(), bias.begin(), std::bind1st( std::greater<double>(), 0.0 ) );
@@ -855,9 +856,9 @@ class papara_nt {
     
     class worker {
         papara_nt &m_pnt;
-        int m_rank;
+        size_t m_rank;
     public:
-        worker( papara_nt & pnt, int rank ) : m_pnt(pnt), m_rank(rank) {}
+        worker( papara_nt & pnt, size_t rank ) : m_pnt(pnt), m_rank(rank) {}
         void operator()() {
             
             pars_align_vec::arrays<VW> arrays;
@@ -933,7 +934,7 @@ class papara_nt {
         // sequencial algorithm. 
         
         assert( m_blockqueue.empty() );
-        int n_groups = (m_ec.m_edges.size() / VW);
+        size_t n_groups = (m_ec.m_edges.size() / VW);
         if( (m_ec.m_edges.size() % VW) != 0 ) {
             n_groups++;
         }

@@ -11,9 +11,11 @@ IF(WIN32)
 include_directories( ${include_directories} C:\\src\\boost_1_46_1)
 LINK_DIRECTORIES( ${LINK_DIRECTORIES} C:\\src\\boost_1_46_1\\stage\\lib)
 set( BOOST_LIBS )
+set( SYSDEP_LIBS )
 ELSE()
 SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -march=native")
 set( BOOST_LIBS boost_thread boost_program_options)
+set(SYSDEP_LIBS pthread)
 ENDIF()
 
 
@@ -24,11 +26,11 @@ add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 add_executable(tbb_test tbb.cpp )
 add_executable(dtw dtw.cpp )
 
-target_link_libraries(papara_nt ivymike pthread ublas_jama)
+target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS})
 #target_link_libraries(stepwise_addition ivymike)
 target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS})
 target_link_libraries(pw_dist ivymike ${BOOST_LIBS})
-target_link_libraries(tbb_test tbb ublas_jama ivymike )
+target_link_libraries(tbb_test ublas_jama ivymike )
 
 target_link_libraries(dtw ivymike)
 

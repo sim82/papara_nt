@@ -421,11 +421,11 @@ private:
     std::vector<score_t> m_matrix;
     std::vector<int> m_backmap;
     std::string m_alphabet;
-    size_t addr( int a, int b ) {
+    size_t addr( size_t a, size_t b ) {
         return a + b * MAX_SIZE;
     }
     
-    size_t caddr( int a, int b ) {
+    size_t caddr( size_t a, size_t b ) {
         return a + b * m_cmatrixsize;
     }
     
@@ -534,7 +534,7 @@ public:
     }
     
     inline int get_zero_state() const {
-        return m_alphabet.size();
+        return int(m_alphabet.size());
     }
     
     inline char *get_cslice( int a ) const {
@@ -553,7 +553,7 @@ public:
         
         for( int i = 0; i < 4; i++ ) {
             const char ci = acgt[i];
-            m_backmap[ci] = m_alphabet.size();
+            m_backmap[ci] = int(m_alphabet.size());
             m_alphabet.push_back(ci);
             
             
@@ -615,7 +615,7 @@ public:
                 while( c != '\n' ) {
                     c = toupper(c);
                     
-                    m_backmap[c] = m_alphabet.size();
+                    m_backmap[c] = int(m_alphabet.size());
                     m_alphabet.push_back(c);
                     
                     do {

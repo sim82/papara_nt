@@ -22,7 +22,8 @@ int main() {
 //     
 //     std::vector<float> a( ax, ax + ax_s );
 //     std::vector<float> b( bx, bx + bx_s );
-    if(0)
+#if 0
+	if(0)
     {
         aligned_buffer<float> a(4);
         aligned_buffer<float> b(8);
@@ -34,7 +35,7 @@ int main() {
         std::copy( bx, bx + 8, b.begin() );
         
         typedef vector_unit<float,4> vu;
-        typedef typename vu::vec_t vec_t;
+        typedef vu::vec_t vec_t;
         
         vec_t av = vu::load( a(0) );
         vec_t v1 = vu::load( b(0) );
@@ -49,7 +50,7 @@ int main() {
         std::copy( b.begin(), b.end(), std::ostream_iterator<float>( std::cout, "\n" ));
         return 0;
     }
-
+#endif
 
     short v = -1234;
     std::cout << (~v & 0x7fff) << "\n";
@@ -67,7 +68,7 @@ int main() {
     float d = 0;
     std::ofstream os( "in.txt" );
     
-    for( int i = 0; i < a.size(); i++ ) {
+    for( size_t i = 0; i < a.size(); i++ ) {
         //a[i] = (value_t)(sin( (i / float(a.size())) * (16 + 16 * (i/float(a.size()))) * 3.14159) * 128) + i * 0.1;
         if( i % 32 < 16 ) {
             a[i] = -127;
@@ -87,7 +88,7 @@ int main() {
         //             b[i] = b0[i-1] - b0[i];
         //         }
         //      
-        d += fabs(a[i] - b[i]);
+        d += fabs((double)(a[i] - b[i]));
         os << a[i] << " " << b[i] << "\n";
     }
     
@@ -105,7 +106,7 @@ int main() {
             std::cout << "res: " << res << "\n";
         }
         
-        std::cout << ncup << " in " << t1.elapsed() << ": " << (ncup / (t1.elapsed() * 1e9)) << "\n";
+        std::cout << ncup << " in " << t1.elapsed() << ": " << (double(ncup) / (t1.elapsed() * 1e9)) << "\n";
     }
     ivy_mike::timer t1;
     size_t ncup = 0;
@@ -113,13 +114,8 @@ int main() {
     std::vector<value_t> out(VW);
     dtw_align_ps<value_t> ps;
     aligned_buffer<value_t> aprofile;
-    for( int i = 0; i < 10000; i++ ) 
+    for( int run = 0; run < 10000; run++ ) 
     {
-     
-        
-        
-        
-        
         
         size_t asize = a.size();
         
@@ -127,7 +123,7 @@ int main() {
             aprofile.resize( asize * VW );
         }
         
-        for( int i = 0; i < asize; i++ ) {
+        for( size_t i = 0; i < asize; i++ ) {
             std::fill( aprofile(i * VW), aprofile(i*VW + VW), a[i] );
         }
         
