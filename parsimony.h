@@ -36,6 +36,7 @@ struct rooted_bifurcation {
     lnode * child1;
     lnode * child2;
     
+        
     tip_case tc;
     
     rooted_bifurcation() : parent(0), child1(0), child2(0) {}

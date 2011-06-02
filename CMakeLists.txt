@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 2.8)
 
 project(papara_nt)
 add_subdirectory(ivy_mike)
+add_subdirectory(ublasJama-1.0.2.3)
 
-include_directories( ${include_directories} ivy_mike/src . )
+include_directories( ${include_directories} ivy_mike/src . ublasJama-1.0.2.3 )
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)
@@ -23,11 +24,11 @@ add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 add_executable(tbb_test tbb.cpp )
 add_executable(dtw dtw.cpp )
 
-target_link_libraries(papara_nt ivymike pthread)
+target_link_libraries(papara_nt ivymike pthread ublas_jama)
 #target_link_libraries(stepwise_addition ivymike)
 target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS})
 target_link_libraries(pw_dist ivymike ${BOOST_LIBS})
-target_link_libraries(tbb_test tbb)
+target_link_libraries(tbb_test tbb ublas_jama ivymike )
 
 target_link_libraries(dtw ivymike)
 

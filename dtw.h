@@ -148,8 +148,8 @@ void dtw_align_vec( dtw_align_ps<score_t> &ps, aligned_buffer<score_t> &aprofile
     if( mat.size() < (asize+1) * W ) {
         mat.resize( (asize + 1) * W );
     }
-    
-    std::fill( mat.begin(), mat.end(), vu::LARGE_VALUE );
+    const score_t LARGE_VALUE = vu::LARGE_VALUE;
+    std::fill( mat.begin(), mat.end(), LARGE_VALUE );
     {
         vu::store( vu::set1(vu::BIAS), mat(0) );
     }

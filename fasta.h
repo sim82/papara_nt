@@ -393,19 +393,19 @@ static void read_fasta( input &is, const StateMap &sm, std::vector<std::string> 
 
 
 
-static void write_fasta( std::ostream &os, std::vector<std::string> &names, std::vector<std::string> &data ) {
- 
-    assert( names.size() == data.size() );
-    
-    for( size_t i = 0; i < names.size(); i++ ) {
-     
-        os << ">" << names[i] << "\n";
-        os << data[i] << "\n";
-    }
-        
-        
-        
-}
+// static void write_fasta( std::ostream &os, std::vector<std::string> &names, std::vector<std::string> &data ) {
+//  
+//     assert( names.size() == data.size() );
+//     
+//     for( size_t i = 0; i < names.size(); i++ ) {
+//      
+//         os << ">" << names[i] << "\n";
+//         os << data[i] << "\n";
+//     }
+//         
+//         
+//         
+// }
 
 class scoring_matrix {
 public:
