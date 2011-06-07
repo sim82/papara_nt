@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include <cstdio>
+#include <cstddef>
 
 class pars_align_seq {
       typedef unsigned int pars_state_t;
@@ -166,7 +167,7 @@ public:
 
 
 
-        for ( int ib = 0; ib < m_nb; ib++ ) {
+        for ( size_t ib = 0; ib < m_nb; ib++ ) {
             pars_state_t cb;// = m_b[ib];
 
 
@@ -183,7 +184,7 @@ public:
                 cb = m_bvtrans[m_b[ib]];
             }
 
-            int astart = ib;
+            size_t astart = ib;
             score_t last_sp = sp[saddr(astart - 1, ib)];
             score_t last_sLp = sLp[saddr(astart - 1, ib)];
 
@@ -195,7 +196,7 @@ public:
             // /*       score_t *sp_0_0 = &sp[saddr_0_0];
             //          score_t *sp_1_1 = &sp[saddr_1_1];*/
 
-            for ( int ia = astart; ia <= ib + band_width; ia++ /*, saddr_0_0++, saddr_1_1++, sp_0_0++, sp_1_1++*/ ) {
+            for ( size_t ia = astart; ia <= ib + band_width; ia++ /*, saddr_0_0++, saddr_1_1++, sp_0_0++, sp_1_1++*/ ) {
                 const pars_state_t ca = getSeqA( ia );
 
                 // cgap == true means that we are at a position with a 'constant gap', according to the tree phylogeny (this is
@@ -291,9 +292,9 @@ public:
         
         
         if( g_dump ) {
-            for( int ib = -1; ib < m_nb; ib++ ) {
+            for( int ib = -1; ib < int(m_nb); ib++ ) {
                 
-                for( int ia = -1; ia < m_na; ia++ ) {
+                for( int ia = -1; ia < int(m_na); ia++ ) {
                         
                     printf( "\t%d", sp[saddr(ia, ib)] );
                     

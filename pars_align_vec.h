@@ -150,7 +150,7 @@ public:
     }
         
     inline score_t *get_best() {
-        return m_best.m_ptr;
+        return m_best.base();
     }
     inline size_t get_ncups() {
      

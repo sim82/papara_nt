@@ -457,7 +457,7 @@ private:
         for( size_t i = 0; i < asize; i++ ) {
             for( size_t j = 0; j < asize; j++ ) {
                 
-                m_cmatrix.m_ptr[caddr(i,j)] = m_matrix[addr(m_alphabet[i], m_alphabet[j])];
+                m_cmatrix[caddr(i,j)] = m_matrix[addr(m_alphabet[i], m_alphabet[j])];
                 
             }
         }
@@ -537,7 +537,7 @@ public:
         return int(m_alphabet.size());
     }
     
-    inline char *get_cslice( int a ) const {
+    inline const char *get_cslice( int a ) const {
         //return &m_cmatrix[a * m_alphabet.size()];
         return m_cmatrix(a * m_cmatrixsize);
     }

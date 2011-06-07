@@ -11,7 +11,7 @@
  *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
  *  for more details.
  */
-
+#define PWDIST_INLINE
 #include "pairwise_seq_distance.h"
 
 #include "ivymike/tdmatrix.h"
@@ -21,7 +21,7 @@
 
 
 
-void pairwise_seq_distance(std::vector< std::vector<uint8_t> > &seq_raw, ivy_mike::tdmatrix<int> &, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
+// void pairwise_seq_distance(std::vector< std::vector<uint8_t> > &seq_raw, ivy_mike::tdmatrix<int> &, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
 
 int main() {
     //mapped_file qsf( "test_1604/1604.fa" );

@@ -1,9 +1,22 @@
-
+/*
+ * Copyright (C) 2011 Simon A. Berger
+ * 
+ *  This program is free software; you may redistribute it and/or modify its
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but
+ *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
+ */
 
 #include <iostream>
 #include <iterator>
 #include <math.h>
 #include <ivymike/time.h>
+#include <ctime>
 #include "dtw.h"
 
 template<typename v_t>
@@ -11,7 +24,45 @@ inline v_t my_min3( v_t a, v_t b, v_t c ) {
     return std::min( a, std::min(b, c));
 }
 
+void bla() {
+    static bool first = true;
+    
+    if( first ) {
+        std::cout << "first\n";
+        first = false;
+    } else {
+        std::cout << "not first\n";
+    }
+    
+    
+}
+
 int main() {
+    std::cout << CLOCKS_PER_SEC << "\n";
+    ivy_mike::timer tx;
+    while(true) {
+        bla();
+        std::cout << std::clock() / double(CLOCKS_PER_SEC) << "\n";
+        std::cout << tx.elapsed() << "\n";
+    }
+    
+    {
+        int y = 1234;
+        std::cout << y << "\n";
+    }
+    
+    int xxx[1024];// = int();
+    
+//     if( my_min3<int>(1, 2, 3) == 4 ) {
+//         xxx = 666;
+//     }
+    
+    xxx[666] = int();
+    
+    std::cout << xxx[666] << "\n";
+    
+    return 0;
+    
  //     float ax[] = {1,2,3,4,5};
 //     float bx[] = {1,2,4};
 //     

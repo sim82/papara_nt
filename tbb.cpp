@@ -264,12 +264,12 @@ int main() {
     
     
     
-    for ( int i=0; i < n; i++)
+    for ( size_t i=0; i < n; i++)
     {
-        for ( int j=i+1;  j < n; j++)
+        for ( size_t j=i+1;  j < n; j++)
         {
             //             double factor =  initialRates[m++];
-            double factor = 1.0; // initial rate = 1
+//             double factor = 1.0; // initial rate = 1
 #if 0
             rate_matrix(i,j) = rate_matrix(j,i) = factor * sqrt( frequencies(i) * frequencies(j));
             rate_matrix(i,i) -= factor * frequencies(j);
@@ -297,7 +297,7 @@ int main() {
     
     ublas::diagonal_matrix<double> diag_evals(n); 
     
-    for( int i = 0 ; i < n; i++ ) {
+    for( size_t i = 0 ; i < n; i++ ) {
         diag_evals(i,i) = exp( 0.1 * evals(i) );
     }
     

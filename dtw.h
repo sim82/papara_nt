@@ -1,9 +1,24 @@
+/*
+ * Copyright (C) 2011 Simon A. Berger
+ * 
+ *  This program is free software; you may redistribute it and/or modify its
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but
+ *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
+ */
+
 #ifndef __dtw_h
 #define __dtw_h
 
 #include <fstream>
 #include <stdint.h>
 #include <vector>
+#include <cassert>
 
 #include "vec_unit.h"
 #include "aligned_buffer.h"
@@ -73,7 +88,9 @@ static value_t dtw_align( const vec_iter_t &a_begin, const vec_iter_t &a_end, co
     mat[0] = 0;
     
 //     std:: ofstream os( "/tmp/yyy.txt" );
-    value_t last_s;
+    value_t last_s = value_t(); // guru meditation: I thought that the default constructor of POD types is supposed to do nothing. Still this seems like a generic way to get rid of the 'last_s might be uninitialized' warning. Finally I should get a copy of TC++PL...
+    assert( a_begin != a_end ); // just to make sure that last_s really is never used uninitialized...
+    
     for( vec_iter_t ait = a_begin; ait != a_end; ++ait ) {
         const value_t a = *ait;
         last_s = large_value;
@@ -157,7 +174,7 @@ void dtw_align_vec( dtw_align_ps<score_t> &ps, aligned_buffer<score_t> &aprofile
     vec_t last_s;
     vec_t diag_init = vu::set1(vu::BIAS);
     
-    for( int ia = 0; ia < asize; ia++ ) {
+    for( size_t ia = 0; ia < asize; ia++ ) {
         
         //const value_t a = *ait;
         const vec_t a = vu::load(aprofile(ia * W));
@@ -200,7 +217,7 @@ void dtw_align_vec( dtw_align_ps<score_t> &ps, aligned_buffer<score_t> &aprofile
     if( ps.out.size() != W ) {
         ps.out.resize(W);
     }
-    vu::store( last_s, ps.out.begin() );
+    vu::store( last_s, ps.out.base() );
     
     out.assign( ps.out.begin(), ps.out.end() );
     //return mat[mat.size() - 1];

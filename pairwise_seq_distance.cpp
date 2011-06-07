@@ -169,7 +169,7 @@ struct lworker {
             
 
             aligned_buffer<sscore_t> qprofile( block.maxlen * W * m_sm.num_states());
-            sscore_t *qpi = qprofile.begin();
+            typename aligned_buffer<sscore_t>::iterator qpi = qprofile.begin();
             
             // setup the qprofile (= lookup table for match penalties along the db-sequences in the current block)
             // this is the faster (at least on core i5) two-step version, using interleaved db-sequences
@@ -180,10 +180,10 @@ struct lworker {
             }
             
             // copy individual db sequences into interleaved buffer (padding the shorter sequnences
-            seq_char_t *dint_iter = ddata_int.begin();
+            typename aligned_buffer<seq_char_t>::iterator dint_iter = ddata_int.begin();
             const int zero_state = m_sm.get_zero_state();
-            for ( int i = 0; i < block.maxlen; i++ ) {
-                for ( int j = 0; j < W; j++ ) {
+            for ( size_t i = 0; i < block.maxlen; i++ ) {
+                for ( size_t j = 0; j < W; j++ ) {
                     const std::vector<seq_char_t> &sdi = m_seq[block.didx[j]];//*(block.ddata[j]);
                     if ( i < sdi.size() ) {
                         *dint_iter = sdi[i];
@@ -205,11 +205,11 @@ struct lworker {
             }
             
             //copy interleaved scoring-matrix
-            for ( int j = 0; j < m_sm.num_states(); j++ ) {
+            for ( size_t j = 0; j < m_sm.num_states(); j++ ) {
                 dint_iter = ddata_int.begin();
                 const char *cslice = m_sm.get_cslice(j);
-                for ( int k = 0; k < block.maxlen; k++ ) {
-                    for ( int l = 0; l < W; l++ ) {
+                for ( size_t k = 0; k < block.maxlen; k++ ) {
+                    for ( size_t l = 0; l < W; l++ ) {
                         //                     if( *dint_iter == zero_state ) {
                             //                         std::cout << int(cslice[*dint_iter]) << "\n";
                             //
@@ -224,7 +224,12 @@ struct lworker {
             
             std::vector<int> out(W);
             
+            
+#if 0
             const size_t i_max = block.didx[block.lj];
+#else
+            const size_t i_max = m_seq.size() - 1;
+#endif
 //             std::cout << "i_max: " << i_max << " " << block.maxlen << "\n";
             
 //             const size_t i_max = m_seq.size() - 1;
@@ -232,7 +237,8 @@ struct lworker {
             // loop over all sequences and align them against the current profile
             
             for ( size_t i_seq2 = 0; i_seq2 <= i_max; ++i_seq2 ) {
-                const std::vector<uint8_t> &qdata = m_seq[i_seq2];
+//             for ( size_t i_seq2 = 0; i_seq2 < m_seq.size(); ++i_seq2 ) {
+                const std::vector<uint8_t> &qdata = m_seq.at(i_seq2);
                 
                 if ( first_block ) {
                     n_qseq++;
@@ -292,7 +298,7 @@ struct lworker {
 // WARNING: the sequences are expected to be transformed to 'compressed states' (= 0, 1, 2 ...) rather than characters.
 // The state mapping must be consistent with the supplied scoring matrix and its compressed form.
 // Sequences containing numbers >= sm.num_states() will likely blow up the aligner, as there are no checks after this point!
-PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread ) {
+PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
  #if 1
     const int W = 8;
     typedef short score_t;

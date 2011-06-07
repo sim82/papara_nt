@@ -325,7 +325,8 @@ struct vector_unit<float, 4> {
         
         //unsigned int SIGN_MASK[4] = {0x7FFFFFFF,0x7FFFFFFF,0x7FFFFFFF,0x7FFFFFFF};
         //unsigned int SIGN_MASK = 0x7FFFFFFF;
-        static float SIGN_MASK = *((float*)&SIGN_MASK_INT);
+        const float *SIGN_MASK_PTR = (float*)&SIGN_MASK_INT;
+        static float SIGN_MASK = *SIGN_MASK_PTR;
         return bit_and(sub(a,b), set1(SIGN_MASK) ); // TODO: could this case any alignment problems?
         //return bit_and(sub(a,b), set1(*((float*)&SIGN_MASK_INT) )); // TODO: could this case any alignment problems?
         

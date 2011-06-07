@@ -62,13 +62,13 @@ void align_vec( persistent_state<score_t> &ps, size_t asize, const std::vector<u
     
 //     vec_t len_vec = vu::load( len.m_ptr );
 #define LOCAL_ALIGN
-    for( int ib = 0; ib < b.size(); ib++ ) {
+    for( size_t ib = 0; ib < b.size(); ib++ ) {
 #ifndef LOCAL_ALIGN        
         const bool lastrow = ib == (b.size() - 1);
 #endif        
         char bc = b[ib];
 //         std::cout << "bc: " << bc << std::endl;
-        assert( bc < qprofile.size() / (W * asize));
+        assert( bc < char(qprofile.size() / (W * asize)));
         
         vec_t last_sl_vec = vu::set1(SMALL);
         vec_t last_sc_vec = vu::set1(vu::BIAS);
@@ -76,8 +76,8 @@ void align_vec( persistent_state<score_t> &ps, size_t asize, const std::vector<u
 //         std::cout << "sbm: " << m.state_backmap(bc) << " " << (W * asize) << std::endl;
        // sscore_t *qpp_iter = qprofile(m.state_backmap(bc) * W * asize);
         sscore_t *qpp_iter = qprofile( bc * W * asize);
-        score_t * __restrict s_iter = s.m_ptr;
-        score_t * __restrict si_iter = si.m_ptr;
+        score_t * __restrict s_iter = s.base();
+        score_t * __restrict si_iter = si.base();
         score_t * __restrict s_end = s_iter + (asize * W);
         
         for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
@@ -128,12 +128,12 @@ void align_vec( persistent_state<score_t> &ps, size_t asize, const std::vector<u
     }
     
     ps.out.resize(W);
-    vu::store( max_vec, ps.out.m_ptr );
+    vu::store( max_vec, ps.out.base() );
     
     out.resize(0);
     out.reserve(W);
-    for( int i = 0; i < W; i++ ) {
-        out.push_back(int(ps.out.m_ptr[i]) - vu::BIAS );
+    for( size_t i = 0; i < W; i++ ) {
+        out.push_back(int(ps.out[i]) - vu::BIAS );
 //         std::cout << "x: " << int(ps.out.m_ptr[i]) << "\n";
     }
     //return max;

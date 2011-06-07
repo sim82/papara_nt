@@ -40,7 +40,7 @@ void pars_align_vec::align_freeshift_s11() {
     
     vu_t::vec_t l = vu_t::set1(LARGE_VALUE); 
    
-    for( int ia = int(m_na - m_nb); ia < m_na; ia++ ) {
+    for( size_t ia = int(m_na - m_nb); ia < m_na; ia++ ) {
         size_t p = svaddr(ia, -1);
         vu_t::store( l, m_arrays.m_score(p) );
     }
@@ -60,7 +60,7 @@ void pars_align_vec::align_freeshift_s11() {
     
 }
 void pars_align_vec::align_freeshift_s3() {
-    score_t best = LARGE_VALUE;
+//     score_t best = LARGE_VALUE;
     const size_t band_width = m_na - m_nb;
     
     #define AUX_CGAP ( 0x1 )
@@ -68,7 +68,7 @@ void pars_align_vec::align_freeshift_s3() {
     
     
     
-    for ( int ib = 0; ib < m_nb; ib++ ) {
+    for ( size_t ib = 0; ib < m_nb; ib++ ) {
         pars_state_t cb = m_seq_b[ib];
         
         vu_t::vec_t cb_vec = vu_t::set1(cb);
@@ -85,11 +85,11 @@ void pars_align_vec::align_freeshift_s3() {
         int ibl = 0;
         vu_t::vec_t last_diag = vu_t::load(m_arrays.m_score(svaddr(astart-1,ibl-1)));         
 //         std::cout << _mm_extract_epi16( last_diag, 0 ) << "\n";
-        for ( int ia = astart; ia <= ib + band_width; ia++ /*, saddr_0_0++, saddr_1_1++, sp_0_0++, sp_1_1++*/ ) {
+        for ( size_t ia = astart; ia <= ib + band_width; ia++ /*, saddr_0_0++, saddr_1_1++, sp_0_0++, sp_1_1++*/ ) {
 //             const pars_state_t ca = get_seq_a( ia );
 //             vu_t::vec_t ca_vec = vu_t::set1(ca);
             
-            vu_t::vec_t ca_vec = vu_t::load( m_seq_a.m_ptr + (WIDTH * ia) );
+            vu_t::vec_t ca_vec = vu_t::load( m_seq_a(WIDTH * ia) );
             
             
             // CGAP mask: aux_cgap_mask_vec[i] == 0xffff if cgap column
@@ -183,7 +183,7 @@ void pars_align_vec::align_freeshift_s3() {
     
     
 //     throw std::runtime_error("exit");
-    vu_t::store(best_score, m_best.m_ptr);
+    vu_t::store(best_score, m_best.base());
     
     m_ncups = band_width * m_nb * WIDTH;
 //     std::cout << "best: " << m_best.m_ptr[0] << "\n";
@@ -216,17 +216,17 @@ pars_align_vec::pars_align_vec(const int** seqA, unsigned char* seqB, size_t n_a
 {    
     m_arrays.size(ma() * mb());
     
-    score_t *sap = m_seq_a.m_ptr;
-    score_t *aap = m_aux_a.m_ptr;
-    score_t *mcp = m_match_cgap_pre.m_ptr;
-    score_t *ep = m_extend_pre.m_ptr;
-    score_t *oep = m_open_ext_pre.m_ptr;
+    score_t *sap = m_seq_a.base();
+    score_t *aap = m_aux_a.base();
+    score_t *mcp = m_match_cgap_pre.base();
+    score_t *ep = m_extend_pre.base();
+    score_t *oep = m_open_ext_pre.base();
 //     score_t *cmp = m_cgap_mask_pre.m_ptr;
     
-    for( int i = 0; i < m_na; i++ ) {
+    for( size_t i = 0; i < m_na; i++ ) {
         score_t *aap_start = aap;
         
-        for( int j = 0; j < WIDTH; j++ ) {
+        for( size_t j = 0; j < WIDTH; j++ ) {
         
             *sap = get_seq_a(j, i);
             *aap = get_aux_a(j, i);

@@ -171,7 +171,7 @@ int main( int argc, char *argv[] ) {
     
     std::string dname[W];
     std::vector<seq_char_t> ddata[W];
-    size_t dpad[W];
+//     size_t dpad[W];
     aligned_buffer<seq_char_t> ddata_int;
     
 //     std::vector<score_t> dmask[W];
@@ -248,7 +248,7 @@ int main( int argc, char *argv[] ) {
         
 //         std::cout << "sdis: " << sdi.size() << "\n";
         aligned_buffer<sscore_t> qprofile( maxlen * W * sm.num_states());
-        sscore_t *qpi = qprofile.begin();
+        aligned_buffer<sscore_t>::iterator qpi = qprofile.begin();
 #if 0
         for( int j = 0; j < sm.num_states(); j++ ) {
             const int jstate = sm.get_state(j);
@@ -292,9 +292,9 @@ int main( int argc, char *argv[] ) {
         }
  
         // copy individual db sequences into interleaved buffer (padding the shorter sequnences 
-        seq_char_t *dint_iter = ddata_int.begin();
+        aligned_buffer<seq_char_t>::iterator dint_iter = ddata_int.begin();
         const int zero_state = sm.get_zero_state();
-        for( int i = 0; i < maxlen; i++ ) {
+        for( size_t i = 0; i < maxlen; i++ ) {
             for( int j = 0; j < W; j++ ) {
                 std::vector<seq_char_t> &sdi = ddata[j];
                 if( i < sdi.size() ) {
@@ -306,10 +306,10 @@ int main( int argc, char *argv[] ) {
                 ++dint_iter;
             }
         }
-        for( int j = 0; j < sm.num_states(); j++ ) {
+        for( size_t j = 0; j < sm.num_states(); j++ ) {
             dint_iter = ddata_int.begin();
             const char *cslice = sm.get_cslice(j);
-            for( int k = 0; k < maxlen; k++ ) {
+            for( size_t k = 0; k < maxlen; k++ ) {
                 for( int l = 0; l < W; l++ ) {
 //                     if( *dint_iter == zero_state ) {
 //                         std::cout << int(cslice[*dint_iter]) << "\n";

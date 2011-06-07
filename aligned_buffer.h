@@ -17,108 +17,220 @@
 
 #include <cstdlib>
 #include <cstddef>
+#include <cassert>
 #include <stdexcept>
 
-template<class T>
-struct aligned_buffer {
-    T* m_ptr;
-    size_t m_size;
+#if 1
+
+#include <vector>
+
+namespace ab_internal_ {
+template<typename T>
+class alloc {
     const static size_t align = 32;
     
 #ifndef WIN32
-	struct allocator_posix {
-		static inline void *alloc( size_t align, size_t size ) {
-			void *ptr;
-			int ret = posix_memalign( (void**)&ptr, align, size );
+    struct allocator_posix {
+        static inline void *alloc( size_t align, size_t size ) {
+            void *ptr;
+            int ret = posix_memalign( (void**)&ptr, align, size );
             
             if( ret != 0 ) {
                 throw std::runtime_error( "posix_memalign failed" );
             }
-			return ptr;
-		}
+            return ptr;
+        }
 
-		static inline void free( void *ptr ) {
-			std::free( ptr );
-		}
-	};
-	typedef allocator_posix allocator;
+        static inline void free( void *ptr ) {
+            std::free( ptr );
+        }
+    };
+    typedef allocator_posix allocator;
 #endif
 #ifdef WIN32
-	struct allocator_ugly {
-		static inline void *alloc( size_t align, size_t size ) {
-			return _aligned_malloc( size, align );
-		}
-
-		static inline void free( void *ptr ) {
-			_aligned_free(ptr);
-		}
-	};
-	typedef allocator_ugly allocator;
-#endif
-
-    aligned_buffer() : m_ptr(0), m_size(0) {}
-    
-    aligned_buffer( size_t size ) : m_ptr(0), m_size(0) {
-         
-        resize( size );
-                
-    }
-    
-    void resize( size_t ns ) {
-    
-        
-        if( ns != size() ) {
-            allocator::free( m_ptr );
-            
-            m_size = ns;
-			m_ptr = (T*)allocator::alloc( align, byte_size() );
-
-            
+    struct allocator_ugly {
+        static inline void *alloc( size_t align, size_t size ) {
+            return _aligned_malloc( size, align );
         }
-        
+
+        static inline void free( void *ptr ) {
+            _aligned_free(ptr);
+        }
+    };
+    typedef allocator_ugly allocator;
+#endif
+public:
+    template<typename t>
+    struct rebind {
+        typedef alloc<T> other;
+    };
+    typedef T value_type;
+    typedef T* pointer;
+    typedef const T* const_pointer;
+    typedef T& reference;
+    typedef const T& const_reference;
+    typedef size_t size_type;
+    
+    pointer allocate( size_type nobj, const void *lh = 0 ) {
+        return (pointer) allocator::alloc( align, nobj * sizeof(T) );
     }
     
-    size_t size() const {
-        return m_size;
+    void deallocate( pointer ptr, size_type nobj ) {
+        allocator::free( ptr );
     }
     
-    size_t byte_size() {
-        return m_size * sizeof(T);
+    
+    void construct( pointer p, const_reference t) { new ((void*) p) T(t); }
+    
+    
+    void destroy( pointer p ){ ((T*)p)->~T(); }
+    
+    size_type max_size() const {
+        return size_t(-1);
+    }
+};
+    
+}
+
+template<typename T>
+struct aligned_buffer : private std::vector<T,ab_internal_::alloc<T> > {
+public:
+    typedef typename std::vector<T,ab_internal_::alloc<T> >::iterator iterator;
+    typedef typename std::vector<T,ab_internal_::alloc<T> >::const_iterator const_iterator;
+    
+    aligned_buffer() : std::vector<T,ab_internal_::alloc<T> >() {}
+    aligned_buffer( size_t size ) : std::vector<T,ab_internal_::alloc<T> >(size) {}
+    
+
+    using std::vector<T,ab_internal_::alloc<T> >::begin;
+    using std::vector<T,ab_internal_::alloc<T> >::end;
+    using std::vector<T,ab_internal_::alloc<T> >::size;
+    using std::vector<T,ab_internal_::alloc<T> >::resize;
+    
+    using std::vector<T,ab_internal_::alloc<T> >::operator[];
+    
+    inline T* operator() (ptrdiff_t o) {
+        return &(operator[](o));
     }
     
-    ~aligned_buffer() {
-        allocator::free( m_ptr );
+    inline const T* operator() (ptrdiff_t o) const {
+        return &(operator[](o));
     }
-    
-    T *begin() const {
-        return m_ptr;
+    inline T* base() {
+        return operator()(0);
     }
-    
-    T* end() const {
-        return begin() + m_size;
-    }
-    
-    inline T* operator() (ptrdiff_t o) const {
-        return begin() + o;
-    }
-    
-    inline T& operator[](ptrdiff_t o) {
-        return *(begin() + o);
-   }
-    
-    aligned_buffer &operator=( const aligned_buffer &other ) {
-        resize(other.size());
-        std::copy( other.begin(), other.end(), begin() );
-        
-        return *this;
-    }
-    
-    aligned_buffer( const aligned_buffer &other ) : m_ptr(0), m_size(0) {
-        resize(other.size());
-        std::copy( other.begin(), other.end(), begin() );
-    }
-        
-    
 };
 
+
+#else
+// template<typename T>
+// struct aligned_buffer {
+//     typedef T* iterator;
+//     
+//     T* m_ptr;
+//     size_t m_size;
+//     const static size_t align = 32;
+//     
+// #ifndef WIN32
+// 	struct allocator_posix {
+// 		static inline void *alloc( size_t align, size_t size ) {
+// 			void *ptr;
+// 			int ret = posix_memalign( (void**)&ptr, align, size );
+//             
+//             if( ret != 0 ) {
+//                 throw std::runtime_error( "posix_memalign failed" );
+//             }
+// 			return ptr;
+// 		}
+// 
+// 		static inline void free( void *ptr ) {
+// 			std::free( ptr );
+// 		}
+// 	};
+// 	typedef allocator_posix allocator;
+// #endif
+// #ifdef WIN32
+// 	struct allocator_ugly {
+// 		static inline void *alloc( size_t align, size_t size ) {
+// 			return _aligned_malloc( size, align );
+// 		}
+// 
+// 		static inline void free( void *ptr ) {
+// 			_aligned_free(ptr);
+// 		}
+// 	};
+// 	typedef allocator_ugly allocator;
+// #endif
+// 
+//     aligned_buffer() : m_ptr(0), m_size(0) {}
+//     
+//     aligned_buffer( size_t size ) : m_ptr(0), m_size(0) {
+//          
+//         resize( size );
+//                 
+//     }
+//     
+//     void resize( size_t ns ) {
+//     
+//         
+//         if( ns != size() ) {
+//             allocator::free( m_ptr );
+//             
+//             m_size = ns;
+// 			m_ptr = (T*)allocator::alloc( align, byte_size() );
+// 
+//             
+//         }
+//         
+//     }
+//     
+//     size_t size() const {
+//         return m_size;
+//     }
+//     
+//     size_t byte_size() {
+//         return m_size * sizeof(T);
+//     }
+//     
+//     ~aligned_buffer() {
+//         allocator::free( m_ptr );
+//     }
+//     
+//     T *begin() const {
+//         return m_ptr;
+//     }
+//     
+//     T* end() const {
+//         return begin() + m_size;
+//     }
+//     
+//     inline T* operator() (ptrdiff_t o) const {
+//         assert( o < m_size );
+//         return begin() + o;
+//     }
+//     
+//     inline T& operator[](ptrdiff_t o) {
+//         assert( o < m_size );
+//         return *(begin() + o);
+//    }
+//     
+//     aligned_buffer &operator=( const aligned_buffer &other ) {
+//         resize(other.size());
+//         std::copy( other.begin(), other.end(), begin() );
+//         
+//         return *this;
+//     }
+//     
+//     aligned_buffer( const aligned_buffer &other ) : m_ptr(0), m_size(0) {
+//         resize(other.size());
+//         std::copy( other.begin(), other.end(), begin() );
+//     }
+//         
+//         
+//     T* base() {
+//         return m_ptr;
+//     }
+//     
+// };
+#endif
 #endif

@@ -70,7 +70,7 @@ pars_align_seq::~pars_align_seq() {
 
 }
 void pars_align_seq::alignFreeshiftS11() {
-    for ( int ia = 0; ia <= m_na - m_nb - 1; ia++ ) {
+    for ( size_t ia = 0; ia <= m_na - m_nb - 1; ia++ ) {
         m_arr.scoreL[saddr ( ia, -1 ) ] = 0;
         m_arr.score[saddr ( ia, -1 ) ] = 0;
     }
@@ -79,19 +79,19 @@ void pars_align_seq::alignFreeshiftS11() {
     m_arr.score[saddr ( -1, -1 ) ] = 0;
     m_arr.scoreL[saddr ( -1, -1 ) ] = 0;
 
-    for ( int i = 0; i < m_nb; i++ ) {
+    for ( size_t i = 0; i < m_nb; i++ ) {
         m_arr.score[saddr ( i-1, i )] = LARGE_VALUE;
         m_arr.scoreL[saddr ( i-1, i )] = LARGE_VALUE;
         m_arr.scoreL[saddr ( i, i )] = LARGE_VALUE;
         m_arr.score[saddr ( (m_na - m_nb) + i, i - 1 )] = LARGE_VALUE;
     }
 
-    for( int i = 0; i < m_na; i++ ) {
+    for( size_t i = 0; i < m_na; i++ ) {
         m_arr.score[saddr ( i, -1 )] = 0;
     }
 
     if ( m_arr.dir != 0 ) {
-        for ( int ia = 0; ia <= m_na - m_nb - 1; ia++ ) {
+        for ( size_t ia = 0; ia <= m_na - m_nb - 1; ia++ ) {
             m_arr.dir[saddr ( ia, -1 ) ] = BT_STAY_L;
         }
     }
@@ -100,14 +100,14 @@ void pars_align_seq::alignFreeshiftS11() {
 
 void pars_align_seq::tracebackCompressed(std::vector< uint8_t >& bvec) {
 //     int idx_b = m_na-1;
-    int ba = m_tbStartA;
-    int bb = m_tbStartB;
+    ptrdiff_t ba = m_tbStartA;
+    ptrdiff_t bb = m_tbStartB;
     bool inL = false;
 
     
     
     
-    if ( m_tbStartA < m_na - 1 ) {
+    if ( m_tbStartA < ptrdiff_t(m_na) - 1 ) {
         for ( int ba = m_na - 1; ba > m_tbStartA; ba-- ) {
             bvec.push_back(1);
             
