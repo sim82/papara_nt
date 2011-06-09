@@ -36,13 +36,13 @@
 
 void write_phylip_distmatrix( const ivy_mike::tdmatrix<int> &ma, const std::vector<std::string> &names, std::ostream &os ) {
     if( names.size() != ma.size() || ma.size() != ma[0].size() ) {
-        throw std::runtime_error( "distance matrix seems fishy" );
+        throw std::runtime_error( "distance matrix seems fishy (=matrix not quadratic)" );
     }
     os << ma.size() << "\n";
     os << std::setiosflags(std::ios::fixed) << std::setprecision(4);
     for( size_t i = 0; i < ma.size(); i++ ) {
         os << names[i] << "\t";
-        for( size_t j = 0; j < ma.size(); j++ ) {
+        for( size_t j = 0; j < ma[i].size(); j++ ) {
             
             // three modes for normalizing: min, max and mean
             //const float norm = std::min( ma[i][i], ma[j][j] );
@@ -99,6 +99,7 @@ int main( int argc, char *argv[] ) {
     
     ivy_mike::getopt::parser igp;
     std::string opt_seq_file;
+    std::string opt_seq_file2;
     int opt_match;
     int opt_mismatch;
     int opt_gap_open;
@@ -115,10 +116,11 @@ int main( int argc, char *argv[] ) {
     igp.add_opt('h', false );
     
     igp.add_opt('f', ivy_mike::getopt::value<std::string>(opt_seq_file) );
+    igp.add_opt('g', ivy_mike::getopt::value<std::string>(opt_seq_file2) );
     igp.add_opt('m', ivy_mike::getopt::value<int>(opt_match).set_default(3) );
     igp.add_opt('n', ivy_mike::getopt::value<int>(opt_mismatch).set_default(0) );
-    igp.add_opt('o', ivy_mike::getopt::value<int>(opt_gap_open).set_default(-5) );
-    igp.add_opt('e', ivy_mike::getopt::value<int>(opt_gap_extend).set_default(-3) );
+    igp.add_opt('o', ivy_mike::getopt::value<int>(opt_gap_open).set_default(-11) );
+    igp.add_opt('e', ivy_mike::getopt::value<int>(opt_gap_extend).set_default(-1) );
     igp.add_opt('s', ivy_mike::getopt::value<std::string>(opt_sm_name) );
     igp.add_opt('t', ivy_mike::getopt::value<int>(opt_threads).set_default(1) );
     igp.add_opt('1', ivy_mike::getopt::value<bool>(opt_out_dist_matrix, true).set_default(false) );
@@ -134,6 +136,8 @@ int main( int argc, char *argv[] ) {
         opt_out_dist_matrix = true;
     }
     
+    
+    
 //     std::cout << "opt_match: " << &opt_seq_file << "\n";
     
 //     return 0;
@@ -142,6 +146,7 @@ int main( int argc, char *argv[] ) {
         std::cout << 
         "  -h        print help message\n" <<
         "  -f arg    input sequence file (fasta)\n" <<
+        "  -g arg    input sequence file2 (fasta, optional)\n" <<
         "  -m arg    match score (implies DNA data, excludes option -s)\n" << 
         "  -n arg    mismatch score\n" << 
         "  -o arg    gap open score (default: -5, negtive means penalize)\n" <<
@@ -167,7 +172,7 @@ int main( int argc, char *argv[] ) {
         return 0;
 // 		opt_seq_file = "c:\\src\\papara_nt\\test_1604\\1604.fa.400";
     }
-    
+    const bool have_second = igp.opt_count('g') != 0;
    // std::string opt_seq_file = igp.get_string('f');
     
     std::auto_ptr<scoring_matrix>sm;
@@ -292,28 +297,52 @@ int main( int argc, char *argv[] ) {
     std::vector<std::vector<uint8_t> > qs_seqs;
     
     
-    
-    std::ifstream qsf( opt_seq_file.c_str() );
-    if( !qsf.good() ) {
-        std::cout << "cannot open sequence file: " << opt_seq_file << "\n";
+    {
+        std::ifstream qsf( opt_seq_file.c_str() );
+        if( !qsf.good() ) {
+            std::cout << "cannot open sequence file: " << opt_seq_file << "\n";
+            
+            return -1;
+        }
         
-        return -1;
+        read_fasta( qsf, *sm, qs_names, qs_seqs);
     }
     
-    read_fasta( qsf, *sm, qs_names, qs_seqs);
+    std::vector<std::string> qs_names2;
+    std::vector<std::vector<uint8_t> > qs_seqs2;
+    
+    if( have_second )
+    {
+        std::ifstream qsf( opt_seq_file2.c_str() );
+        if( !qsf.good() ) {
+            std::cout << "cannot open sequence file: " << opt_seq_file2 << "\n";
+            
+            return -1;
+        }
+        
+        read_fasta( qsf, *sm, qs_names2, qs_seqs2);
+    }
+    
+    
+    const std::vector<std::string> &qs_names2_ref = have_second ? qs_names2 : qs_names;
+    const std::vector<std::vector<uint8_t> > &qs_seqs2_ref = have_second ? qs_seqs2 : qs_seqs;
+    
     
     std::cerr << "using " << opt_threads << " threads\n";
 //     return 0;
     
     //     write_phylip_distmatrix( out_scores, names, std::cout );
-    ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs.size() );
-    pairwise_seq_distance( qs_seqs, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
+    
+    
+    
+    ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs2_ref.size() );
+    pairwise_seq_distance( qs_seqs, qs_seqs2_ref, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
     
     if( opt_out_dist_matrix ) {
         write_phylip_distmatrix( out_scores, qs_names, std::cout );
     } else if( opt_out_score_matrix ) {
         for( size_t i = 0; i < qs_seqs.size(); i++ ) {
-            for( size_t j = 0; j < qs_seqs.size(); j++ ) {
+            for( size_t j = 0; j < qs_seqs2.size(); j++ ) {
                 std::cout << out_scores[i][j] << "\t";
             }
             std::cout << "\n";
@@ -321,9 +350,9 @@ int main( int argc, char *argv[] ) {
     } else if( opt_out_pgm_image ) {
         ivy_mike::write_png( out_scores, std::cout );        
     } else if( opt_out_faux_swps3 ) {
-        for( size_t i = 0; i < qs_seqs.size(); i++ ) {
+        for( size_t i = 0; i < qs_seqs2.size(); i++ ) {
             for( size_t j = 0; j < qs_seqs.size(); j++ ) {
-                std::cout << out_scores[i][j] << "\t" << qs_names[j] << "\n";
+                std::cout << out_scores[j][i] << "\t" << qs_names[j] << "\n";
             }
             
         }

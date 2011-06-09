@@ -227,8 +227,24 @@
 // }
 // }
 
+template<typename T>
+void bla( T x ) {
+    std::cout << "bla1\n";
+}
+
+template<typename T>
+void bla( T *x ) {
+    std::cout << "bla2\n";
+}
+
 
 int main() {
+    int x;
+    int *y = &x;
+    
+    bla( x );
+    bla( y );
+    
 //     {
 //         long n = 10;
 //         long sum = 0;

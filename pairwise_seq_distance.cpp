@@ -101,15 +101,23 @@ struct lworker {
     const int m_rank;
     block_queue<block_t> &m_queue;
     const scoring_matrix &m_sm;
-    const std::vector< std::vector<uint8_t> > &m_seq;
+    const std::vector< std::vector<uint8_t> > &m_seq1;
+    const std::vector< std::vector<uint8_t> > &m_seq2;
     const sscore_t gap_open;
     const sscore_t gap_extend;
     
     
     pw_score_matrix &m_outscore;
-    
-    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore ) 
-    : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq(seq_), gap_open(gap_open_), gap_extend(gap_extend_), m_outscore(outscore) {}
+    const bool m_half_matrix;
+    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq1_, const std::vector< std::vector<uint8_t> > &seq2_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore, bool half_matrix ) 
+    : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq1(seq1_), m_seq2(seq2_), gap_open(gap_open_), gap_extend(gap_extend_), m_outscore(outscore), m_half_matrix( half_matrix ) 
+    {
+        if( m_half_matrix ) {
+            if( m_seq1.size() != m_seq2.size() ) {
+                std::runtime_error( "half_matrix mode set with m_seq1.size() != m_seq2.size()." );
+            }
+        }
+    }
     
     void operator()() {
         
@@ -184,7 +192,7 @@ struct lworker {
             const int zero_state = m_sm.get_zero_state();
             for ( size_t i = 0; i < block.maxlen; i++ ) {
                 for ( size_t j = 0; j < W; j++ ) {
-                    const std::vector<seq_char_t> &sdi = m_seq[block.didx[j]];//*(block.ddata[j]);
+                    const std::vector<seq_char_t> &sdi = m_seq1.at(block.didx[j]);//*(block.ddata[j]);
                     if ( i < sdi.size() ) {
                         *dint_iter = sdi[i];
                         // the aligner will catch this later if assertions are enabled
@@ -223,13 +231,12 @@ struct lworker {
             }
             
             std::vector<int> out(W);
-            
-            
-#if 0
-            const size_t i_max = block.didx[block.lj];
-#else
-            const size_t i_max = m_seq.size() - 1;
-#endif
+            size_t i_max;
+            if( m_half_matrix ) {
+                i_max = block.didx[block.lj];
+            } else {
+                i_max = m_seq2.size() - 1;
+            }
 //             std::cout << "i_max: " << i_max << " " << block.maxlen << "\n";
             
 //             const size_t i_max = m_seq.size() - 1;
@@ -238,7 +245,7 @@ struct lworker {
             
             for ( size_t i_seq2 = 0; i_seq2 <= i_max; ++i_seq2 ) {
 //             for ( size_t i_seq2 = 0; i_seq2 < m_seq.size(); ++i_seq2 ) {
-                const std::vector<uint8_t> &qdata = m_seq.at(i_seq2);
+                const std::vector<uint8_t> &qdata = m_seq2.at(i_seq2);
                 
                 if ( first_block ) {
                     n_qseq++;
@@ -257,9 +264,13 @@ struct lworker {
                     //                 std::cout << out[j] << "\t" << dname[j] << " " << qname << " " << ddata[j].size() << "\n";
                     //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
 //                     m_outscore[block.didx[j]][i_seq2] = out[j];
-                    m_outscore[i_seq2][block.didx[j]] = out[j];
+                    
+                    
                     m_outscore[block.didx[j]][i_seq2] = out[j];
-                    ncups += m_seq[i_seq2].size() * m_seq[block.didx[j]].size();
+                    if( m_half_matrix ) { 
+                        m_outscore[i_seq2][block.didx[j]] = out[j];
+                    }
+                    ncups += m_seq2[i_seq2].size() * m_seq1[block.didx[j]].size();
                 }
                 
                 
@@ -271,7 +282,7 @@ struct lworker {
 //                     std::cout << out[j] << "\t" << block.didx[j] << " " << i_seq2 << "\n";
                     
                 n_dseq++;
-                n_dchar += m_seq[block.didx[j]].size();
+                n_dchar += m_seq1[block.didx[j]].size();
             }
             first_block = false;
             if( m_rank == 0 && t1.elapsed() > 2 ) {
@@ -298,8 +309,8 @@ struct lworker {
 // WARNING: the sequences are expected to be transformed to 'compressed states' (= 0, 1, 2 ...) rather than characters.
 // The state mapping must be consistent with the supplied scoring matrix and its compressed form.
 // Sequences containing numbers >= sm.num_states() will likely blow up the aligner, as there are no checks after this point!
-PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
- #if 1
+PSD_DECLARE_INLINE void pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq1, const std::vector< std::vector<uint8_t> > &seq2, bool identical, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
+ #if 0
     const int W = 8;
     typedef short score_t;
     typedef short sscore_t;
@@ -321,7 +332,7 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
 //         std::for_each( seq_raw[i].begin(), seq_raw[i].end(), scoring_matrix::valid_state_appender<std::vector<uint8_t> >(sm, seq[i]) );
 //     }
     
-    if( seq.size() != out_scores.size() || seq.size() != out_scores[0].size() ) {
+    if( seq1.size() != out_scores.size() || seq2.size() != out_scores[0].size() ) {
         throw std::runtime_error( "out_scores matrix is too small" );
     }
     
@@ -345,7 +356,7 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
     
     size_t i_seq1 = 0;
     
-
+    // TODO: update comment for seq1 * seq2 alignment!
     // the following code basically consists of two nested loops which align all elements in seq against each other (N*N alignments).
     
     // It is a bit hard to recognize, though as the alignments operations are distributed to 'blocks' (=independent work units)
@@ -367,7 +378,7 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
 //             dname[j].resize(0);
             //ddata[j].resize(0);
 //             have_input = (i_seq1 != seq.size());                       
-           have_input = (i_seq1 != seq.size());
+           have_input = (i_seq1 != seq1.size());
 //             have_input = i_seq1 < 30;
            // std::cout << "have_input " << have_input << " " << seq.size() << "\n";
             
@@ -401,7 +412,7 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
 //             dmask[j].resize(ddata[j].length(), 0xffff );
             
             
-            block.maxlen = std::max( block.maxlen, seq[block.didx[j]].size() );
+            block.maxlen = std::max( block.maxlen, seq1[block.didx[j]].size() );
         }
 //         std::cout << "maxlen; " << block.maxlen << "\n";
         // jf == -1 at this point means that the block is empty (#db-seqs % W == 0)
@@ -431,7 +442,7 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
     timpl::thread_group tg;
     
     while( tg.size() < n_thread ) {
-        lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq, gap_open, gap_extend, out_scores );
+        lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq1, seq2, gap_open, gap_extend, out_scores, identical );
         
         std::cerr << "thread " << tg.size() << "\n";
         
@@ -441,7 +452,7 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( std::vector< std::vector<uint8_t>
     tg.join_all();
     
     
-    std::cerr << "aligned " << seq.size() << " x " << seq.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
+    std::cerr << "aligned " << seq1.size() << " x " << seq2.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
     
 
 }

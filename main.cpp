@@ -1045,6 +1045,7 @@ public:
             //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
         std::cerr << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
 
+        std::cerr << ivy_mike::isa<papara_nt<pvec_cgap> >(*this) << " " << ivy_mike::isa<papara_nt<pvec_pgap> >(*this) << "\n";
         // load input data: ref-tree, ref-alignment and query sequences
 
         //
@@ -1090,7 +1091,7 @@ public:
                     sptr::shared_ptr< lnode > ln = it->second;
                     //      adata *ad = ln->m_data.get();
 
-                    assert( typeid(*ln->m_data.get()) == typeid(my_adata ) );
+                    assert( ivy_mike::isa<my_adata>(ln->m_data.get()) ); //typeid(*ln->m_data.get()) == typeid(my_adata ) );
                     my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
 
                     m_ref_names.push_back(std::string() );
@@ -1415,12 +1416,15 @@ int main( int argc, char *argv[] ) {
     std::string opt_alignment_name;
     std::string opt_qs_name;
     bool opt_use_cgap;
-
+    int opt_num_threads;
+    
+    
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
     igp.add_opt( 'q', igo::value<std::string>(opt_qs_name) );
     igp.add_opt( 'c', igo::value<bool>(opt_use_cgap, true).set_default(false) );
-
+    igp.add_opt( 'n', igo::value<int>(opt_num_threads).set_default(1) );
+    
     igp.parse(argc,argv);
 
     if( igp.opt_count('t') != 1 || igp.opt_count('s') != 1  ) {
@@ -1441,9 +1445,11 @@ int main( int argc, char *argv[] ) {
     } else {
         pnt_ptr.reset( new papara_nt<pvec_cgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name ));
     }
+    std::cerr << "using " << opt_num_threads << " threads\n";
+
 
     papara_nt_i &pnt = *pnt_ptr;
-    pnt.calc_scores( 4 );
+    pnt.calc_scores( opt_num_threads );
 
     {
         std::ofstream os( "papara_scores.txt" );
