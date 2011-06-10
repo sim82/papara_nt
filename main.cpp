@@ -13,6 +13,9 @@
 #include <boost/numeric/ublas/io.hpp>
 #include <boost/numeric/ublas/lu.hpp>
 #include <boost/numeric/ublas/triangular.hpp>
+#include <boost/iostreams/tee.hpp>
+#include <boost/iostreams/stream.hpp>
+
 
 #include <EigenvalueDecomposition.hpp>
 
@@ -34,6 +37,28 @@ using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
 
 using namespace boost::numeric;
+
+
+namespace {
+    typedef boost::iostreams::tee_device<std::ostream, std::ofstream> log_device;
+    typedef boost::iostreams::stream<log_device> log_stream;
+    
+    log_stream lout;
+    
+    template<typename stream_, typename device_>
+    class bios_open_guard {
+        stream_ &m_stream;
+    public:
+        bios_open_guard( stream_ &stream, device_ &device ) : m_stream(stream) {
+            m_stream.open( device );
+        }
+        ~bios_open_guard() {
+            m_stream.close();
+        }
+    };
+    
+    typedef bios_open_guard<log_stream, log_device> log_stream_guard;
+}
 
 class ostream_test {
     std::ostream &m_os;
@@ -1043,7 +1068,7 @@ public:
     {
 
             //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
-        std::cerr << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
+        lout << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
 
         std::cerr << ivy_mike::isa<papara_nt<pvec_cgap> >(*this) << " " << ivy_mike::isa<papara_nt<pvec_pgap> >(*this) << "\n";
         // load input data: ref-tree, ref-alignment and query sequences
@@ -1123,7 +1148,7 @@ public:
 
         visit_edges( n, m_ec );
 
-        std::cout << "edges: " << m_ec.m_edges.size() << "\n";
+        lout << "edges: " << m_ec.m_edges.size() << "\n";
 
 //         std::vector< pvec_t > m_parsvecs;
 //         m_parsvecs.resize( m_ec.m_edges.size() );
@@ -1188,7 +1213,7 @@ public:
         //
         ivy_mike::timer t1;
         ivy_mike::thread_group tg;
-
+        lout << "start scoring, using " << n_threads <<  " threads\n";
 
 
         while( tg.size() < n_threads ) {
@@ -1196,7 +1221,7 @@ public:
         }
         tg.join_all();
 
-        std::cerr << "scoring finished: " << t1.elapsed() << "\n";
+        lout << "scoring finished: " << t1.elapsed() << "\n";
 
     }
 
@@ -1253,7 +1278,9 @@ public:
 
     void align_best_scores( std::ostream &os, std::ostream &os_quality ) {
         // create the actual alignments for the best scoring insertion position (=do the traceback)
-
+        
+        lout << "generating best scoring alignments\n";
+        ivy_mike::timer t1;
         pars_align_seq::arrays seq_arrays(true);
 
         double mean_quality = 0.0;
@@ -1323,8 +1350,8 @@ public:
 
 
         }
-
-        std::cerr << "mean quality: " << mean_quality / n_quality << "\n";
+        lout << "alignment finished: " << t1.elapsed() << "\n"; 
+        lout << "mean quality: " << mean_quality / n_quality << "\n";
 
     }
 
@@ -1351,7 +1378,7 @@ public:
 
 
     void write_result_phylip( std::ostream &os, std::ostream &os_quality ) {
-        os << " 1 2\n";
+        os << " " << m_ref_seqs.size() + m_qs_names.size() << " " << m_ref_seqs.at(0).size() << "\n";
         dump_ref_seqs(os);
         align_best_scores(os, os_quality);
 
@@ -1401,6 +1428,21 @@ public:
 
 };
 
+std::string filename( const std::string &run_name, const char *type ) {
+    std::stringstream ss;
+    
+    ss << "papara_" << type << "." << run_name;
+    
+    return ss.str();
+}
+
+bool file_exists(const char *filename)
+{
+  std::ifstream is(filename);
+  return is;
+}
+
+
 int main( int argc, char *argv[] ) {
 
 //     aligned_buffer<int> xxx(1024);
@@ -1417,13 +1459,14 @@ int main( int argc, char *argv[] ) {
     std::string opt_qs_name;
     bool opt_use_cgap;
     int opt_num_threads;
-    
+    std::string opt_run_name;
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
     igp.add_opt( 'q', igo::value<std::string>(opt_qs_name) );
     igp.add_opt( 'c', igo::value<bool>(opt_use_cgap, true).set_default(false) );
-    igp.add_opt( 'n', igo::value<int>(opt_num_threads).set_default(1) );
+    igp.add_opt( 'j', igo::value<int>(opt_num_threads).set_default(1) );
+    igp.add_opt( 'n', igo::value<std::string>(opt_run_name).set_default("default") );
     
     igp.parse(argc,argv);
 
@@ -1437,7 +1480,25 @@ int main( int argc, char *argv[] ) {
     if( !opt_qs_name.empty() ) {
         qs_name = opt_qs_name.c_str();
     }
+    
+    std::string log_filename = filename( opt_run_name, "log" );
 
+    if( opt_run_name != "default" && file_exists(log_filename.c_str()) ) {
+        std::cout << "log file already exists for run '" << opt_run_name << "'\n";
+        return 0;
+    }
+    
+    std::ofstream logs( log_filename.c_str());
+    if( !logs ) {
+        std::cout << "could not open logfile for writing: " << log_filename << std::endl;
+        return 0;
+    }
+    
+    log_device ldev( std::cout, logs );
+    log_stream_guard lout_guard( lout, ldev );
+    
+    
+    
     std::auto_ptr<papara_nt_i> pnt_ptr;
 
     if( !opt_use_cgap ) {
@@ -1452,13 +1513,13 @@ int main( int argc, char *argv[] ) {
     pnt.calc_scores( opt_num_threads );
 
     {
-        std::ofstream os( "papara_scores.txt" );
+        std::ofstream os( filename( opt_run_name, "scores" ).c_str() );
         pnt.print_best_scores(os);
     }
 
     {
-        std::ofstream os( "papara_ali.phy" );
-        std::ofstream os_quality( "papara_quality.phy" );
+        std::ofstream os( filename( opt_run_name, "alignment" ).c_str() );
+        std::ofstream os_quality( filename( opt_run_name, "quality" ).c_str() );
 
         //         pnt.dump_ref_seqs(os);
         //         pnt.align_best_scores(os);
@@ -1473,6 +1534,7 @@ int main( int argc, char *argv[] ) {
 
 
     std::cout << t.elapsed() << std::endl;
+    lout << "SUCCESS " << t.elapsed() << std::endl;
     return 0;
 //     getchar();
 }
