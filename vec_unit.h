@@ -236,6 +236,12 @@ struct vector_unit<int, 4> {
     
 };
 #ifndef WIN32
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++0x-static-nonintegral-init"
+#endif
+
 template<>
 struct vector_unit<float, 4> {
 
@@ -246,7 +252,7 @@ struct vector_unit<float, 4> {
 
     const static int SIGN_MASK_INT = 0x7FFFFFFF;
     
-    const static T LARGE_VALUE = 1e8;
+    const static T LARGE_VALUE  = 1e8;
     const static T SMALL_VALUE = -1e8;
     const static T BIAS = 0;
     const static size_t W = 4;
@@ -335,6 +341,9 @@ struct vector_unit<float, 4> {
     }
     
 };
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif
 #ifdef HAVE_AVX
@@ -526,8 +535,8 @@ struct vector_unit<unsigned char, 16> {
     typedef unsigned char T;
     
     const static size_t W = 16;
-    const static T SMALL_VALUE = 32;
-    const static T BIAS = 127;
+    const static T SMALL_VALUE = 1;
+    const static T BIAS = 12;
     
     
     static inline vec_t setzero() {

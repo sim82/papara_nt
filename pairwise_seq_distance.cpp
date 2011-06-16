@@ -310,7 +310,7 @@ struct lworker {
 // The state mapping must be consistent with the supplied scoring matrix and its compressed form.
 // Sequences containing numbers >= sm.num_states() will likely blow up the aligner, as there are no checks after this point!
 PSD_DECLARE_INLINE void pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq1, const std::vector< std::vector<uint8_t> > &seq2, bool identical, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
- #if 0
+#if 1
     const int W = 8;
     typedef short score_t;
     typedef short sscore_t;

@@ -19,7 +19,7 @@
 
 #include "fasta.h"
 #include "ivymike/write_png.h"
-#include <ivymike/statistics.h>
+#include "ivymike/statistics.h"
 #include "ivymike/thread.h"
 #include "ivymike/getopt.h"
 
@@ -75,6 +75,10 @@ public:
     }
 };
 
+// inline bool my_less( const std::pair<size_t,size_t> &a, const std::pair<size_t,size_t> &b ) {
+//     return a.first < b.first;
+// }
+
 
 // #define XSIZE(x) (sizeof(x) / sizeof(*x))
 int main( int argc, char *argv[] ) {
@@ -119,8 +123,8 @@ int main( int argc, char *argv[] ) {
     igp.add_opt('g', ivy_mike::getopt::value<std::string>(opt_seq_file2) );
     igp.add_opt('m', ivy_mike::getopt::value<int>(opt_match).set_default(3) );
     igp.add_opt('n', ivy_mike::getopt::value<int>(opt_mismatch).set_default(0) );
-    igp.add_opt('o', ivy_mike::getopt::value<int>(opt_gap_open).set_default(-11) );
-    igp.add_opt('e', ivy_mike::getopt::value<int>(opt_gap_extend).set_default(-1) );
+    igp.add_opt('o', ivy_mike::getopt::value<int>(opt_gap_open).set_default(-5) );
+    igp.add_opt('e', ivy_mike::getopt::value<int>(opt_gap_extend).set_default(-3) );
     igp.add_opt('s', ivy_mike::getopt::value<std::string>(opt_sm_name) );
     igp.add_opt('t', ivy_mike::getopt::value<int>(opt_threads).set_default(1) );
     igp.add_opt('1', ivy_mike::getopt::value<bool>(opt_out_dist_matrix, true).set_default(false) );
@@ -295,9 +299,12 @@ int main( int argc, char *argv[] ) {
 #endif
     std::vector<std::string> qs_names;
     std::vector<std::vector<uint8_t> > qs_seqs;
+    std::vector<uint32_t> qs_map;
     
-    
+    const bool sort_len = true;
     {
+        std::vector<std::string> qs_names_us;
+        std::vector<std::vector<uint8_t> > qs_seqs_us;
         std::ifstream qsf( opt_seq_file.c_str() );
         if( !qsf.good() ) {
             std::cout << "cannot open sequence file: " << opt_seq_file << "\n";
@@ -305,11 +312,45 @@ int main( int argc, char *argv[] ) {
             return -1;
         }
         
-        read_fasta( qsf, *sm, qs_names, qs_seqs);
+        read_fasta( qsf, *sm, qs_names_us, qs_seqs_us);
+        
+        if( sort_len ) {
+            // sort sequences by length
+            std::vector<std::pair<uint32_t,uint32_t> >seq_lengths;
+            seq_lengths.reserve(qs_seqs_us.size());
+            assert( qs_seqs_us.size() < 0xFFFFFFFF );
+            for( size_t i = 0; i < qs_seqs_us.size(); ++i ) {
+                assert( qs_seqs_us[i].size() < 0xFFFFFFFF );
+                
+                seq_lengths.push_back(std::pair<uint32_t,uint32_t>(uint32_t(qs_seqs_us[i].size()),uint32_t(i)));
+            }
+            
+            // sort seq_lengths by std::pair.first (or std::pair.second if equal, but we don't care in that case)
+            std::sort( seq_lengths.begin(), seq_lengths.end() );//, my_less );
+            
+            // permutate sequences and names. swap data into qs_names/qs_seqs along the way.
+            // FIXME: is there an easy way to apply a permutation in-place?
+            qs_names.resize( qs_names_us.size() );
+            qs_seqs.resize( qs_seqs_us.size() );
+            qs_map.resize(qs_seqs_us.size() );
+            for( size_t i = 0; i < qs_names_us.size(); ++i ) {
+                qs_names[i].swap( qs_names_us[seq_lengths[i].second] );
+                qs_seqs[i].swap( qs_seqs_us[seq_lengths[i].second] );
+                qs_map[seq_lengths[i].second] = uint32_t(i);
+            }
+        } else {
+            qs_names.swap(qs_names_us);
+            qs_seqs.swap(qs_seqs_us);
+        }
+        
     }
     
-    std::vector<std::string> qs_names2;
-    std::vector<std::vector<uint8_t> > qs_seqs2;
+    
+
+    
+    
+    std::vector<std::string> qs_names2_exp;
+    std::vector<std::vector<uint8_t> > qs_seqs2_exp;
     
     if( have_second )
     {
@@ -320,12 +361,12 @@ int main( int argc, char *argv[] ) {
             return -1;
         }
         
-        read_fasta( qsf, *sm, qs_names2, qs_seqs2);
+        read_fasta( qsf, *sm, qs_names2_exp, qs_seqs2_exp);
     }
     
     
-    const std::vector<std::string> &qs_names2_ref = have_second ? qs_names2 : qs_names;
-    const std::vector<std::vector<uint8_t> > &qs_seqs2_ref = have_second ? qs_seqs2 : qs_seqs;
+//     const std::vector<std::string> &qs_names2_ref = have_second ? qs_names2 : qs_names;
+    const std::vector<std::vector<uint8_t> > &qs_seqs2 = have_second ? qs_seqs2_exp : qs_seqs;
     
     
     std::cerr << "using " << opt_threads << " threads\n";
@@ -335,8 +376,8 @@ int main( int argc, char *argv[] ) {
     
     
     
-    ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs2_ref.size() );
-    pairwise_seq_distance( qs_seqs, qs_seqs2_ref, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
+    ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs2.size() );
+    pairwise_seq_distance( qs_seqs, qs_seqs2, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
     
     if( opt_out_dist_matrix ) {
         write_phylip_distmatrix( out_scores, qs_names, std::cout );
@@ -352,7 +393,10 @@ int main( int argc, char *argv[] ) {
     } else if( opt_out_faux_swps3 ) {
         for( size_t i = 0; i < qs_seqs2.size(); i++ ) {
             for( size_t j = 0; j < qs_seqs.size(); j++ ) {
-                std::cout << out_scores[j][i] << "\t" << qs_names[j] << "\n";
+                size_t idx = (!qs_map.empty())? qs_map[j] : j;
+                
+                
+                std::cout << out_scores[idx][i] << "\t" << qs_names[idx] << "\n";
             }
             
         }
