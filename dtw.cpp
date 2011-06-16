@@ -139,7 +139,7 @@ int main() {
         //             b[i] = b0[i-1] - b0[i];
         //         }
         //      
-        d += fabs((double)(a[i] - b[i]));
+        d += (float)fabs((double)(a[i] - b[i]));
         os << a[i] << " " << b[i] << "\n";
     }
     
@@ -152,7 +152,7 @@ int main() {
         for( int i = 0; i < 1; i++ ) {
             
             const value_t large_value = 0x7fff;
-            float res = dtw_align( a.begin(), a.end(), b.begin(), b.end(), large_value, fabsf, my_min3<float> );
+            float res = dtw_align( a.begin(), a.end(), b.begin(), b.end(), large_value, fabsf, my_min3<value_t> );
             ncup += a.size() * b.size();
             std::cout << "res: " << res << "\n";
         }

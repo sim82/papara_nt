@@ -11,7 +11,10 @@
  *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
  *  for more details.
  */
+#ifndef WIN32 
+// there is some strange linker error on widows. can't be bothered now... visual c++ will probably do better whole program optimization than gcc anyway...
 #define PWDIST_INLINE
+#endif
 #include "pairwise_seq_distance.h"
 
 #include "ivymike/tdmatrix.h"

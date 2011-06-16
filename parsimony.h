@@ -243,7 +243,16 @@ typedef int parsimony_state;
 class dna_parsimony_mapping_real {
     std::vector<uint8_t> m_p2d;
     std::vector<parsimony_state> m_d2p;
+	char my_tolower( char x ) {
+		// std::tolower needs std::locale. I will not touch i18n
 
+		if( x >= 'A' && x <= 'Z' ) {
+			return x - ('A' - 'a');
+		} else {
+			return x;
+		}
+		
+	}
 public:
     dna_parsimony_mapping_real() : m_p2d(16), m_d2p(256, -1)
     {
@@ -259,7 +268,7 @@ public:
             }
 
             m_d2p[pd[i]] = pds[i];
-            m_d2p[std::tolower(pd[i])] = pds[i];
+            m_d2p[my_tolower(pd[i])] = pds[i];
 
             if( m_p2d[pds[i]] == 0 ) {
                 m_p2d[pds[i]] = pd[i];

@@ -173,8 +173,10 @@ int main( int argc, char *argv[] ) {
     
     if( igp.opt_count('f') != 1 ) {
         std::cerr << "missing option -f\n";
-        return 0;
-// 		opt_seq_file = "c:\\src\\papara_nt\\test_1604\\1604.fa.400";
+#ifndef WIN32 // hack. make it easier to start inside visual studio
+		return 0;
+#endif
+ 		opt_seq_file = "c:\\src\\papara_nt\\test_1604\\1604.fa.400";
     }
     const bool have_second = igp.opt_count('g') != 0;
    // std::string opt_seq_file = igp.get_string('f');
