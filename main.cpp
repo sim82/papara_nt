@@ -632,12 +632,16 @@ public:
             multiple_alignment ref_ma;
             ref_ma.load_phylip( opt_alignment_name );
 
-
+            
 
             for( unsigned int i = 0; i < ref_ma.names.size(); i++ ) {
 
                 std::map< std::string, sptr::shared_ptr<lnode> >::iterator it = name_to_lnode.find(ref_ma.names[i]);
 
+                // process sequences fomr the ref_ma depending on, if they are contained in the tree.
+                // if they are, they are 'swapped' into m_ref_seqs
+                // if they are not, into m_qs_seqs. (gaps in the QS are removed later)
+                
                 if( it != name_to_lnode.end() ) {
                     sptr::shared_ptr< lnode > ln = it->second;
                     //      adata *ad = ln->m_data.get();
@@ -654,6 +658,8 @@ public:
                     // WARNING: make sure not to keep references to elements of m_ref_seqs at this point!
                     adata->init_pvec( m_ref_seqs.back() );
                 } else {
+                    
+                    //std::cout << "transfer ref -> qs: " << ref_ma.names[i] << "\n";
                     m_qs_names.push_back(std::string() );
                     m_qs_seqs.push_back(std::vector<uint8_t>() );
 

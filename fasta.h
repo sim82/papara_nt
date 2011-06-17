@@ -421,7 +421,7 @@ private:
     std::vector<score_t> m_matrix;
     std::vector<int> m_backmap;
     std::string m_alphabet;
-    size_t addr( size_t a, size_t b ) {
+    size_t addr( size_t a, size_t b ) const {
         return a + b * MAX_SIZE;
     }
     
@@ -524,7 +524,7 @@ public:
         return m_backmap[s];
     }
 
-    inline score_t get_score( int a, int b ) {
+    inline score_t get_score( int a, int b ) const {
 //         assert( a >= 0 && a < MAX_SIZE && b >= 0 && b < MAX_SIZE );
         return m_matrix[addr(a,b)];
     }

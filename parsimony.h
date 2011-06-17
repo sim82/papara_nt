@@ -88,8 +88,14 @@ inline std::ostream &operator<<( std::ostream &os, const rooted_bifurcation<lnod
 
 template <class lnode, class container>
 void rooted_traveral_order_rec( lnode *n, container &cont, bool incremental = false ) {
+    
+    
+    
     lnode *n1 = n->next->back;
     lnode *n2 = n->next->next->back;
+    
+    assert( n->m_data->isTip || n1 != 0 );
+    assert( n->m_data->isTip || n2 != 0 );
     
     n->towards_root = true;
     n->next->towards_root = false;
@@ -192,12 +198,16 @@ public:
 
 
 template <class visitor>
-void visit_edges( typename visitor::lnode *n, visitor &v, bool go_back = true ) {
+void visit_edges( typename visitor::lnode *n, visitor &v, bool at_root = true ) {
     assert( n->back != 0 );
     
-    v( n, n->back );
     
-    if( go_back && n->back != 0 ) {
+    // at the root, the edge between n and n->back will be visited when recursing to n->back
+    if( !at_root ) {
+        v( n, n->back );
+    }
+    
+    if( at_root && n->back != 0 ) {
         visit_edges( n->back, v, false );
     }
     if( n->next->back != 0 ) {

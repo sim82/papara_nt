@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <vector>
 #include <limits>
+#include <stdexcept>
 
 #include "pars_align_seq.h"
 
@@ -43,7 +44,9 @@ pars_align_seq::pars_align_seq(const int* seqA, unsigned char* seqB, size_t n_a,
         
 
 {
-    
+    if( n_a == n_b ) {
+        throw std::runtime_error( "n_a == n_b\n" );
+    }
     
     m_na = n_a;
     m_nb = n_b;
@@ -71,6 +74,12 @@ pars_align_seq::~pars_align_seq() {
 }
 void pars_align_seq::alignFreeshiftS11() {
     for ( size_t ia = 0; ia <= m_na - m_nb - 1; ia++ ) {
+      //  std::cout << "init: " << ia << " " << m_na << " " << m_nb << "\n";
+        
+        size_t xxx = saddr ( ia, -1 );
+//         if( xxx >= m_arr.size() ) {
+//             std::cout << "meeeep: " << xxx << " " << ia << "\n";
+//         }
         m_arr.scoreL[saddr ( ia, -1 ) ] = 0;
         m_arr.score[saddr ( ia, -1 ) ] = 0;
     }

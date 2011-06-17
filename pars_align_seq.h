@@ -45,6 +45,8 @@ public:
 
         void size( size_t s ) {
             if ( m_s < s ) {
+                std::cout << "arr resize: " << m_s << " -> " << s << "\n";
+                
                 delete [] score;
                 delete [] scoreL;
 
@@ -59,6 +61,13 @@ public:
                 }
             }
         }
+        
+        size_t size() {
+            return m_s;
+        }
+        
+        
+        
     };
     size_t m_ncups;
 private:
