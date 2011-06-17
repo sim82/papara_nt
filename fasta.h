@@ -529,7 +529,7 @@ public:
         return m_matrix[addr(a,b)];
     }
     
-    inline score_t *get_slice( int a ) {
+    inline score_t *get_slice( size_t a ) {
         return &m_matrix[a * MAX_SIZE];
     }
     
@@ -537,7 +537,7 @@ public:
         return int(m_alphabet.size());
     }
     
-    inline const char *get_cslice( int a ) const {
+    inline const char *get_cslice( size_t a ) const {
         //return &m_cmatrix[a * m_alphabet.size()];
         return m_cmatrix(a * m_cmatrixsize);
     }

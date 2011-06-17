@@ -16,7 +16,7 @@
 #define __pairwise_seq_distance_h
 
 
-
+// under certain circumstances gcc produces more consistent performance when the heavy-lifting is done in included code. maybe due to better optimization inside a compilation unit.
 #ifdef PWDIST_INLINE
 #define PSD_DECLARE_INLINE inline
 #include "pairwise_seq_distance.cpp"

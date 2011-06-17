@@ -70,7 +70,8 @@ public:
     typedef T& reference;
     typedef const T& const_reference;
     typedef size_t size_type;
-    
+    typedef ptrdiff_t difference_type;
+
     pointer allocate( size_type nobj, const void *lh = 0 ) {
         return (pointer) allocator::alloc( align, nobj * sizeof(T) );
     }

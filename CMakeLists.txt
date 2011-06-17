@@ -28,8 +28,8 @@ add_executable(dtw dtw.cpp )
 
 target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS})
 #target_link_libraries(stepwise_addition ivymike)
-target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS} pthread)
-target_link_libraries(pw_dist ivymike ${BOOST_LIBS} pthread)
+target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
+target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 target_link_libraries(tbb_test ublas_jama ivymike )
 
 target_link_libraries(dtw ivymike)

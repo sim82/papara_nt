@@ -514,7 +514,7 @@ class papara_nt : public papara_nt_i {
 
             for( unsigned int i = 0; i < VW; i++ ) {
 
-                unsigned int edge = j * VW + i;
+                size_t edge = j * VW + i;
                 if( edge < m_ec.m_edges.size()) {
                     block.edges[i] = edge;
                     block.num_valid++;
@@ -731,7 +731,7 @@ public:
     }
 
 
-    void calc_scores( const size_t n_threads ) {
+    void calc_scores( size_t n_threads ) {
 
         //
         // build the alignment blocks

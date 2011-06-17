@@ -323,8 +323,8 @@ public:
 
         for ( size_t a = m_na - 1; a >= m_nb - 1; a-- ) {
 
-            //assert(0); // bogus! use float. look if this caused errors!
-            float s = m_arr.score[saddr ( a, m_tbStartB ) ];
+            
+            score_t s = m_arr.score[saddr ( a, m_tbStartB ) ];
             if ( s < best ) {
                 best = s;
                 m_tbStartA = a;
