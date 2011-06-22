@@ -72,6 +72,9 @@ struct vector_unit<short, 8> {
         return _mm_and_si128( a, b );
     }
     
+    static inline const vec_t bit_or( const vec_t &a, const vec_t &b ) {
+        return _mm_or_si128( a, b );
+    }
     static inline const vec_t bit_andnot( const vec_t &a, const vec_t &b ) {
         return _mm_andnot_si128( a, b );
     }

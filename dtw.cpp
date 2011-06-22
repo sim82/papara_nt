@@ -38,30 +38,30 @@ void bla() {
 }
 
 int main() {
-    std::cout << CLOCKS_PER_SEC << "\n";
-    ivy_mike::timer tx;
-    while(true) {
-        bla();
-        std::cout << std::clock() / double(CLOCKS_PER_SEC) << "\n";
-        std::cout << tx.elapsed() << "\n";
-    }
-    
-    {
-        int y = 1234;
-        std::cout << y << "\n";
-    }
-    
-    int xxx[1024];// = int();
-    
-//     if( my_min3<int>(1, 2, 3) == 4 ) {
-//         xxx = 666;
+//     std::cout << CLOCKS_PER_SEC << "\n";
+//     ivy_mike::timer tx;
+//     while(true) {
+//         bla();
+//         std::cout << std::clock() / double(CLOCKS_PER_SEC) << "\n";
+//         std::cout << tx.elapsed() << "\n";
 //     }
-    
-    xxx[666] = int();
-    
-    std::cout << xxx[666] << "\n";
-    
-    return 0;
+//     
+//     {
+//         int y = 1234;
+//         std::cout << y << "\n";
+//     }
+//     
+//     int xxx[1024];// = int();
+//     
+// //     if( my_min3<int>(1, 2, 3) == 4 ) {
+// //         xxx = 666;
+// //     }
+//     
+//     xxx[666] = int();
+//     
+//     std::cout << xxx[666] << "\n";
+//     
+//     return 0;
     
  //     float ax[] = {1,2,3,4,5};
 //     float bx[] = {1,2,4};
@@ -121,14 +121,14 @@ int main() {
     
     for( size_t i = 0; i < a.size(); i++ ) {
         //a[i] = (value_t)(sin( (i / float(a.size())) * (16 + 16 * (i/float(a.size()))) * 3.14159) * 128) + i * 0.1;
-        if( i % 32 < 16 ) {
+        if( i % 16 < 8 ) {
             a[i] = -127;
 //             b[i] = 127;
         } else {
             a[i] = 127;
 //             b[i] = -127;
         }
-//         a[i] = (value_t)(sin( (i / float(a.size())) * 32 * 3.14159) * 128);
+//         a[i] = (value_t)(sin( (i / float(a.size())) * 32 * 3.14159 + 3.14159) * 128);
 //         
         b[i] = (value_t)(sin( (i / float(a.size())) * 32 * 3.14159) * 128);
         

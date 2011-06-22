@@ -20,7 +20,7 @@ class pvec_cgap {
     
 public:
     void init( const std::vector<uint8_t> &seq ) {
-        assert( v.size() == 0 );
+//         assert( v.size() == 0 );
         v.resize(seq.size());
         auxv.resize( seq.size() );
         std::transform( seq.begin(), seq.end(), v.begin(), dna_parsimony_mapping::d2p );
@@ -30,6 +30,10 @@ public:
     static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, tip_case tc ) {
         assert( c1.v.size() == c2.v.size() );
 
+        if( c1.v.size() != c2.v.size() ) {
+            throw std::runtime_error( "newview: vectors have different lengths (illegal incremetal newview on modified data?)" );
+        }
+        
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
         p.auxv.resize(c1.auxv.size());
@@ -86,19 +90,20 @@ public:
         return v.size();
     }
 
-    inline void to_int_vec( std::vector<int> &outv ) {
+    template<typename vt>
+    inline void to_int_vec( std::vector<vt> &outv ) {
 
         outv.resize( v.size() );
 
         std::copy( v.begin(), v.end(), outv.begin() );
     }
-
-    inline void to_aux_vec( std::vector<unsigned int> &outv ) {
-//         std::cout << "v: " << v.size() << "\n";
-
+    template<typename vt>
+    inline void to_aux_vec( std::vector<vt> &outv ) {
+        //         std::cout << "v: " << v.size() << "\n";
+        
         outv.resize( v.size() );
-       std::copy( auxv.begin(), auxv.end(), outv.begin() );
-
+        std::copy( auxv.begin(), auxv.end(), outv.begin() );
+        
 
 //         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
 
