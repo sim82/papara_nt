@@ -29,6 +29,7 @@
 #include "ivymike/thread.h"
 #include "ivymike/demangle.h"
 #include "ivymike/stupid_ptr.h"
+#include "ivymike/algorithm.h"
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
@@ -364,6 +365,11 @@ public:
 template<typename pvec_t>
 class papara_nt : public papara_nt_i {
 
+    const static int score_gap_open = 1;
+    const static int score_gap_extend = 1;
+    const static int score_mismatch = 1;
+    const static int score_match_cgap = 4;
+    
     //typedef pvec_pgap pvec_t;
     typedef my_adata_gen<pvec_t> my_adata;
 
@@ -448,7 +454,7 @@ class papara_nt : public papara_nt_i {
 
                     size_t stride = 1;
                     size_t aux_stride = 1;
-                    pars_align_vec pa( block.seqptrs, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, block.auxptrs, aux_stride, arrays, 0 );
+                    pars_align_vec pa( block.seqptrs, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, block.auxptrs, aux_stride, arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
 
 
                     pars_align_vec::score_t *score_vec = pa.align_freeshift();
@@ -466,7 +472,7 @@ class papara_nt : public papara_nt_i {
                                     const int *seqptr = block.seqptrs[k];
                                     const unsigned int *auxptr = block.auxptrs[k];
 
-                                    pars_align_seq pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0 );
+                                    pars_align_seq pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
                                     int res = pas.alignFreeshift(INT_MAX);
 
                                     if( res != score_vec[k] ) {
@@ -584,6 +590,37 @@ class papara_nt : public papara_nt_i {
         }
 
     }
+    void seq_to_position_map(const std::vector< uint8_t >& seq, std::vector< int > &map) {
+        for( size_t i = 0; i < seq.size(); ++i ) {
+            uint8_t ps = dna_parsimony_mapping::d2p(seq[i]);
+
+            if( ps == 0x1 || ps == 0x2 || ps == 0x4 || ps == 0x8 ) {
+                map.push_back(int(i));
+            }
+        }
+    }
+    
+    void gapstream_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > &map) { 
+        
+        int seq_ptr = 0;
+        
+        for ( std::vector<uint8_t>::const_reverse_iterator git = gaps.rbegin(); git != gaps.rend(); ++git ) {
+
+            if ( *git == 1) {
+                ++seq_ptr;
+            } else if ( *git == 0 ) {
+
+                map.push_back(seq_ptr);
+                
+                ++seq_ptr;
+            } else {
+                map.push_back(seq_ptr);
+                
+            }
+        }        
+    }
+
+
 
 public:
 
@@ -595,7 +632,10 @@ public:
 
             //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
         lout << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
-
+        lout << "scores: " << score_gap_open << " " << score_gap_extend << " " << score_mismatch << " " << score_match_cgap << "\n";
+        
+        
+        
         std::cerr << ivy_mike::isa<papara_nt<pvec_cgap> >(*this) << " " << ivy_mike::isa<papara_nt<pvec_pgap> >(*this) << "\n";
         // load input data: ref-tree, ref-alignment and query sequences
 
@@ -830,7 +870,7 @@ public:
 
             const size_t stride = 1;
             const size_t aux_stride = 1;
-            pars_align_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0 );
+            pars_align_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
             int res = pas.alignFreeshift(INT_MAX);
 
 
@@ -870,9 +910,22 @@ public:
             if( os_quality.good() && out_qs.size() == m_qs_seqs[i].size() ) {
                 bool debug = (m_qs_names[i] == "Species187_04");
 
-
-
-                double score = alignment_quality( out_qs, m_qs_seqs[i], debug );
+                std::vector<int> map_ref;
+                std::vector<int> map_aligned;
+                seq_to_position_map( m_qs_seqs[i], map_ref );
+                gapstream_to_position_map( tbv, map_aligned );
+                
+                if( map_ref.size() != map_aligned.size() ) {
+                    throw std::runtime_error( "alignment quirk: map_ref.size() != map_aligned.size()" );
+                }
+                
+                size_t num_equal = ivy_mike::count_equal( map_ref.begin(), map_ref.end(), map_aligned.begin() );
+                
+                //std::cout << "size: " << map_ref.size() << " " << map_aligned.size() << " " << m_qs_seqs[i].size() << "\n";
+               // std::cout << num_equal << " equal of " << map_ref.size() << "\n"; 
+                
+                double score = num_equal / double(map_ref.size());
+                //double score = alignment_quality( out_qs, m_qs_seqs[i], debug );
 
                 os_quality << m_qs_names[i] << " " << score << "\n";
 

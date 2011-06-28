@@ -296,6 +296,12 @@ public:
         }
 
         int c;
+        
+        while( xisspace(m_input.get() )) {}
+        
+        m_input.unget();
+        
+        
         while( true ) {
             c = m_input.get();
             

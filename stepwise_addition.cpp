@@ -20,6 +20,8 @@
 #include <boost/dynamic_bitset.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/future.hpp>
+#include <boost/thread/barrier.hpp>
+#include <boost/array.hpp>
 
 #define PWDIST_INLINE
 #endif
@@ -808,8 +810,9 @@ template<class pvec_t>
 class my_adata_gen : public ivy_mike::tree_parser_ms::adata {
 //     static int ct;
     //vector<parsimony_state> m_pvec;
-    pvec_t m_pvec;
+  
     vector<uint8_t> m_raw_seq;
+    pvec_t m_pvec;
 public:
 //     int m_ct;
     my_adata_gen() {
@@ -829,15 +832,15 @@ public:
     }
     void init_pvec(const vector< uint8_t >& seq) {
         m_raw_seq = seq;
-
-        m_pvec.init( seq );
+        reset_pvec();
+//        m_pvec.init( seq );
     }
     vector<uint8_t>&get_raw_seq() {
         return m_raw_seq;
     }
     
     void reset_pvec() {
-        m_pvec.init(m_raw_seq);
+        m_pvec.init( m_raw_seq );
     }
     
     pvec_t &get_pvec() {
@@ -856,6 +859,57 @@ class my_fact_gen : public ivy_mike::tree_parser_ms::node_data_factory {
     }
 
 };
+
+// template<class pvec_t>
+// class newview_service {
+//     boost::thread_group m_tg;
+//     boost::barrier m_barrier;
+//     boost::barrier m_barrier2;
+//     
+//     volatile bool m_finish;
+//     
+//     static void work_outer( size_t rank, newview_service<pvec_t> *this_ ) {
+//         this_->work(rank);
+//     }
+//     
+//     void work( size_t rank ) {
+//         m_barrier2.wait();
+//         while( !m_finish ) {
+//             cout << "waiting: " << rank << "\n";
+//             m_barrier.wait();
+//             
+//             
+//             cout << "waited: " << rank << "\n";
+//             
+//             m_barrier2.wait();
+//         }
+//         cout << "finished: " << rank << "\n";
+//     }
+//     
+// public:
+//     newview_service( size_t n_threads ) : m_barrier( n_threads + 1 ), m_barrier2( n_threads + 1 ), m_finish(false) {
+//         while( m_tg.size() < n_threads ) {
+//             m_tg.create_thread( boost::bind( &newview_service::work_outer, m_tg.size(), this ));
+//             
+//         }
+//         
+//         
+//   //      m_barrier2.wait();
+//         
+//     }
+//     
+//     void do_it() {
+//         m_barrier2.wait();
+//         m_barrier.wait();
+//         
+//     }
+//     
+//     ~newview_service() {
+//         m_finish = true;
+//         m_barrier2.wait();
+//         m_tg.join_all();
+//     }
+// };
 
 template<class pvec_t>
 void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
@@ -1351,7 +1405,7 @@ public:
         assert( futures.size() == ec.m_edges.size() );
         for( size_t i = 0; i < ec.m_edges.size(); ++i ) {
             int res = futures[i].get();
-            cout << "result: " << i << " = " << res << "\n";
+            //cout << "result: " << i << " = " << res << "\n";
             if( res > best_score ) {
 
                 best_score = res;
@@ -1504,6 +1558,8 @@ public:
         os << tc.m_nodes.size() << " " << seq_len << "\n";
         for( vector< tr1::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
             my_adata *adata = (*it)->m_data->get_as<my_adata>();
+
+            
             
             os << setw(max_name_len + 1) << left << setfill( ' ' ) << adata->tipName;
             copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), ostream_iterator<char>(os) );
@@ -1524,6 +1580,8 @@ int main( int argc, char **argv ) {
     
     scoring_matrix sm(3,0);
     
+    
+  
     
     align_freeshift( sm, a, b, -5, -3);
 //     return 0;
