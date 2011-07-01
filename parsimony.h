@@ -20,7 +20,7 @@
 #include <vector>
 #include <set>
 #include <cassert>
-
+#include <stdint.h>
 #if WIN32
 #include <boost/shared_ptr.hpp>
 
