@@ -1,6 +1,7 @@
 
 #ifndef __pvec_h
 #define __pvec_h
+// #define BOOST_UBLAS_NDEBUG
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/banded.hpp>
 #include <boost/numeric/ublas/io.hpp>
@@ -9,8 +10,18 @@
 #include <EigenvalueDecomposition.hpp>
 #include <cassert>
 #include <algorithm>
+
+//#define USE_CBLAS
+#ifdef USE_CBLAS
+extern "C" {
+#include <cblas.h>
+}
+#endif
+
+
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
+#include "ivymike/algorithm.h"
 class pvec_cgap {
     //     aligned_buffer<parsimony_state> v;
     std::vector<parsimony_state> v;
@@ -97,12 +108,47 @@ public:
 
         std::copy( v.begin(), v.end(), outv.begin() );
     }
+    template<typename oiter_, size_t STRIDE>
+    inline void to_int_vec_strided( oiter_ out ) {
+        //outv.assign( v.begin(), v.end() );
+        for( std::vector< parsimony_state >::iterator it = v.begin(); it != v.end(); ++it, out += STRIDE ) {
+            *out = *it;
+            
+        }
+        
+//         outv.resize( v.size() );
+//         std::copy( v.begin(), v.end(), outv.begin() );
+
+    }
+    
+    
     template<typename vt>
     inline void to_aux_vec( std::vector<vt> &outv ) {
         //         std::cout << "v: " << v.size() << "\n";
         
         outv.resize( v.size() );
         std::copy( auxv.begin(), auxv.end(), outv.begin() );
+        
+
+//         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
+
+
+    }
+    
+    template<typename oiter_, size_t STRIDE>
+    inline void to_aux_vec_strided( oiter_ out ) {
+        //         std::cout << "v: " << v.size() << "\n";
+        
+        for( std::vector< int >::iterator it = auxv.begin(); it != auxv.end(); ++it, out += STRIDE ) {
+            if( *it == AUX_CGAP ) {
+                *out = 0xFFFF;
+            } else {
+                *out = 0x0;
+            }
+        }
+       // std::transform( auxv.begin(), auxv.end(), out );
+        
+        
         
 
 //         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
@@ -202,6 +248,8 @@ class pvec_pgap {
     std::vector<parsimony_state> v;
     ublas::matrix<double> gap_prob;
 
+    
+    
 public:
     static ivy_mike::stupid_ptr<probgap_model> pgap_model;
 
@@ -241,10 +289,31 @@ public:
 
         ublas::matrix<double> p1 = pgap_model->setup_pmatrix(z1);
         ublas::matrix<double> p2 = pgap_model->setup_pmatrix(z2);
-
+#if 1
         ublas::matrix<double> t1 = ublas::prod(p1, c1.gap_prob);
         ublas::matrix<double> t2 = ublas::prod(p2, c2.gap_prob);
-
+#else
+        ublas::matrix<double> t1(c1.gap_prob.size1(), c1.gap_prob.size2(),0 );
+        ublas::matrix<double> t2(c2.gap_prob.size1(), c2.gap_prob.size2(),0 );    
+        
+        {
+            double *p1x = p1.data().begin();
+            double *p2x = p2.data().begin();
+            
+            double *c1x = c1.gap_prob.data().begin();
+            double *c2x = c2.gap_prob.data().begin();
+            
+            double *t1bx = t1.data().begin();
+            double *t2bx = t2.data().begin();
+            
+            size_t m = p1.size2();
+            size_t n = c1.gap_prob.size2();
+            size_t k = p1.size1();
+            
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, p1x, m, c1x, n, 1, t1bx, n);
+            cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1, p2x, m, c2x, n, 1, t2bx, n);
+        }
+#endif   
         p.gap_prob = ublas::element_prod( t1, t2 );
         //ublas::matrix< double >::const_iterator1 xxx = p.gap_prob.begin1();
        // xxx.
@@ -283,18 +352,29 @@ public:
     inline size_t size() {
         return v.size();
     }
-        inline void to_int_vec( std::vector<int> &outv ) {
+    
+    
+    
+    template<typename vt>
+    inline void to_int_vec( std::vector<vt> &outv ) {
+        outv.assign( v.begin(), v.end() );
+//         outv.resize( v.size() );
+//         std::copy( v.begin(), v.end(), outv.begin() );
 
-        outv.resize( v.size() );
-
-        std::copy( v.begin(), v.end(), outv.begin() );
     }
+    
+    
+   
 
-    inline void to_aux_vec( std::vector<unsigned int> &outv ) {
+    template<typename vt>
+    inline void to_aux_vec( std::vector<vt> &outv ) {
+    
 //         std::cout << "v: " << v.size() << "\n";
 
-        outv.resize( v.size() );
-        std::fill( outv.begin(), outv.end(), 0 );
+        outv.clear();
+        outv.reserve(v.size());
+//         outv.resize( v.size() );
+//         std::fill( outv.begin(), outv.end(), 0 );
 
 //         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
 
@@ -305,20 +385,27 @@ public:
         // yeah! metaprogramming massacre!
 
         ublas::matrix< double >::iterator1 tit1 = t.begin1();
+#if 0
         std::vector<double> odds;
+        odds.reserve(t.size2());
 
-
-        for( ublas::matrix< double >::iterator2 tit = t.begin2(); tit != t.end2(); ++tit ) {
-            odds.push_back( *tit / *(tit.begin()+1));
-        }
+//         NOTE: t.begin1() + 1).begin() is the boost::ublas way of saying "iterator over the second row"
+        ivy_mike::binary_twizzle( t.begin2(), t.end2(), (t.begin1() + 1).begin(), std::back_inserter(odds), std::divides<double>() );
+        
         std::transform( odds.begin(), odds.end(), odds.begin(), std::ptr_fun<double>(log) );
 
-        std::vector<bool> bias(odds.size());
-        std::transform( odds.begin(), odds.end(), bias.begin(), std::bind1st( std::greater<double>(), 0.0 ) );
-        //std::transform( bias.begin(), bias.end(), outv.begin(), std::bind1st( std::multiplies<int>(), 3 ) );
-        std::copy( bias.begin(), bias.end(), outv.begin());
-//         std::vector<uint8_t> lomag(odds.size());
-//         std::transform( odds.begin(), odds.end(), lomag.begin(), to_hex );
+        //std::transform( odds.begin(), odds.end(), std::back_inserter(outv), std::bind1st( std::greater<double>(), -1.0 ) );
+        
+        const double odds_threshold = 0.0;
+        std::transform( odds.begin(), odds.end(), std::back_inserter(outv), std::bind2nd( std::less<double>(), odds_threshold ) );
+        //         std::fill( outv.begin(), outv.end(), 1 );
+#else
+        // set outv[i] == 1 if, prob(non-gap) is less than prob(gap)
+        // this is equivalent to the above code with odds_threshold == 0.0
+        ivy_mike::binary_twizzle( t.begin2(), t.end2(), (t.begin1() + 1).begin(), std::back_inserter(outv), std::less<double>() );
+        
+                
+#endif
 
 
 #if 0
@@ -352,6 +439,49 @@ public:
 #endif
 
     }
+//     template<typename oiter_, size_t STRIDE>
+//     class strided_inserter {
+//         typedef std::iterator_traits<oiter_> traits;
+//         typedef typename traits::value_type reference_type;
+//         
+//         oiter_ out;
+//     public:
+//         strided_inserter( oiter_ out_ ) : out(out_) {}
+//         
+//         strided_inserter<oiter_,STRIDE> &operator=( reference_type v ) {
+//             *out = v;
+//         }
+//         strided_inserter<oiter_,STRIDE> &operator*() {
+//             return *this;
+//         }
+//         
+//         strided_inserter<oiter_,STRIDE> &operator++() {
+//             out+=STRIDE;
+//             return *this;
+//         }
+//         
+//         strided_inserter<oiter_,STRIDE> operator++(int w) {
+//             out+=STRIDE * w;
+//             return *this;
+//         }
+//         
+//         
+//     };
+//     
+//     template<typename oiter_, size_t STRIDE>
+//     inline void to_aux_vec( oiter_ out ) {
+// 
+//         ublas::matrix<double> t = get_pgap();
+// 
+//         // yeah! metaprogramming massacre!
+// 
+//         ublas::matrix< double >::iterator1 tit1 = t.begin1();
+// 
+//         // set outv[i] == 1 if, prob(non-gap) is less than prob(gap)
+//         // this is equivalent to the above code with odds_threshold == 0.0
+//         ivy_mike::binary_twizzle( t.begin2(), t.end2(), (t.begin1() + 1).begin(), strided_inserter<oiter_,STRIDE>(out), std::less<double>() );
+//     }
+    
     const ublas::matrix<double> get_pgap() {
         return gap_prob;
     }

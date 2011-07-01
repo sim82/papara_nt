@@ -559,6 +559,10 @@ class papara_nt : public papara_nt_i {
         // in each thread will most likely use more memory than storing the pre-calculated vectors.
 
         // TODO: maybe try lazy create/cache of the asv's in the threads
+        
+        ivy_mike::timer t1;
+
+
 
         assert( m_ref_aux.empty() && m_ref_pvecs.empty() );
 
@@ -569,7 +573,7 @@ class papara_nt : public papara_nt_i {
         for( size_t i = 0; i < m_ec.m_edges.size(); i++ ) {
             pvec_t root_pvec;
 
-            std::cout << "newview for branch " << i << ": " << *(m_ec.m_edges[i].first->m_data) << " " << *(m_ec.m_edges[i].second->m_data) << "\n";
+//             std::cout << "newview for branch " << i << ": " << *(m_ec.m_edges[i].first->m_data) << " " << *(m_ec.m_edges[i].second->m_data) << "\n";
 
             if( i == 340 ) {
                 g_dump_aux = true;
@@ -588,7 +592,9 @@ class papara_nt : public papara_nt_i {
 
 
         }
-
+        
+        std::cout << "pvecs created: " << t1.elapsed() << "\n";
+        
     }
     void seq_to_position_map(const std::vector< uint8_t >& seq, std::vector< int > &map) {
         for( size_t i = 0; i < seq.size(); ++i ) {
@@ -660,7 +666,7 @@ public:
         std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
 
         for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-            std::cout << (*it)->m_data->tipName << "\n";
+//             std::cout << (*it)->m_data->tipName << "\n";
             name_to_lnode[(*it)->m_data->tipName] = *it;
         }
 
@@ -1033,7 +1039,7 @@ int main( int argc, char *argv[] ) {
 //     aligned_buffer<int> xxx(1024);
     
     
-    
+
     
     namespace igo = ivy_mike::getopt;
 
@@ -1091,6 +1097,9 @@ int main( int argc, char *argv[] ) {
     } else {
         pnt_ptr.reset( new papara_nt<pvec_cgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name ));
     }
+    
+//     return 0;
+    
     std::cerr << "using " << opt_num_threads << " threads\n";
 
 

@@ -14,8 +14,9 @@
 
 #include <functional>
 #include <iomanip>
+#include <numeric>
+
 #ifndef WIN32 
-// there is some strange linker error on widows. can't be bothered now... visual c++ will probably do better whole program optimization than gcc anyway...
 
 #include <boost/dynamic_bitset.hpp>
 #include <boost/thread.hpp>
@@ -23,76 +24,85 @@
 #include <boost/thread/barrier.hpp>
 #include <boost/array.hpp>
 
+// there is some strange linker error on widows. can't be bothered now... visual c++ will probably do better whole program optimization than gcc anyway...
 #define PWDIST_INLINE
 #endif
 #include "pairwise_seq_distance.h"
 
 #include "ivymike/tdmatrix.h"
 #include "ivymike/algorithm.h"
-#include "ivymike/cycle.h"
+// #include "ivymike/cycle.h"
 
 #include "parsimony.h"
 #include "pvec.h"
 #include "fasta.h"
 #include "ivymike/tree_parser.h"
 #include "pars_align_seq.h"
+#include <ivymike/time.h>
 
 using namespace std;
 using namespace ivy_mike::tree_parser_ms;
-// void pairwise_seq_distance(vector< vector<uint8_t> > &seq_raw, ivy_mike::tdmatrix<int> &, const scoring_matrix &sm, const int gap_open, const int gap_extend, const int n_thread );
+
+
 template<typename score_t>
 struct align_arrays {
     aligned_buffer<score_t> s;
     aligned_buffer<score_t> si;
 };
 
-template<typename score_t>
+template<typename score_t,bool global>
 score_t align_freeshift_pvec_score( vector<uint8_t> &a, vector<uint8_t> &a_aux, const vector<uint8_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, align_arrays<score_t> &arr ) {
-    // meeeep: FIXME!
-    
-    
-    
-    
-    
+
     if( arr.s.size() < a.size()  ) {
         arr.s.resize( a.size() );
         arr.si.resize( a.size() );
     }
     
-    fill( arr.s.begin(), arr.s.end(), 0 );
-    fill( arr.si.begin(), arr.si.end(), 0 );
+    
+    if( global ) {
+        for( size_t i = 0; i < a.size(); ++i ) {
+            arr.s[i] = gap_open + (i+1) * gap_extend;
+        }
+    } else {
+        fill( arr.s.begin(), arr.s.end(), 0 );
+    }
     const score_t SMALL = -32000;
+    fill( arr.si.begin(), arr.si.end(), SMALL );
+    
 
     score_t max_score = SMALL;
-    
-
-    
-
     
     for( size_t ib = 0; ib < b.size(); ib++ ) {
         int bc = b[ib];
         
         score_t last_sl = SMALL;
-        score_t last_sc = 0.0;
-        score_t last_sdiag = 0.0;
-//         cout << "sbm: " << m.state_backmap(bc) << " " << (W * asize) << endl;
-       // sscore_t *qpp_iter = qprofile(m.state_backmap(bc) * W * asize);
+        score_t last_sc;// = 0.0;
+        score_t last_sdiag;// = 0.0;
+        if( global ) {
+            if( ib == 0 ) {
+                last_sdiag = 0;
+            } else {
+                last_sdiag = gap_open + ib * gap_extend;
+            }
+            
+            last_sc = gap_open + (ib+1) * gap_extend;
+            
+        } else {
+            last_sc = 0;
+            last_sdiag = 0;
+        }
+        
         
         score_t * __restrict s_iter = arr.s.base();
         score_t * __restrict si_iter = arr.si.base();
         score_t * __restrict s_end = s_iter + a.size();
         bool lastrow = ib == (b.size() - 1);
-        
-        //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
             
         for( size_t ia = 0; ia < a.size(); ++ia, ++s_iter, ++si_iter ) {  
-            //score_t match = sm.get_score( a[ia], bc );
-            
-            
             score_t ac = a[ia];
             const bool cgap = a_aux[ia] == AUX_CGAP;
             
-                // determine match or mis-match according to parsimony bits coming from the tree.
+            // determine match or mis-match according to parsimony bits coming from the tree.
             score_t match = ( ac & bc ) != 0 ? match_score : 0;
             
 
@@ -100,9 +110,6 @@ score_t align_freeshift_pvec_score( vector<uint8_t> &a, vector<uint8_t> &a_aux, 
             
             last_sdiag = *s_iter;
 
-           // score_t sm_zero = sm;
-
-            
             score_t last_sc_OPEN; 
             score_t sl_score_stay;
             
@@ -121,20 +128,12 @@ score_t align_freeshift_pvec_score( vector<uint8_t> &a, vector<uint8_t> &a_aux, 
             } else {
                 sl = last_sc_OPEN;
             }
-            //score_t sl = max( last_sl + gap_extend, last_sc_OPEN );
-            
-            
-            
-//             vu::println( GAP_EXT_vec, pb.m_ptr ); getchar();
-            
             
             last_sl = sl;
             
 
             score_t su_gap_open = last_sdiag + gap_open;
             score_t su_GAP_EXTEND = *si_iter + gap_extend;
-            
-            
             
             score_t su;// = max( su_GAP_EXTEND,  );
             if( su_GAP_EXTEND > su_gap_open ) {
@@ -146,98 +145,113 @@ score_t align_freeshift_pvec_score( vector<uint8_t> &a, vector<uint8_t> &a_aux, 
             
             *si_iter = su;
             
-            
-            
-            
             score_t sc = std::max( sm, std::max( su, sl ) );
             
             last_sc = sc;
             *s_iter = sc;
             
-            
-            if( s_iter == (s_end - 1) || lastrow ) {
-                if( sc  > max_score ) {
-                    
-                    max_score = sc;
+            if( global ) {
+                max_score = sc;
+            } else {
+                if( s_iter == (s_end - 1) || lastrow ) {
+                    if( sc  > max_score ) {
+                        
+                        max_score = sc;
+                    }
                 }
-                
-                
             }
         }
-        
     }
-    
-    
 
     return max_score;
     
 }
 
-template<typename score_t, size_t W>
-void align_freeshift_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, vector<uint8_t> &b, const score_t match_score, const score_t match_cgap, const score_t gap_open, const score_t gap_extend, aligned_buffer<score_t> &out ) {
+
+
+
+template<typename score_t>
+struct align_vec_arrays {
+    aligned_buffer<score_t> s;
+    aligned_buffer<score_t> si;
+};
+
+template<typename score_t, size_t W, bool global>
+void align_freeshift_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const vector<uint8_t> &b, const score_t match_score, const score_t match_cgap, const score_t gap_open, const score_t gap_extend, aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
     
     
     typedef vector_unit<score_t,W> vu;
     typedef typename vu::vec_t vec_t;
     
     
-    // meeeep: FIXME!
-    static aligned_buffer<score_t> s;
-    static aligned_buffer<score_t> si;
-    
+        
     size_t av_size = a_prof.size();
     
-    if( s.size() < av_size  ) {
-        s.resize( av_size );
-        si.resize( av_size );
+//     if( arr.s.size() < av_size  ) {
+    arr.s.resize( av_size );
+    arr.si.resize( av_size );
+//     }
+    
+    
+    if( arr.s.size() % W != 0 ) {
+        throw std::runtime_error( "profile length not multiple of vec-unit width." );
     }
     
-    fill( s.begin(), s.end(), 0 );
-    fill( si.begin(), si.end(), 0 );
+    if( global ) {
+        int i = 0;
+        
+        for( typename aligned_buffer<score_t>::iterator it = arr.s.begin(); it != arr.s.end(); it += W, ++i ) {
+            std::fill( it, it + W, gap_open + (i+1) * gap_extend );
+        }
+    } else {
+        fill( arr.s.begin(), arr.s.end(), 0 );
+    }
+    
     const score_t SMALL = vu::SMALL_VALUE;
+    fill( arr.si.begin(), arr.si.end(), SMALL );
+    
 
     vec_t max_score = vu::set1(SMALL);
-//     const vec_t full_mask = vu::set1(0xFFFF);
     
     for( size_t ib = 0; ib < b.size(); ib++ ) {
-        //int bc = b[ib];
         vec_t bc = vu::set1(b[ib]);
         
         vec_t last_sl = vu::set1(SMALL);
-        vec_t last_sc = vu::set1(0);
-        vec_t last_sdiag = vu::set1(0);
-//         cout << "sbm: " << m.state_backmap(bc) << " " << (W * asize) << endl;
-       // sscore_t *qpp_iter = qprofile(m.state_backmap(bc) * W * asize);
+        vec_t last_sc;// = vu::set1(0);
+        vec_t last_sdiag; // = vu::set1(0);
+        
+        if( global ) {
+            if( ib == 0 ) {
+                last_sdiag = vu::set1(0);
+            } else {
+                last_sdiag = vu::set1(gap_open + ib * gap_extend);
+            }
+            
+            last_sc = vu::set1(gap_open + (ib+1) * gap_extend);
+            
+        } else {
+            last_sc = vu::set1(0);;
+            last_sdiag = vu::set1(0);;
+        }
         
         
         score_t * __restrict a_prof_iter = a_prof.base();
         score_t * __restrict a_aux_prof_iter = a_aux_prof.base();
-        score_t * __restrict s_iter = s.base();
-        score_t * __restrict si_iter = si.base();
+        score_t * __restrict s_iter = arr.s.base();
+        score_t * __restrict si_iter = arr.si.base();
         score_t * __restrict s_end = s_iter + av_size;
         bool lastrow = ib == (b.size() - 1);
         
-//         vec_t lastrow_mask = vu::set1( lastrow ? 0xFFFF : 0 );
-        
-        //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
-            
-        //for( size_t ia = 0; ia < a.size(); ++ia, s_iter+=W, si_iter+=W ) {  
         vec_t row_max_score = vu::set1(SMALL);
         bool break_aloop = false;
         for(; !break_aloop; a_prof_iter += W, a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
-            //score_t match = sm.get_score( a[ia], bc );
-            //vec_t lastcol_mask = (s_iter == (s_end - W)) ? full_mask : lastrow_mask;
             
             break_aloop = s_iter == (s_end - W);
-            //vec_t lastcol_mask = vu::bit_or( lastrow_mask, vu::cmp_eq(vu::set1(ia), vu::setzero() ));
             
             
             const vec_t ac = vu::load( a_prof_iter );
             const vec_t cgap = vu::load( a_aux_prof_iter );
             
-            
-            
-            //score_t match = ( ac & bc ) != 0 ? match_score : 0;
             const vec_t non_match = vu::cmp_eq( vu::bit_and( ac, bc ), vu::setzero() );
             
             vec_t match_score_vec = vu::bit_andnot( non_match, vu::set1(match_score));
@@ -249,35 +263,14 @@ void align_freeshift_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_bu
             
             const vec_t sm = vu::add(last_sdiag, match_score_vec );
             
-            //last_sdiag = *s_iter;
+
             last_sdiag = vu::load( s_iter );
  
             
             const vec_t last_sc_OPEN = vu::add( last_sc, gap_open_score ); 
             const vec_t sl_score_stay = vu::add( last_sl, gap_extend_score );
             
-//             if( cgap ) {
-//                 last_sc_OPEN = last_sc; 
-//                 sl_score_stay = last_sl;
-//                 sm += match_cgap;
-//             } else {
-//                 last_sc_OPEN = last_sc + gap_open; 
-//                 sl_score_stay = last_sl + gap_extend;
-//             }
-            
             const vec_t sl = vu::max( last_sc_OPEN, sl_score_stay );
-//             if( sl_score_stay > last_sc_OPEN ) {
-//                 sl = sl_score_stay;
-//             } else {
-//                 sl = last_sc_OPEN;
-//             }
-            //score_t sl = max( last_sl + gap_extend, last_sc_OPEN );
-            
-            
-            
-//             vu::println( GAP_EXT_vec, pb.m_ptr ); getchar();
-            
-            
             last_sl = sl;
             
 
@@ -285,83 +278,67 @@ void align_freeshift_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_bu
             
             const vec_t si = vu::load( si_iter );
             const vec_t su_GAP_EXTEND = vu::add( si, vu::set1(gap_extend) );
-            
-            
-            
             const vec_t su = vu::max( su_GAP_EXTEND, su_gap_open );// = max( su_GAP_EXTEND,  );
-//             if( su_GAP_EXTEND > su_gap_open ) {
-//                 su = su_GAP_EXTEND;
-//             } else {
-//                 su = su_gap_open;
-//             }
             
             vu::store( su, si_iter );
-            //*si_iter = su;
-            
-            
-            
             
             const vec_t sc = vu::max( sm, vu::max( su, sl ) );
             
             last_sc = sc;
             
             vu::store( sc, s_iter );
-//             *s_iter = sc;
-            
-            
-//             vec_t mask = (break_aloop || lastrow) ? full_mask : vu::setzero();
-//             max_score = vu::max( max_score, vu::bit_and( sc, mask));
-//             if( break_aloop || lastrow ) {
-// //                 if( sc  > max_score ) {
-// //                     
-// //                     max_score = sc;
-// //                 }
-//                 max_score = vu::max( max_score, sc );
-//                 
-//             }
-            
-            row_max_score = vu::max( row_max_score, sc );
+
+            if( !global ) {
+                row_max_score = vu::max( row_max_score, sc );
+            }
         }
-	max_score = vu::max( max_score, last_sc );
-        // CONTINUE HERE!
-        if( lastrow ) {
-            max_score = vu::max( max_score, row_max_score );	
-	} 
         
-        
+        if( global ) {
+            max_score = last_sc;
+        } else {
+            max_score = vu::max( max_score, last_sc );
+            if( lastrow ) {
+                max_score = vu::max( max_score, row_max_score );	
+            }
+        }
     }
     
     
     vu::store( max_score, out.base() );
-//     return max_score;
-    
 }
 
+template<typename score_t>
+struct align_arrays_traceback {
+    aligned_buffer<score_t> s;
+    aligned_buffer<score_t> si;  
+    
+    vector<uint8_t> tb;
+};
 
 template<typename score_t>
-score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector<uint8_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, vector<uint8_t>& tb_out ) {
-    aligned_buffer<score_t> s;
-    aligned_buffer<score_t> si;
+score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector<uint8_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
+  
+    const uint8_t b_sl_stay = 0x1;
+    const uint8_t b_su_stay = 0x2;
+    const uint8_t b_s_l = 0x4;
+    const uint8_t b_s_u = 0x8;
     
     
-    
-    if( s.size() < a.size()  ) {
-        s.resize( a.size() );
-        si.resize( a.size() );
+    if( arr.s.size() < a.size()  ) {
+        arr.s.resize( a.size() );
+        arr.si.resize( a.size() );
     }
     
-    fill( s.begin(), s.end(), 0 );
-    fill( si.begin(), si.end(), 0 );
+    fill( arr.s.begin(), arr.s.end(), 0 );
+    fill( arr.si.begin(), arr.si.end(), 0 );
     const score_t SMALL = -32000;
 
     score_t max_score = SMALL;
     size_t max_a = 0;
     size_t max_b = 0;
     
-    vector<bool> sl_stay( a.size() * b.size() );
-    vector<bool> su_stay( a.size() * b.size() );
-    vector<bool> s_l( a.size() * b.size() );
-    vector<bool> s_u( a.size() * b.size() );
+    arr.tb.resize( a.size() * b.size() );
+    
     
     struct index_calc {
         const size_t as, bs;
@@ -386,11 +363,9 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
         score_t last_sl = SMALL;
         score_t last_sc = 0.0;
         score_t last_sdiag = 0.0;
-//         cout << "sbm: " << m.state_backmap(bc) << " " << (W * asize) << endl;
-       // sscore_t *qpp_iter = qprofile(m.state_backmap(bc) * W * asize);
         
-        score_t * __restrict s_iter = s.base();
-        score_t * __restrict si_iter = si.base();
+        score_t * __restrict s_iter = arr.s.base();
+        score_t * __restrict si_iter = arr.si.base();
         score_t * __restrict s_end = s_iter + a.size();
         bool lastrow = ib == (b.size() - 1);
         
@@ -398,7 +373,7 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
             
         for( size_t ia = 0; ia < a.size(); ++ia, ++s_iter, ++si_iter ) {  
             //score_t match = sm.get_score( a[ia], bc );
-            
+            uint8_t tb_val = 0;
             int ac = a[ia];
             const bool cgap = a_aux[ia]  == AUX_CGAP;
             
@@ -409,9 +384,6 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
             score_t sm = last_sdiag + match;
             
             last_sdiag = *s_iter;
-
-            
-
             
             score_t last_sc_OPEN; 
             score_t sl_score_stay;
@@ -428,16 +400,11 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
             score_t sl;
             if( sl_score_stay > last_sc_OPEN ) {
                 sl = sl_score_stay;
-                sl_stay[ic(ia,ib)] = true;
+                //arr.sl_stay[ic(ia,ib)] = true;
+                tb_val |= b_sl_stay;
             } else {
                 sl = last_sc_OPEN;
             }
-            //score_t sl = max( last_sl + gap_extend, last_sc_OPEN );
-            
-            
-            
-//             vu::println( GAP_EXT_vec, pb.m_ptr ); getchar();
-            
             
             last_sl = sl;
             
@@ -445,12 +412,11 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
             score_t su_gap_open = last_sdiag + gap_open;
             score_t su_GAP_EXTEND = *si_iter + gap_extend;
             
-            
-            
             score_t su;// = max( su_GAP_EXTEND,  );
             if( su_GAP_EXTEND > su_gap_open ) {
                 su = su_GAP_EXTEND;
-                su_stay[ic(ia,ib)] = true;
+                //arr.su_stay[ic(ia,ib)] = true;
+                tb_val |= b_su_stay;
             } else {
                 su = su_gap_open;
             }
@@ -461,10 +427,12 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
             score_t sc;
             if( (su > sl) && su > sm ) {
                 sc = su;
-                s_u[ic(ia,ib)] = true;
+                //arr.s_u[ic(ia,ib)] = true;
+                tb_val |= b_s_u;
             } else if( ( sl >= su ) && sl > sm ) {
                 sc = sl;
-                s_l[ic(ia,ib)] = true;
+                //arr.s_l[ic(ia,ib)] = true;
+                tb_val |= b_s_l;
             } else { // implicit: sm_zero > sl && sm_zero > su
                 sc = sm;
             }
@@ -472,7 +440,7 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
             
             last_sc = sc;
             *s_iter = sc;
-            
+            arr.tb[ic(ia,ib)] = tb_val;
             
             if( s_iter == s_end - 1 || lastrow ) {
                 if( sc > max_score ) {
@@ -490,13 +458,8 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
     cout << "max score: " << max_score << "\n";
     cout << "max " << max_a << " " << max_b << "\n";
     
-    
-    
-    
     int ia = a.size() - 1;
     int ib = b.size() - 1;
-    
-    
     
     assert( ia == max_a || ib == max_b );
     
@@ -504,34 +467,23 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
     bool in_u = false;
     
     while( ia > max_a ) {
-        //         a_tb.push_back(a[ia]);
-        //         b_tb.push_back('-');
         tb_out.push_back(1);
-
         --ia;
-//         in_u = true;
     }
     
     while( ib > max_b ) {
-        //         a_tb.push_back('-');
-        //         b_tb.push_back(b[ib]);
         tb_out.push_back(2);
         --ib;
-//         in_l = true;
     }
-    
-//     cout << "in " << in_l << " " << in_u << "\n";
     
     while( ia >= 0 && ib >= 0 ) {
         size_t c = ic( ia, ib );
         
         if( !in_l && !in_u ) {
-            in_l = s_l[c];
-            in_u = s_u[c];
+            in_l = (arr.tb[c] & b_s_l) != 0;
+            in_u = (arr.tb[c] & b_s_u) != 0;
             
             if( !in_l && !in_u ) {
-                //                 a_tb.push_back(a[ia]);
-                //                 b_tb.push_back(b[ib]);
                 tb_out.push_back(0);
                 --ia;
                 --ib;
@@ -540,40 +492,240 @@ score_t align_freeshift_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector
         }
         
         if( in_u ) {
-            //             a_tb.push_back('-');
-            //             b_tb.push_back(b[ib]);
             tb_out.push_back(2);
             --ib;
             
-            in_u = su_stay[c];
+            in_u = (arr.tb[c] & b_su_stay) != 0;
         } else if( in_l ) {
-            //             a_tb.push_back(a[ia]);
-            //             b_tb.push_back('-');
             tb_out.push_back(1);
             --ia;
             
-            in_l = sl_stay[c];
+            in_l = (arr.tb[c] & b_sl_stay) != 0;
         }
         
         
     }
     
     while( ia >= 0 ) {
-        //         a_tb.push_back(a[ia]);
-        //         b_tb.push_back('-');
         tb_out.push_back(1);
         --ia;
     }
     
     while( ib >= 0 ) {
-        //         a_tb.push_back('-');
-        //         b_tb.push_back(b[ib]);
         tb_out.push_back(2);
         --ib;
     }
-    //reverse( tb_out.begin(), tb_out.end() );
+    return max_score;
+}
+
+template<typename score_t>
+score_t align_global_pvec( vector<uint8_t> &a, vector<uint8_t> &a_aux, vector<uint8_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
+  
+    const uint8_t b_sl_stay = 0x1;
+    const uint8_t b_su_stay = 0x2;
+    const uint8_t b_s_l = 0x4;
+    const uint8_t b_s_u = 0x8;
     
-//     getchar();
+    
+    if( arr.s.size() < a.size()  ) {
+        arr.s.resize( a.size() );
+        arr.si.resize( a.size() );
+    }
+    
+    
+    const score_t SMALL = -32000;
+    //fill( arr.s.begin(), arr.s.end(), 0 );
+    for( size_t i = 0; i < a.size(); ++i ) {
+        arr.s[i] = gap_open + (i+1) * gap_extend;
+    }
+    
+    fill( arr.si.begin(), arr.si.end(), SMALL );
+    
+
+    score_t max_score = SMALL;
+    size_t max_a = 0;
+    size_t max_b = 0;
+    
+    arr.tb.resize( a.size() * b.size() );
+    
+    
+    struct index_calc {
+        const size_t as, bs;
+        index_calc( size_t as_, size_t bs_ ) : as(as_), bs(bs_) {}
+        
+        size_t operator()(size_t ia, size_t ib ) {
+            assert( ia < as );
+            assert( ib < bs );
+            
+            //return ia * bs + ib;
+            return ib * as + ia;
+        }
+        
+    };
+    
+    index_calc ic( a.size(), b.size() );
+    
+    
+    for( size_t ib = 0; ib < b.size(); ib++ ) {
+        int bc = b[ib];
+        
+        score_t last_sl = SMALL;
+        
+        score_t last_sdiag;
+        score_t last_sc = gap_open + (ib+1) * gap_extend;
+        if( ib == 0 ) {
+            last_sdiag = 0;
+        } else {
+            last_sdiag = gap_open + ib * gap_extend;
+        }
+        
+        score_t * __restrict s_iter = arr.s.base();
+        score_t * __restrict si_iter = arr.si.base();
+        score_t * __restrict s_end = s_iter + a.size();
+        bool lastrow = ib == (b.size() - 1);
+        
+        //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
+            
+        for( size_t ia = 0; ia < a.size(); ++ia, ++s_iter, ++si_iter ) {  
+            //score_t match = sm.get_score( a[ia], bc );
+            uint8_t tb_val = 0;
+            int ac = a[ia];
+            const bool cgap = a_aux[ia]  == AUX_CGAP;
+            
+                // determine match or mis-match according to parsimony bits coming from the tree.
+            score_t match = ( ac & bc ) != 0 ? match_score : 0;
+            
+
+            score_t sm = last_sdiag + match;
+            
+            last_sdiag = *s_iter;
+            
+            score_t last_sc_OPEN; 
+            score_t sl_score_stay;
+            
+            if( cgap ) {
+                last_sc_OPEN = last_sc; 
+                sl_score_stay = last_sl;
+                sm += match_cgap;
+            } else {
+                last_sc_OPEN = last_sc + gap_open; 
+                sl_score_stay = last_sl + gap_extend;
+            }
+            
+            score_t sl;
+            if( sl_score_stay > last_sc_OPEN ) {
+                sl = sl_score_stay;
+                //arr.sl_stay[ic(ia,ib)] = true;
+                tb_val |= b_sl_stay;
+            } else {
+                sl = last_sc_OPEN;
+            }
+            
+            last_sl = sl;
+            
+
+            score_t su_gap_open = last_sdiag + gap_open;
+            score_t su_GAP_EXTEND = *si_iter + gap_extend;
+            
+            score_t su;// = max( su_GAP_EXTEND,  );
+            if( su_GAP_EXTEND > su_gap_open ) {
+                su = su_GAP_EXTEND;
+                //arr.su_stay[ic(ia,ib)] = true;
+                tb_val |= b_su_stay;
+            } else {
+                su = su_gap_open;
+            }
+            
+            
+            *si_iter = su;
+            
+            score_t sc;
+            if( (su > sl) && su > sm ) {
+                sc = su;
+                //arr.s_u[ic(ia,ib)] = true;
+                tb_val |= b_s_u;
+            } else if( ( sl >= su ) && sl > sm ) {
+                sc = sl;
+                //arr.s_l[ic(ia,ib)] = true;
+                tb_val |= b_s_l;
+            } else { // implicit: sm_zero > sl && sm_zero > su
+                sc = sm;
+            }
+
+            
+            last_sc = sc;
+            *s_iter = sc;
+            arr.tb[ic(ia,ib)] = tb_val;
+            
+            max_a = ia;
+            max_b = ib;
+            max_score = sc;
+
+        }
+        
+    }
+    
+    cout << "max score: " << max_score << "\n";
+    cout << "max " << max_a << " " << max_b << " " << a.size() << " " << b.size() << "\n";
+    
+    int ia = a.size() - 1;
+    int ib = b.size() - 1;
+    //max_a = ia;
+    //max_b = ib;
+    assert( ia == max_a || ib == max_b );
+    
+    bool in_l = false;
+    bool in_u = false;
+    
+    while( ia > max_a ) {
+        tb_out.push_back(1);
+        --ia;
+    }
+    
+    while( ib > max_b ) {
+        tb_out.push_back(2);
+        --ib;
+    }
+    
+    while( ia >= 0 && ib >= 0 ) {
+        size_t c = ic( ia, ib );
+        
+        if( !in_l && !in_u ) {
+            in_l = (arr.tb[c] & b_s_l) != 0;
+            in_u = (arr.tb[c] & b_s_u) != 0;
+            
+            if( !in_l && !in_u ) {
+                tb_out.push_back(0);
+                --ia;
+                --ib;
+            }
+            
+        }
+        
+        if( in_u ) {
+            tb_out.push_back(2);
+            --ib;
+            
+            in_u = (arr.tb[c] & b_su_stay) != 0;
+        } else if( in_l ) {
+            tb_out.push_back(1);
+            --ia;
+            
+            in_l = (arr.tb[c] & b_sl_stay) != 0;
+        }
+        
+        
+    }
+    
+    while( ia >= 0 ) {
+        tb_out.push_back(1);
+        --ia;
+    }
+    
+    while( ib >= 0 ) {
+        tb_out.push_back(2);
+        --ib;
+    }
     return max_score;
 }
 
@@ -660,20 +812,11 @@ void align_freeshift( const scoring_matrix &sm, vector<uint8_t> &a, vector<uint8
             } else {
                 sl = last_sc_OPEN;
             }
-            //score_t sl = max( last_sl + gap_extend, last_sc_OPEN );
-            
-            
-            
-//             vu::println( GAP_EXT_vec, pb.m_ptr ); getchar();
-            
             
             last_sl = sl;
-            
 
             score_t su_gap_open = last_sdiag + gap_open;
             score_t su_GAP_EXTEND = *si_iter + gap_extend;
-            
-            
             
             score_t su;// = max( su_GAP_EXTEND,  );
             if( su_GAP_EXTEND > su_gap_open ) {
@@ -682,7 +825,6 @@ void align_freeshift( const scoring_matrix &sm, vector<uint8_t> &a, vector<uint8
             } else {
                 su = su_gap_open;
             }
-            
             
             *si_iter = su;
             
@@ -736,17 +878,13 @@ void align_freeshift( const scoring_matrix &sm, vector<uint8_t> &a, vector<uint8
         a_tb.push_back(a[ia]);
         b_tb.push_back('-');
         --ia;
-//         in_u = true;
     }
     
     while( ib > max_b ) {
         a_tb.push_back('-');
         b_tb.push_back(b[ib]);
         --ib;
-//         in_l = true;
     }
-    
-//     cout << "in " << in_l << " " << in_u << "\n";
     
     while( ia >= 0 && ib >= 0 ) {
         size_t c = ic( ia, ib );
@@ -979,6 +1117,13 @@ class step_add {
     typedef my_adata_gen<pvec_t> my_adata;
     typedef my_fact_gen<my_adata> my_fact;
     //auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
+    
+    const static int score_match = 3;
+    const static int score_match_cgap = -4;
+    const static int score_gap_open = -3;
+    const static int score_gap_extend = -1;
+    const static bool align_global = true;
+    
     ivy_mike::tree_parser_ms::ln_pool m_ln_pool;
     string m_seq_file_name;
     vector<string> m_qs_names;
@@ -994,7 +1139,9 @@ class step_add {
     pars_align_seq::arrays m_seq_arrays;
         
     vector<lnode *> m_leafs;
+    align_arrays_traceback<int> m_align_arrays_traceback;
     
+    std::ofstream m_inc_ali;
     
     static void seq_to_nongappy_pvec( vector<uint8_t> &seq, vector<uint8_t> &pvec ) {
         pvec.resize( 0 );
@@ -1028,7 +1175,7 @@ class step_add {
     };
     
     
-    static void ali_work( step_add *sa ) {
+    static void ali_work( step_add *sa, int rank ) {
         pvec_t root_pvec;
         vector<uint8_t> seq_tmp;
         vector<uint8_t> aux_tmp; 
@@ -1050,7 +1197,7 @@ class step_add {
             
             root_pvec.to_int_vec(seq_tmp);
             root_pvec.to_aux_vec(aux_tmp);
-            int res2 = align_freeshift_pvec_score<int32_t>(seq_tmp, aux_tmp, t->m_qs_pvec, 3, -10, -3, -1, arr );
+            int res2 = align_freeshift_pvec_score<int32_t,align_global>(seq_tmp, aux_tmp, t->m_qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, arr );
 //             cout << "thread align: " << res2 << "\n";
             
             t->m_prom.set_value(res2);
@@ -1058,6 +1205,104 @@ class step_add {
         }
         cout << "worker exit\n";
     }
+    
+    static void ali_work_vec( step_add *sa, int rank ) {
+        // TODO: code review! This went to smoothly, I don' trust it...
+        
+        const size_t W = 8;
+        typedef short score_t;
+        
+        
+        
+        
+        vector<uint8_t> seq_tmp;
+        vector<uint8_t> aux_tmp; 
+        
+        
+        
+        vector<ali_task *> tasks;
+        vector<pvec_t> root_pvecs(W);
+        aligned_buffer<short> a_prof;//(seq_tmp.size() * W);
+        aligned_buffer<short> a_aux_prof; //(seq_tmp.size() * W);
+        aligned_buffer<short> out_score(W);
+        align_vec_arrays<score_t> arr;
+        
+        while( true ) {
+            assert( tasks.empty() );
+            
+//             auto_ptr<ali_task> t(sa->get_task());
+            
+            size_t ref_len = 0;
+            
+//             for( size_t i = 0; i < W; ++i ) {
+//                 ali_task *t = sa->get_task().release();
+//                 
+//                 if( t == 0 ) {
+//                     break;
+//                 }
+//                 
+//                 
+//                 tasks.push_back(t);
+//             }
+            
+            sa->get_task_block(tasks, W);
+            
+            if( tasks.empty() ) {
+                break;
+            }
+            
+            
+//             std::cout << "tasks size: " << tasks.size() << "\n";
+
+            
+            
+            {
+                boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
+            
+                for( size_t i = 0; i < tasks.size(); ++i ) {
+                    do_newview( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second, sa->m_incremental_newview );
+                    sa->m_incremental_newview = true;
+                
+                    if( i == 0 ) {
+                        ref_len = root_pvecs[i].size();
+                    } else {
+                        if( ref_len != root_pvecs[i].size() ) {
+                            throw std::runtime_error( "quirk: ref_len != root_pvecs[i].size()" );
+                        }
+                        
+                    }
+                    
+                    if( a_prof.size() < ref_len * W ) {
+                        // zero initialize on resize, so that valgrind will not complain about uninitialized reads if tasks.size() < W after resize...
+                        a_prof.resize( ref_len * W, 0 );
+                        a_aux_prof.resize( ref_len * W, 0 );
+                    }
+                    
+                    // FIXME: to_aux_vec sets a_aux_prof to 0xFFFF for cgap columns. The correct value is dependent on the width of the vector unit.
+                    root_pvecs[i].to_int_vec_strided<aligned_buffer<short>::iterator,W>(a_prof.begin() + i);
+                    root_pvecs[i].to_aux_vec_strided<aligned_buffer<short>::iterator,W>(a_aux_prof.begin() + i);
+                }
+                
+                
+            }
+            align_freeshift_pvec_score_vec<short,W,align_global>(a_prof, a_aux_prof, tasks[0]->m_qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, out_score, arr );            
+            
+            sa->m_thread_ncup.at(rank) += uint64_t(ref_len) * tasks.size() * tasks[0]->m_qs_pvec.size();
+            
+            for( size_t i = 0; i < tasks.size(); ++i ) {
+                tasks[i]->m_prom.set_value( out_score[i] );
+            }
+            
+            for( std::vector< ali_task* >::iterator it = tasks.begin(); it != tasks.end(); ++it ) {
+                delete *it;
+            }
+            tasks.clear();
+
+            
+        }
+        cout << "worker exit\n";
+    }
+    
     
     auto_ptr<ali_task> get_task() {
         boost::unique_lock<boost::mutex> lock( m_q_mutex );
@@ -1075,27 +1320,50 @@ class step_add {
         }
     }
     
+    bool get_task_block( vector<ali_task *> &tasks, size_t max_block_size ) {
+        boost::unique_lock<boost::mutex> lock( m_q_mutex );
+        
+        while( m_queue.empty() && !m_queue_exit ) {
+            m_q_cond.wait( lock );
+        }
+        
+        if( m_queue_exit ) {
+            return false;
+        } else {
+            assert( !m_queue.empty() );
+            while( tasks.size() < max_block_size && !m_queue.empty() ) {
+                ali_task *t = m_queue.front();
+                m_queue.pop_front();
+                tasks.push_back(t);
+//                 std::cout << "task push: " << tasks.size() << "\n";
+            }
+            
+            return true;
+        }
+    }
+    
+    // shared ali_task queue: 
+    // protected by m_q_mutex
+    boost::mutex m_q_mutex;
     deque<ali_task *>m_queue;
     bool m_queue_exit;
-    
-    boost::mutex m_q_mutex;
+
     boost::condition_variable m_q_cond;
+    // end-of protected by m_q_mutex
+    
+    // shared tree: 
+    // protected by m_t_mutex
     boost::mutex m_t_mutex;
     bool m_incremental_newview;
-    class queue_cleanup {
-        step_add &sa;
-    public:
-        queue_cleanup( step_add &sa_ ) : sa(sa_) {}
-        ~queue_cleanup() {
-            sa.m_q_mutex.lock();
-            sa.m_queue_exit = true;
-            sa.m_q_mutex.unlock();
-            sa.m_q_cond.notify_all();
-        }
-    };
+    // declared above: lnode *m_tree_root;
+    // newviews inside the ali_task worker threads must be protected.
+    // during modifications in the main thread the workes must be blocked
     
-    queue_cleanup m_queue_cleanup;
+    // end-of protected by m_t_mutex
+ 
     boost::thread_group m_thread_group;
+    
+    std::vector<uint64_t> m_thread_ncup;
     
 public:
     step_add( const char *seq_name ) 
@@ -1103,9 +1371,7 @@ public:
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
-    m_queue_exit(false),
-    m_queue_cleanup(*this)
-    
+    m_queue_exit(false)
     {
         {
             ifstream qsf( m_seq_file_name.c_str() );
@@ -1115,9 +1381,30 @@ public:
         
         
         while( m_thread_group.size() < 4 ) {
-            m_thread_group.create_thread( boost::bind( &step_add::ali_work, this ) );
+            int rank = int(m_thread_group.size());
+            m_thread_group.create_thread( boost::bind( &step_add::ali_work_vec, this, rank ) );
+            m_thread_ncup.push_back(0);
         }
+        
+        if( true ) {
+            m_inc_ali.open( "inc_ali.txt" );
+        }
+        
     }
+    
+    ~step_add() {
+        // cleanup the ali_task worker threads
+        m_q_mutex.lock();
+        m_queue_exit = true;
+        m_q_mutex.unlock();
+        m_q_cond.notify_all();
+        
+        
+        m_thread_group.join_all();
+        
+            
+    }
+
 
     pair<size_t,size_t> calc_dist_matrix() {
         m_pw_dist.init_size(m_qs_names.size(), m_qs_names.size());
@@ -1321,78 +1608,21 @@ public:
         vector<uint8_t> seq_tmp;
         vector<uint8_t> aux_tmp;    
         
-        double eticks1 = 0.0;
-        double eticks2 = 0.0;
-        double eticks3 = 0.0;
         
+//         
         const size_t W = 8;
         aligned_buffer<short> out_score(W);
+        
+        ivy_mike::perf_timer perf_timer;
         
         
         deque<ali_task *> tasks;
         vector<boost::shared_future<int> > futures;
         futures.reserve(ec.m_edges.size());
         for( vector< pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > >::iterator it = ec.m_edges.begin(); it != ec.m_edges.end(); ++it ) {
-//             vector<uint8_t> best_tb2;
-            //    cout << it->first->m_data->m_serial << " " << it->second->m_data->m_serial << "\n";
-            
-            
-//             boost::promise<int> prom;
             tasks.push_back( new ali_task(*it, qs_pvec) );
             
             futures.push_back( boost::shared_future<int>(tasks.back()->m_prom.get_future()) );
-            
-            
-#if 0            
-            ticks ticks1 = getticks();
-            pvec_t root_pvec;
-           // first_edge = false;
-            do_newview( root_pvec, it->first, it->second, !first_edge );
-        
-            root_pvec.to_int_vec(seq_tmp);
-            root_pvec.to_aux_vec(aux_tmp);
-
-            ticks ticks2 = getticks();
-            //int res2 = align_freeshift_pvec_score<int32_t>(seq_tmp, aux_tmp, qs_pvec, 3, -10, -3, -1 );
-            ticks ticks3 = getticks();
-#if 1
-            aligned_buffer<short> a_prof(seq_tmp.size() * W);
-            aligned_buffer<short> a_aux_prof(seq_tmp.size() * W);
-           for( size_t i = 0; i < seq_tmp.size(); i++ ) {
-                fill( a_prof(i * W), a_prof(i*W) + W, seq_tmp[i] );
-                short cgap = aux_tmp[i] == AUX_CGAP ? 0xFFFF : 0x0;
-                fill( a_aux_prof(i * W), a_aux_prof(i*W) + W, cgap );
-                
-            }
-            align_freeshift_pvec_score_vec<short,W>(a_prof, a_aux_prof, qs_pvec, 3, -10, -3, -1, out_score );
-            int res2 = out_score[0];
-            for( size_t i = 0; i < W; i++ ) {
-                if( res2 != out_score[i] ) {
-                    cout << "bad score: " << res2 << " " << out_score[i] << "\n";
-                    throw runtime_error( "vector error" );
-                }
-            }
-
-
-#endif
-            ticks ticks4 = getticks();
-            if( res2 > best_score ) {
-
-                best_score = res2;
-                best_edge = *it;
-                //best_tb = best_tb2;
-                //            }
-                //
-            }
-            
-            
-            ncup += seq_tmp.size() * qs_pvec.size();
-            
-            eticks1 += elapsed(ticks2, ticks1);
-            eticks2 += elapsed(ticks3, ticks2);
-            eticks3 += elapsed(ticks4, ticks3);
-            first_edge = false;
-#endif            
         }
         
         {
@@ -1400,6 +1630,8 @@ public:
             m_incremental_newview = false;
             m_queue.swap(tasks);
         }
+        
+        ivy_mike::timer thread_timer;
         m_q_cond.notify_all();
         
         assert( futures.size() == ec.m_edges.size() );
@@ -1412,12 +1644,19 @@ public:
                 best_edge = ec.m_edges[i];
             }
         }
+        //double eticks2 = getticks();
+        perf_timer.add_int();
         
-        
+        //
+        // at this point all worker threads must be blocking on the empty queue (TODO: maybe add explicit check).
+        // it is now safe again to motify the tree
+        //
         {
-            cout << "ticks: " << eticks1 << " " << eticks2 << " " << eticks3 << "\n";
-            
-            cout << ncup << " in " << t1.elapsed() << "s : " << ncup / (t1.elapsed() * 1e9) << " GNCUP/s\n";
+            //             cout << "ticks: " << eticks1 << " " << eticks2 << " " << eticks3 << "\n";
+            double dt = thread_timer.elapsed();
+            size_t sum_ncup = std::accumulate( m_thread_ncup.begin(), m_thread_ncup.end(), uint64_t(0) );
+            std::fill( m_thread_ncup.begin(), m_thread_ncup.end(), 0 );
+            cout << sum_ncup << " in " << dt << "s : " << sum_ncup / (dt * 1e9) << " GNCUP/s\n";
         }
         
         //
@@ -1443,11 +1682,16 @@ public:
 
 //             cout << "size: " << seq_tmp.size() << " " << qs_pvec.size() << "\n";
             
-            int res2 = align_freeshift_pvec<short>(seq_tmp, aux_tmp, qs_pvec, 3, -10, -3, -1, best_tb );
+            int res2;
+            if( align_global ) {
+                res2 = align_global_pvec<int>(seq_tmp, aux_tmp, qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, best_tb, m_align_arrays_traceback );
+            } else {
+                res2 = align_freeshift_pvec<int>(seq_tmp, aux_tmp, qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, best_tb, m_align_arrays_traceback );
+            }
             
             if( res2 != best_score ) {
                 cerr << "res2 != best_score: " << res2 << " " << best_score << "\n";
-                throw runtime_error( "alignment error" );
+               throw runtime_error( "alignment error" );
             }
         }
         
@@ -1496,8 +1740,8 @@ public:
         
         
         m_leafs.push_back(nc);
-        
-        
+        perf_timer.add_int();
+#if 0
         {
             stringstream ss;
             ss << "tree_" << setw(5) << setfill('0') << m_leafs.size();
@@ -1529,9 +1773,26 @@ public:
             
             
         }
+#endif   
         
+        if( m_inc_ali.good() ) {
+            m_inc_ali << m_leafs.size() << "\n";
+            for( std::vector< ivy_mike::tree_parser_ms::lnode* >::const_iterator it = m_leafs.begin(); it != m_leafs.end(); ++it ) {
+                my_adata *adata = (*it)->m_data->get_as<my_adata>();
+                
+                copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), ostream_iterator<char>(m_inc_ali) );
+                
+                m_inc_ali << "\n";
+            }
+            
+            m_inc_ali << "\n\n";
+            
+        }
         
+        perf_timer.add_int();
+        perf_timer.print();
         
+//         std::cout << "ticks: " << eticks2 - eticks1 << " " << eticks3 - eticks2 << " " << eticks4 - eticks3 << "\n";
         
         
         return valid;
@@ -1567,23 +1828,27 @@ public:
             os << "\n";
         }
     }
+    void write_newick( ostream &os ) {
+        print_newick( next_non_tip( towards_tree( m_tree_root )), os); 
+    }
+    
 };
 
 int main( int argc, char **argv ) {
     //mapped_file qsf( "test_1604/1604.fa" );
 	
-    string ta = "GATTACAGATTACA";
-    string tb = "GATTACAGATTA";
-    
-    vector<uint8_t> a(ta.begin(), ta.end());
-    vector<uint8_t> b(tb.begin(), tb.end());
-    
-    scoring_matrix sm(3,0);
-    
-    
-  
-    
-    align_freeshift( sm, a, b, -5, -3);
+//     string ta = "GATTACAGATTACA";
+//     string tb = "GATTACAGATTA";
+//     
+//     vector<uint8_t> a(ta.begin(), ta.end());
+//     vector<uint8_t> b(tb.begin(), tb.end());
+//     
+//     scoring_matrix sm(3,0);
+//     
+//     
+//   
+//     
+//     align_freeshift( sm, a, b, -5, -3);
 //     return 0;
     
     
@@ -1600,14 +1865,20 @@ int main( int argc, char **argv ) {
     
     ivy_mike::timer t1;
     
+    
+    
     while( sa.insertion_step() ) {
         
     }
     
     {
-        ofstream os( "sa_result.phy" );
-        sa.write_phylip( os );
+        ofstream os_ali( "sa_alignment.phy" );
+        sa.write_phylip( os_ali );
+        
+        ofstream os_tree( "sa_tree.phy" );
+        sa.write_newick( os_tree );
     }
+    
     
     cout << "time: " << t1.elapsed() << "\n";
 }
