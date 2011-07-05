@@ -534,8 +534,7 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
     
 
     score_t max_score = SMALL;
-    size_t max_a = 0;
-    size_t max_b = 0;
+    
     
     arr.tb.resize( a.size() * b.size() );
     
@@ -572,8 +571,8 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
         
         score_t * __restrict s_iter = arr.s.base();
         score_t * __restrict si_iter = arr.si.base();
-        score_t * __restrict s_end = s_iter + a.size();
-        bool lastrow = ib == (b.size() - 1);
+        
+        
         
         //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
             

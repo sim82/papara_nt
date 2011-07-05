@@ -119,7 +119,7 @@ private:
 
 public:
 
-    pars_align_seq( const int* seqA, unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const unsigned int *aAux, size_t aAuxStride, arrays &arr, const unsigned int *bvtrans = 0,
+    pars_align_seq( const int* seqA, const unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const unsigned int *aAux, size_t aAuxStride, arrays &arr, const unsigned int *bvtrans = 0,
                score_t gapOpen = 1, score_t gapExtend = 1, score_t mismatch = 3, score_t matchCGap = 10 )
     // : LARGE_VALUE(std::numeric_limits<score_t>::max() - 100)
     //: LARGE_VALUE(32000),

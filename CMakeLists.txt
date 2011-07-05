@@ -20,13 +20,14 @@ set(SYSDEP_LIBS pthread)
 ENDIF()
 
 
-add_executable(papara_nt main.cpp pars_align_vec.cpp pars_align_seq.cpp)
+add_executable(papara_nt main.cpp pars_align_seq.cpp)
 add_executable(smith_waterman smith_waterman.cpp )
 add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp )
 add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 add_executable(tbb_test tbb.cpp )
 add_executable(dtw dtw.cpp )
 add_executable(inherit_test inherit_test.cpp )
+add_executable(testbench testbench.cpp pars_align_seq.cpp )
 # add_executable(atlas_test atlas.cpp )
 
 target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )

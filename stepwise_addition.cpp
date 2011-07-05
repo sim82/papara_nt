@@ -45,9 +45,6 @@ using namespace std;
 using namespace ivy_mike::tree_parser_ms;
 
 
-
-
-
 template<class pvec_t>
 class my_adata_gen : public ivy_mike::tree_parser_ms::adata {
 //     static int ct;
@@ -697,7 +694,7 @@ public:
         cout << "edges: " << ec.m_edges.size() << "\n";
         
         
-        bool first_edge = true;
+        
         vector<uint8_t> qs_pvec;
         seq_to_nongappy_pvec(m_qs_seqs.at(candidate), qs_pvec);
         
@@ -707,7 +704,7 @@ public:
         pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > best_edge;
         int best_score = INT_MIN;
         vector<uint8_t> best_tb;
-        uint64_t ncup = 0;
+        
         ivy_mike::timer t1;
         vector<uint8_t> seq_tmp;
         vector<uint8_t> aux_tmp;    

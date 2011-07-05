@@ -18,10 +18,10 @@
 
 #include "parsimony.h"
 #include "pvec.h"
-#include "pars_align_vec.h"
+
 #include "pars_align_seq.h"
 #include "fasta.h"
-
+#include "vec_unit.h"
 
 #include "ivymike/tree_parser.h"
 #include "ivymike/time.h"
@@ -36,6 +36,269 @@ using namespace ivy_mike::tree_parser_ms;
 
 using namespace boost::numeric;
 
+
+template<typename score_t, size_t W>
+class align_pvec_score{
+    aligned_buffer<score_t> m_a_prof;
+    aligned_buffer<score_t> m_cgap_prof;
+    
+    mutable aligned_buffer<score_t> m_s;
+    mutable aligned_buffer<score_t> m_out_score;
+    
+    
+    const score_t m_mismatch_score;
+    const score_t m_match_cgap;
+    const score_t m_gap_open;
+    const score_t m_gap_extend;
+    
+    //aligned_buffer<score_t> m_a_aux_prof;
+    const static score_t aux_cgap = 0x1;
+    score_t map_match_cgap( score_t aux ) {
+        if( aux == aux_cgap ) {
+            return m_match_cgap;
+        } else {
+            return 0;
+        }
+    }
+    
+    score_t map_gap_extend( score_t aux ) {
+        if( aux == aux_cgap ) {
+            return 0;
+        } else {
+            return m_gap_extend;
+        }
+    }
+    
+    score_t map_gap_oext( score_t aux ) {
+        if( aux == aux_cgap ) {
+            return 0;
+        } else {
+            return m_gap_open + m_gap_extend;
+        }
+    }
+    
+    score_t map_cgap( score_t aux ) {
+        if( aux == aux_cgap ) {
+            return -1; // FIXME: will this always yield a score_t with all bits set?
+        } else {
+            return 0;
+        }
+    }
+public:
+    align_pvec_score( const aligned_buffer<score_t> &a_prof, const aligned_buffer<score_t> &a_aux_prof, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend )
+     : m_mismatch_score(mismatch_score),m_match_cgap(match_cgap), m_gap_open(gap_open), m_gap_extend( gap_extend )
+    {
+        m_a_prof = a_prof;
+       
+        
+        m_cgap_prof.reserve( a_aux_prof.size());
+        for( typename aligned_buffer<score_t>::const_iterator it = a_aux_prof.begin(); it != a_aux_prof.end(); ++it ) {
+            
+            m_cgap_prof.push_back( map_cgap(*it));
+        }
+        
+        m_s.resize( a_prof.size() );
+        m_out_score.resize(W);
+    }
+    
+    
+    align_pvec_score( const int **seqptrs, const unsigned int **auxptrs, size_t reflen, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend )
+     : m_mismatch_score(mismatch_score),m_match_cgap(match_cgap), m_gap_open(gap_open), m_gap_extend( gap_extend )
+    {
+        m_a_prof.reserve( reflen * W );
+        m_cgap_prof.reserve( reflen * W );
+        for( size_t i = 0; i < reflen; ++i ) {
+            for( size_t j = 0; j < W; ++j ) {
+                m_a_prof.push_back( seqptrs[j][i] );
+                m_cgap_prof.push_back( map_cgap(auxptrs[j][i]));    
+            }
+            
+            
+        }
+        
+        assert( m_a_prof.size() == reflen * W );
+        
+        m_s.resize( m_a_prof.size() );
+        m_out_score.resize(W);
+    }
+    
+    inline void align( const std::vector<uint8_t> &b ) const {
+        typedef vector_unit<score_t, W> vu;
+        typedef typename vu::vec_t vec_t;
+        
+        
+        size_t asize = m_a_prof.size() / W;
+        assert( asize > b.size() );
+        
+        const size_t band_width = asize - b.size();
+        std::fill( m_s.begin(), m_s.end(), 0 );
+        
+        const score_t LARGE = 32000;
+        //     std::fill( arr.si.begin(), arr.si.end(), LARGE );
+        std::fill( m_s.begin() + (band_width + 1) * W, m_s.begin() + (band_width + 2) * W, LARGE );
+        
+        
+        const vec_t gap_oext = vu::set1(m_gap_open + m_gap_extend);
+        const vec_t gap_ext = vu::set1(m_gap_extend);
+        const vec_t match_cgap = vu::set1( m_match_cgap );
+        const vec_t mismatch_score = vu::set1(m_mismatch_score);
+        const vec_t zero = vu::setzero();
+        for( size_t ib = 0; ib < b.size(); ib++ ) {
+            const vec_t bc = vu::set1(b[ib]);
+            
+            vec_t last_sl = vu::set1(LARGE);
+            vec_t last_sc = vu::set1(LARGE);
+            vec_t last_sdiag = vu::set1(0);
+            
+            size_t astart = ib;
+            
+            score_t * __restrict s_iter = &m_s[0];
+            score_t * __restrict s_iter_next = &m_s[W];
+            
+            last_sdiag = vu::load(s_iter);
+            
+            
+            for( size_t ia = astart; ia <= ib + band_width; ++ia, s_iter += W, s_iter_next += W ) {  
+                const vec_t ac = vu::load( m_a_prof(ia * W) );
+                const vec_t cgap = vu::load( m_cgap_prof(ia * W)); 
+               
+                const vec_t sm_match = vu::bit_and( mismatch_score, vu::cmp_eq( vu::bit_and( ac, bc ), zero) );
+                const vec_t sm_cgap = vu::bit_and( match_cgap, cgap );
+                const vec_t sm = vu::add( vu::add( last_sdiag, sm_match ), sm_cgap );
+                
+                
+                
+                const vec_t sl_ext = vu::add( last_sl, vu::bit_andnot( cgap, gap_ext));
+                const vec_t sl_open = vu::add( last_sc, vu::bit_andnot( cgap, gap_oext));
+                last_sl = vu::min( sl_ext, sl_open );
+                
+                const vec_t min_sm_sl = vu::min( sm, last_sl );
+                last_sdiag = vu::load(s_iter_next);
+                const vec_t su = vu::add( last_sdiag, mismatch_score );
+                const vec_t sc = vu::min( min_sm_sl, su );
+                
+                last_sc = sc;
+                
+                vu::store( sc, s_iter );
+                
+                
+            }
+        }
+        
+        vec_t minscore = vu::set1(LARGE);
+        for( size_t i = 0; i < band_width + 1; ++i ) {
+            minscore = vu::min( minscore, vu::load( m_s(i * W)));
+        }
+        
+        vu::store( minscore, m_out_score(0));
+    }
+    
+    
+    const score_t *get_scores() const {
+        return m_out_score.data();
+    }
+    
+};
+
+// template<typename score_t>
+// struct align_arrays_vec {
+//     aligned_buffer<score_t> s;
+//     
+// };
+// 
+// template<typename score_t, size_t W>
+// static void align_pvec_score( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const std::vector<uint8_t> &b, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend, align_arrays_vec<score_t> &arr, aligned_buffer<score_t> &out ) {
+// 
+//     typedef vector_unit<score_t, W> vu;
+//     typedef typename vu::vec_t vec_t;
+//     
+//     if( arr.s.size() < a_prof.size() ) {
+//         arr.s.resize( a_prof.size() );
+//         
+//     }
+//     
+//     const score_t aux_cgap = 0x1;
+//     
+//     assert( a_prof.size() % W == 0 );
+//     size_t asize = a_prof.size() / W;
+//     assert( asize > b.size() );
+//     
+//     const size_t band_width = asize - b.size();
+//     std::fill( arr.s.begin(), arr.s.end(), 0 );
+//     
+//     const score_t LARGE = 32000;
+// //     std::fill( arr.si.begin(), arr.si.end(), LARGE );
+//     std::fill( arr.s.begin() + (band_width + 1) * W, arr.s.begin() + (band_width + 2) * W, LARGE );
+//     //arr.s.at(band_width+1) = LARGE;
+// 
+// //     score_t min_score = LARGE;
+//     
+//     for( size_t ib = 0; ib < b.size(); ib++ ) {
+//         const vec_t bc = vu::set1(b[ib]);
+//         
+//         vec_t last_sl = vu::set1(LARGE);
+//         vec_t last_sc = vu::set1(LARGE);
+//         vec_t last_sdiag = vu::set1(0);
+//         
+//         size_t astart = ib;
+//                 
+//         score_t * __restrict s_iter = &arr.s[0];
+// 
+//         
+//         
+//         
+//        
+//         last_sdiag = vu::load(s_iter);
+//         
+//         
+//         for( size_t ia = astart; ia <= ib + band_width; ++ia, s_iter += W ) {  
+//             vec_t ac = vu::load( a_prof(ia * W) );
+//             vec_t aaux = vu::load(a_aux_prof(ia * W));
+//             
+//             vec_t cgap_mask = vu::cmp_eq( aaux, vu::set1(aux_cgap));
+//             
+//             
+//             // determine match or mis-match according to parsimony bits coming from the tree.
+//             
+//             vec_t mismatch_mask = vu::cmp_eq( vu::bit_and( ac, bc ), vu::setzero() );
+//             
+//             vec_t sm = vu::add( last_sdiag, vu::bit_and( vu::set1(mismatch_score), mismatch_mask ));
+//             sm = vu::add( sm, vu::bit_and( vu::set1( match_cgap ), cgap_mask ));
+//             
+//             last_sdiag = vu::load(s_iter+W);
+// 
+// //            cgap_mask = vu::bit_invert( cgap_mask );
+//             
+//             vec_t last_sc_OPEN = vu::add( last_sc, vu::bit_andnot( cgap_mask, vu::set1(gap_open + gap_extend)));
+//             vec_t sl_score_stay = vu::add( last_sl, vu::bit_andnot( cgap_mask, vu::set1(gap_extend)));
+//             
+//                        
+//             vec_t sl = vu::min( sl_score_stay, last_sc_OPEN );
+//                         
+//             last_sl = sl;
+//             
+// 
+//             vec_t su = vu::add( last_sdiag, vu::set1(mismatch_score));
+//             
+// //             std::cout << "x: " << sm << " " << su << " " << sl << "  ";
+//             vec_t sc = vu::min( sm, vu::min( su, sl ) );
+//             
+//             last_sc = sc;
+//             
+//             vu::store( sc, s_iter );
+//             
+//            
+//         }
+//     }
+//     
+//     vec_t minscore = vu::set1(LARGE);
+//     for( size_t i = 0; i < band_width + 1; ++i ) {
+//         minscore = vu::min( minscore, vu::load( arr.s(i * W)));
+//     }
+//     out.resize(W);
+//     vu::store( minscore, out(0));
+//     
+// }
 
 namespace {
     typedef boost::iostreams::tee_device<std::ostream, std::ofstream> log_device;
@@ -374,7 +637,7 @@ class papara_nt : public papara_nt_i {
     typedef my_adata_gen<pvec_t> my_adata;
 
 
-    const static size_t VW = pars_align_vec::WIDTH;
+    const static size_t VW = 8;
 
     struct block_t {
         block_t() {
@@ -425,11 +688,12 @@ class papara_nt : public papara_nt_i {
         worker( papara_nt & pnt, size_t rank ) : m_pnt(pnt), m_rank(rank) {}
         void operator()() {
 
-            pars_align_vec::arrays<VW> arrays;
             pars_align_seq::arrays seq_arrays(true);
-
+            
             ivy_mike::timer tstatus;
             double last_tstatus = 0.0;
+   
+            uint64_t ncup = 0;
             while( true ) {
                 block_t block;
 
@@ -442,23 +706,21 @@ class papara_nt : public papara_nt_i {
                     m_pnt.m_blockqueue.pop_front();
 
                     if( m_rank == 0 && (tstatus.elapsed() - last_tstatus) > 10.0 ) {
-                        std::cerr << tstatus.elapsed() << " " << m_pnt.m_blockqueue.size() << " blocks remaining\n";
+                        std::cerr << tstatus.elapsed() << " " << m_pnt.m_blockqueue.size() << " blocks remaining. " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
                         last_tstatus = tstatus.elapsed();
                     }
                 }
 
-
-
-
+                const align_pvec_score<short,8> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
                 for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
 
                     size_t stride = 1;
                     size_t aux_stride = 1;
-                    pars_align_vec pa( block.seqptrs, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, block.auxptrs, aux_stride, arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+                    
+                    aligner.align(m_pnt.m_qs_pvecs[i]);
+                    const short *score_vec = aligner.get_scores();
 
-
-                    pars_align_vec::score_t *score_vec = pa.align_freeshift();
-
+                    ncup += block.num_valid * block.ref_len * m_pnt.m_qs_pvecs[i].size();
                     {
                         ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
 
@@ -488,6 +750,10 @@ class papara_nt : public papara_nt_i {
                         }
                     }
                 }
+            }
+            {
+                ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
+                std::cout << "thread " << m_rank << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
             }
         }
     };
@@ -625,7 +891,27 @@ class papara_nt : public papara_nt_i {
             }
         }        
     }
-
+    
+    void write_qs_pvecs( const char * name ) {
+        std::ofstream os( name );
+        
+        os << m_qs_pvecs.size();
+        for( std::vector< std::vector< uint8_t > >::iterator it = m_qs_pvecs.begin(); it != m_qs_pvecs.end(); ++it ) {
+            os << " " << it->size() << " ";
+            os.write( (char *)it->data(), it->size() );
+            
+        }
+    }
+    void write_ref_pvecs( const char * name ) {
+        std::ofstream os( name );
+        
+        os << m_ref_pvecs.size();
+        for( size_t i = 0; i < m_ref_pvecs.size(); ++i ) {
+            os << " " << m_ref_pvecs[i].size() << " ";
+            os.write( (char *)m_ref_pvecs[i].data(), m_ref_pvecs[i].size() * sizeof(int));
+            os.write( (char *)m_ref_aux[i].data(), m_ref_aux[i].size() * sizeof(unsigned int));
+        }
+    }
 
 
 public:
@@ -772,7 +1058,9 @@ public:
         for( size_t i = 0; i < m_qs_seqs.size(); i++ ) {
             seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
         }
-
+        
+        write_qs_pvecs( "qs.bin" );
+        write_ref_pvecs( "ref.bin" );
 
     }
 
@@ -914,7 +1202,7 @@ public:
             }
 
             if( os_quality.good() && out_qs.size() == m_qs_seqs[i].size() ) {
-                bool debug = (m_qs_names[i] == "Species187_04");
+                
 
                 std::vector<int> map_ref;
                 std::vector<int> map_aligned;

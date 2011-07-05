@@ -107,6 +107,9 @@ public:
     using std::vector<T,ab_internal_::alloc<T> >::end;
     using std::vector<T,ab_internal_::alloc<T> >::size;
     using std::vector<T,ab_internal_::alloc<T> >::resize;
+    using std::vector<T,ab_internal_::alloc<T> >::reserve;
+    using std::vector<T,ab_internal_::alloc<T> >::push_back;
+    using std::vector<T,ab_internal_::alloc<T> >::data;
     
     using std::vector<T,ab_internal_::alloc<T> >::operator[];
     

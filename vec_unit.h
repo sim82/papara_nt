@@ -64,7 +64,7 @@ struct vector_unit<short, 8> {
         _mm_store_si128( (vec_t*)addr, v );
     }
     
-    static inline const vec_t load( T* addr ) {
+    static inline const vec_t load( const T* addr ) {
         return _mm_load_si128( (vec_t*)addr );
     }
     
@@ -78,6 +78,10 @@ struct vector_unit<short, 8> {
     static inline const vec_t bit_andnot( const vec_t &a, const vec_t &b ) {
         return _mm_andnot_si128( a, b );
     }
+    static inline const vec_t bit_invert( const vec_t &a ) {
+        return _mm_xor_si128( a, set1(0xffff) );
+    }
+    
     
 //     static inline const vec_t bit_invert( const vec_t &a ) {
 //         //return _mm_andnot_pd(a, set1(0xffff));

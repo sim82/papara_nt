@@ -30,7 +30,7 @@
 #include "pars_align_seq.h"
 
 
-pars_align_seq::pars_align_seq(const int* seqA, unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const unsigned int* aAux, size_t aAuxStride, pars_align_seq::arrays &arr, const unsigned int *bvtrans, pars_align_seq::score_t gapOpen, score_t gapExtend, pars_align_seq::score_t mismatch, pars_align_seq::score_t matchCGap) : GAP_OPEN(gapOpen),
+pars_align_seq::pars_align_seq(const int* seqA, const unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const unsigned int* aAux, size_t aAuxStride, pars_align_seq::arrays &arr, const unsigned int *bvtrans, pars_align_seq::score_t gapOpen, score_t gapExtend, pars_align_seq::score_t mismatch, pars_align_seq::score_t matchCGap) : GAP_OPEN(gapOpen),
         GAP_EXTEND(gapExtend),
         GAP_OPEN_EXTEND( GAP_OPEN + GAP_EXTEND ),
         MISMATCH_PENALTY(mismatch),
@@ -44,9 +44,9 @@ pars_align_seq::pars_align_seq(const int* seqA, unsigned char* seqB, size_t n_a,
         
 
 {
-//     if( n_a == n_b ) {
-//         throw std::runtime_error( "n_a == n_b\n" );
-//     }
+    if( n_a <= n_b ) {
+        throw std::runtime_error( "n_a <= n_b\n" );
+    }
     
     m_na = n_a;
     m_nb = n_b;
