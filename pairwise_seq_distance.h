@@ -27,11 +27,11 @@
 #include "ivymike/tdmatrix.h"
 
 class scoring_matrix;
-void pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq_raw1, const std::vector< std::vector<uint8_t> > &seq_raw2, bool identical, ivy_mike::tdmatrix<int> &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread );
+bool pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq_raw1, const std::vector< std::vector<uint8_t> > &seq_raw2, bool identical, ivy_mike::tdmatrix<int> &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread );
 
 #endif
-inline void pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq_raw, ivy_mike::tdmatrix<int> &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
-    pairwise_seq_distance( seq_raw, seq_raw, true, out_scores, sm, gap_open, gap_extend, n_thread );
+inline bool pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq_raw, ivy_mike::tdmatrix<int> &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
+    return pairwise_seq_distance( seq_raw, seq_raw, true, out_scores, sm, gap_open, gap_extend, n_thread );
 }
 
 #endif

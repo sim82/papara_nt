@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <climits>
 #include <algorithm>
+#include <iterator>
 #include <utility>
 #include <map>
 
@@ -40,7 +41,6 @@ typedef int score_t;
 
 struct align_arrays {
     std::vector<score_t> s;
-    std::vector<score_t> si;
 };
 
 
@@ -48,9 +48,8 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
 
     if( arr.s.size() < a.size()  ) {
         arr.s.resize( a.size() );
-        arr.si.resize( a.size() );
     }
-    
+    assert( a.size() > b.size() );
     const score_t aux_cgap = 0x1;
     
     const size_t band_width = a.size() - b.size();
@@ -211,7 +210,36 @@ class testbench {
         
     }
     
-    
+    template<typename T, size_t min_len>
+    static void trim_ref( std::vector<T> &v ) {
+        
+        
+        while( v.size() < min_len ) {
+            std::vector<T> v_new = v;
+            
+            
+            std::copy( v.begin(), v.end(), std::back_inserter(v_new) );
+            
+            v.swap(v_new);
+            
+        }
+        
+        const size_t max_len = min_len * 2;
+        if( v.size() > max_len ) {
+            v.resize( max_len );
+        }
+        
+        
+    }
+    template<typename T, size_t max_len>
+    static void trim_max( std::vector<T> &v ) {
+
+        if( v.size() > max_len ) {
+            v.resize( max_len );
+        }
+        
+        
+    }
 public:  
     testbench( const char *qs_name, const char *ref_name ) {
         {
@@ -225,9 +253,17 @@ public:
         
         
         // reduce size of testset
-        size_t num_ref = 64;
-        size_t num_qs = 128;
+        size_t num_ref = 32;
+        size_t num_qs = 32;
       
+#if 0
+        const size_t ref_len = 128;
+        const size_t qs_len = ref_len - 1;
+        std::for_each( m_ref_pvecs.begin(), m_ref_pvecs.end(), &trim_ref<int,ref_len> );
+        std::for_each( m_ref_aux.begin(), m_ref_aux.end(), &trim_ref<unsigned int,ref_len> );
+        std::for_each( m_qs_pvecs.begin(), m_qs_pvecs.end(), &trim_max<uint8_t,qs_len> );
+#endif
+
         num_ref = std::min( num_ref, m_ref_pvecs.size() );
         num_qs = std::min( num_qs, m_qs_pvecs.size() );
         

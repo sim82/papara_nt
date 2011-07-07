@@ -27,29 +27,29 @@ class align_pvec_score{
 
     //aligned_buffer<score_t> m_a_aux_prof;
     const static score_t aux_cgap = 0x1;
-    score_t map_match_cgap( score_t aux ) {
-        if( aux == aux_cgap ) {
-            return m_match_cgap;
-        } else {
-            return 0;
-        }
-    }
-    
-    score_t map_gap_extend( score_t aux ) {
-        if( aux == aux_cgap ) {
-            return 0;
-        } else {
-            return m_gap_extend;
-        }
-    }
-    
-    score_t map_gap_oext( score_t aux ) {
-        if( aux == aux_cgap ) {
-            return 0;
-        } else {
-            return m_gap_open + m_gap_extend;
-        }
-    }
+//     score_t map_match_cgap( score_t aux ) {
+//         if( aux == aux_cgap ) {
+//             return m_match_cgap;
+//         } else {
+//             return 0;
+//         }
+//     }
+//     
+//     score_t map_gap_extend( score_t aux ) {
+//         if( aux == aux_cgap ) {
+//             return 0;
+//         } else {
+//             return m_gap_extend;
+//         }
+//     }
+//     
+//     score_t map_gap_oext( score_t aux ) {
+//         if( aux == aux_cgap ) {
+//             return 0;
+//         } else {
+//             return m_gap_open + m_gap_extend;
+//         }
+//     }
     
     score_t map_cgap( score_t aux ) {
         if( aux == aux_cgap ) {

@@ -77,8 +77,9 @@ template <typename block>
 struct block_queue {
     std::deque<block> m_blocks;
     timpl::mutex m_mtx;
-    size_t m_ncup;
-    block_queue() : m_ncup(0) {}
+    volatile size_t m_ncup;
+    volatile int m_ok_flags;
+    block_queue() : m_ncup(0), m_ok_flags(0) {}
 };
 
 template <typename block_t>
@@ -105,12 +106,12 @@ struct lworker {
     const std::vector< std::vector<uint8_t> > &m_seq2;
     const sscore_t gap_open;
     const sscore_t gap_extend;
-    
+    const size_t m_block_size;
     
     pw_score_matrix &m_outscore;
     const bool m_half_matrix;
-    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq1_, const std::vector< std::vector<uint8_t> > &seq2_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore, bool half_matrix ) 
-    : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq1(seq1_), m_seq2(seq2_), gap_open(gap_open_), gap_extend(gap_extend_), m_outscore(outscore), m_half_matrix( half_matrix ) 
+    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq1_, const std::vector< std::vector<uint8_t> > &seq2_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore, bool half_matrix, size_t block_size ) 
+    : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq1(seq1_), m_seq2(seq2_), gap_open(gap_open_), gap_extend(gap_extend_), m_block_size(block_size), m_outscore(outscore), m_half_matrix( half_matrix ) 
     {
         if( m_half_matrix ) {
             if( m_seq1.size() != m_seq2.size() ) {
@@ -132,6 +133,7 @@ struct lworker {
         bool first_block = true;
         aligned_buffer<seq_char_t> ddata_int;
         persistent_state<score_t> ps;
+        persistent_state_blocked<score_t, sscore_t> ps_blocked;
     
 //         {
 //             cpu_set_t cs;
@@ -254,9 +256,19 @@ struct lworker {
                 
                 
                 // call the alignment kernel 
-                align_vec<score_t,sscore_t,W>( ps, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
                 
-                
+                if( m_block_size == 0 ) {
+                    align_vec<score_t,sscore_t,W>( ps, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
+                } else if( m_block_size == 32 ) {
+                    align_vec_blocked<score_t,sscore_t,W,32>( ps_blocked, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
+                } else if( m_block_size == 64 ) {
+                    align_vec_blocked<score_t,sscore_t,W,64>( ps_blocked, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
+                } else if( m_block_size == 128 ) {
+                    align_vec_blocked<score_t,sscore_t,W,128>( ps_blocked, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
+                } else {
+                    std::cerr << "worker thread abort: unsupported block size: " << m_block_size << "\n";
+                    return;
+                }
                 
                 // write output scores to the output matrix. no lock necessary, as writes are independent.
                 
@@ -298,6 +310,7 @@ struct lworker {
             std::cerr << n_qchar << " x " << n_dchar << "\n";
             timpl::lock_guard<timpl::mutex> lock( m_queue.m_mtx );
             m_queue.m_ncup += ncups;
+            m_queue.m_ok_flags++;
         }
         
         
@@ -309,7 +322,7 @@ struct lworker {
 // WARNING: the sequences are expected to be transformed to 'compressed states' (= 0, 1, 2 ...) rather than characters.
 // The state mapping must be consistent with the supplied scoring matrix and its compressed form.
 // Sequences containing numbers >= sm.num_states() will likely blow up the aligner, as there are no checks after this point!
-PSD_DECLARE_INLINE void pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq1, const std::vector< std::vector<uint8_t> > &seq2, bool identical, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
+PSD_DECLARE_INLINE bool pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq1, const std::vector< std::vector<uint8_t> > &seq2, bool identical, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread ) {
 #if 1
     const int W = 8;
     typedef short score_t;
@@ -441,18 +454,24 @@ PSD_DECLARE_INLINE void pairwise_seq_distance( const std::vector< std::vector<ui
     // the results are concurrently written to the 2d matrix out_scores
     timpl::thread_group tg;
     
-    while( tg.size() < n_thread ) {
-        lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, tg.size(), q, sm, seq1, seq2, gap_open, gap_extend, out_scores, identical );
+    for( size_t i = 0; i < n_thread; ++i ) {
+        lworker<W, seq_char_t, score_t, sscore_t> lw( n_thread, i, q, sm, seq1, seq2, gap_open, gap_extend, out_scores, identical, 64 );
         
-        std::cerr << "thread " << tg.size() << "\n";
+        std::cerr << "thread " << i << "\n";
         
         tg.create_thread( lw );
     }
+    
         
     tg.join_all();
+
+    if( q.m_ok_flags != n_thread ) {
+        std::cerr << n_thread - q.m_ok_flags << " threads did not exit properly.\n";
+        return false;
+    }
     
     
     std::cerr << "aligned " << seq1.size() << " x " << seq2.size() << " sequences. " << q.m_ncup << " " << (q.m_ncup / (t1.elapsed() * 1.0e9)) << " GCup/s\n";
-    
+    return true;
 
 }

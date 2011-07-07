@@ -379,7 +379,12 @@ int main( int argc, char *argv[] ) {
     
     
     ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs2.size() );
-    pairwise_seq_distance( qs_seqs, qs_seqs2, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
+    bool success = pairwise_seq_distance( qs_seqs, qs_seqs2, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
+    
+    if( !success ) {
+        std::cerr << "alignment failed. bailing out.\n";
+        return 1;
+    }
     
     if( opt_out_dist_matrix ) {
         write_phylip_distmatrix( out_scores, qs_names, std::cout );
@@ -403,8 +408,8 @@ int main( int argc, char *argv[] ) {
             
         }
         
-        return 0;
+        
     }
-
+    return 0;
     
 }
