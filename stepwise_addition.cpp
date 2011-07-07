@@ -538,7 +538,7 @@ public:
             }
             is.read((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         } else {
-            pairwise_seq_distance(qs_mapped, out_scores, m_pw_scoring_matrix, -5, -2, 4);
+            pairwise_seq_distance(qs_mapped, out_scores, m_pw_scoring_matrix, -5, -2, 4, 64);
             ofstream os( "out_scores.bin" );
             os.write((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         }

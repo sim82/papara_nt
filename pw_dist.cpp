@@ -116,7 +116,7 @@ int main( int argc, char *argv[] ) {
     bool opt_out_pgm_image;
     bool opt_out_faux_swps3;
     bool opt_out_none;
-    
+    int opt_block_size;
     igp.add_opt('h', false );
     
     igp.add_opt('f', ivy_mike::getopt::value<std::string>(opt_seq_file) );
@@ -127,6 +127,7 @@ int main( int argc, char *argv[] ) {
     igp.add_opt('e', ivy_mike::getopt::value<int>(opt_gap_extend).set_default(-3) );
     igp.add_opt('s', ivy_mike::getopt::value<std::string>(opt_sm_name) );
     igp.add_opt('t', ivy_mike::getopt::value<int>(opt_threads).set_default(1) );
+    igp.add_opt('b', ivy_mike::getopt::value<int>(opt_block_size).set_default(64) );
     igp.add_opt('1', ivy_mike::getopt::value<bool>(opt_out_dist_matrix, true).set_default(false) );
     igp.add_opt('2', ivy_mike::getopt::value<bool>(opt_out_score_matrix, true).set_default(false) );
     igp.add_opt('3', ivy_mike::getopt::value<bool>(opt_out_pgm_image, true).set_default(false) );
@@ -156,7 +157,8 @@ int main( int argc, char *argv[] ) {
         "  -o arg    gap open score (default: -5, negtive means penalize)\n" <<
         "  -e arg    gap extend score (default: -3)\n" <<
         "  -s arg    scoring matrix (optional)\n" <<
-        "  -t arg    number of threads (default: 1)\n\n" <<
+        "  -t arg    number of threads (default: 1)\n" <<
+        "  -b arg    block size (L1 cache opt. default: 64, 0 means unblocked algorithm)\n\n" <<
         "  -1        output distance matrix (PHYLIP format, e.g. for nj-tree building with ninja)\n" <<
         "  -2        output raw score matrix\n" <<
         "  -3        output greyscale pgm image (gimmick)\n" <<
@@ -222,7 +224,7 @@ int main( int argc, char *argv[] ) {
     std::cerr << "gap extend: " << opt_gap_extend << "\n";
     std::cerr << "nthreads  : " << opt_threads << "\n";
     std::cerr << "seq. file : " << opt_seq_file << "\n";
-    
+    std::cerr << "block size: " << opt_block_size << "\n";
 #if 0    
 //     return 0;
      
@@ -379,7 +381,7 @@ int main( int argc, char *argv[] ) {
     
     
     ivy_mike::tdmatrix<int> out_scores( qs_seqs.size(), qs_seqs2.size() );
-    bool success = pairwise_seq_distance( qs_seqs, qs_seqs2, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads);
+    bool success = pairwise_seq_distance( qs_seqs, qs_seqs2, !have_second, out_scores, *sm, opt_gap_open, opt_gap_extend, opt_threads, opt_block_size);
     
     if( !success ) {
         std::cerr << "alignment failed. bailing out.\n";
