@@ -265,6 +265,8 @@ struct lworker {
                     align_vec_blocked<score_t,sscore_t,W,64>( ps_blocked, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
                 } else if( m_block_size == 128 ) {
                     align_vec_blocked<score_t,sscore_t,W,128>( ps_blocked, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
+                } else if( m_block_size == 256 ) {
+                    align_vec_blocked<score_t,sscore_t,W,256>( ps_blocked, block.maxlen, qdata, m_sm, qprofile, gap_open, gap_extend, out );
                 } else {
                     std::cerr << "worker thread abort: unsupported block size: " << m_block_size << "\n";
                     return;
