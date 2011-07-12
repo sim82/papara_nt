@@ -479,7 +479,7 @@ public:
         }
         
         inline void operator()( int c ) {
-            if( c >= 0 && c < scoring_matrix::MAX_SIZE ) {
+            if( c >= 0 && c < int(scoring_matrix::MAX_SIZE) ) {
                 
                 c = toupper(c);
                 

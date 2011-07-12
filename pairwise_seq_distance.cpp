@@ -78,7 +78,7 @@ struct block_queue {
     std::deque<block> m_blocks;
     timpl::mutex m_mtx;
     volatile size_t m_ncup;
-    volatile int m_ok_flags;
+    volatile size_t m_ok_flags;
     block_queue() : m_ncup(0), m_ok_flags(0) {}
 };
 

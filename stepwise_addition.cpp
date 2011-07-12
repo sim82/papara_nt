@@ -244,6 +244,8 @@ class step_add {
     
     std::ofstream m_inc_ali;
     
+    const size_t m_num_threads;
+    
     static void seq_to_nongappy_pvec( vector<uint8_t> &seq, vector<uint8_t> &pvec ) {
         pvec.resize( 0 );
         
@@ -472,6 +474,7 @@ public:
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
+    m_num_threads(2),
     m_queue_exit(false)
     {
         {
@@ -481,7 +484,8 @@ public:
         m_used_seqs.resize( m_qs_names.size() );
         
         
-        while( m_thread_group.size() < 4 ) {
+        
+        for( size_t i = 0; i < m_num_threads; i++ ) {
             int rank = int(m_thread_group.size());
             m_thread_group.create_thread( boost::bind( &step_add::ali_work_vec, this, rank ) );
             m_thread_ncup.push_back(0);
@@ -504,6 +508,85 @@ public:
         m_thread_group.join_all();
         
             
+    }
+    pair<size_t,size_t> calc_dist_matrix_from_msa( std::map<std::string,std::vector<uint8_t> > &msa ) {
+        typedef std::map<std::string,std::vector<uint8_t> > msa_t;
+        
+        m_pw_dist.init_size(m_qs_names.size(), m_qs_names.size());
+    
+        vector<vector<uint8_t> > qs_mapped;
+        qs_mapped.reserve(m_qs_names.size() );
+               
+        
+        ivy_mike::tdmatrix<int> out_scores(m_qs_names.size(), m_qs_names.size());
+        
+        
+        if( msa.size() != m_qs_names.size() ) {
+            throw std::runtime_error( "msa.size() != m_qs_names.size()" );
+        }
+        for( size_t i = 0; i < m_qs_names.size(); ++i ) {
+            out_scores[i][i] = 0;
+            
+            msa_t::iterator seq_i = msa.find(m_qs_names[i] );
+            
+            if( seq_i == msa.end() ) {
+                throw std::runtime_error( "missing sequence in ref msa" );
+            }
+            
+            // TODO: maybe cache the seq_i iterators in a vector to get rid of the map.finds in the j-loop...
+            
+            
+            for( size_t j = 0; j < i; ++j ) {
+                msa_t::iterator seq_j = msa.find(m_qs_names[j] );
+                
+                if( seq_j == msa.end() ) {
+                    throw std::runtime_error( "missing sequence in ref msa" );
+                }
+                
+                int score = score_for_aligned_pair( seq_i->second, seq_j->second ); 
+                
+                std::cout << "score " << i << " " << j << " " << score << "\n";
+                
+                out_scores[i][j] = score;
+                out_scores[j][i] = score;
+            }
+            
+        }
+        
+        return init_pw_dist_from_msa_score_matrix(out_scores);
+    }
+    
+    
+    pair<size_t,size_t> init_pw_dist_from_msa_score_matrix( ivy_mike::tdmatrix<int> &out_scores ) {
+        size_t li = -1, lj = -1;
+        float lowest_dist = 1e8;
+        int min = *(std::min_element( out_scores.begin(), out_scores.end() ));
+        int max = *(std::max_element( out_scores.begin(), out_scores.end() ));
+        
+        for( size_t i = 0; i < out_scores.size(); i++ ) {
+            
+            for( size_t j = 0; j < out_scores[i].size(); j++ ) {
+            
+                // three modes for normalizing: min, max and mean
+                //const float norm = min( ma[i][i], ma[j][j] );
+                //             const float norm = max( ma[i][i], ma[j][j] );
+                const float norm = (out_scores[i][j] - min) / float(max-min);
+                
+              
+                const float dist = 1.0 - norm;
+                m_pw_dist[i][j] = dist;
+                
+                if( i != j && dist < lowest_dist ) {
+                    lowest_dist = dist;
+                    li = i;
+                    lj = j;
+                }
+                
+            }
+        
+        }
+        
+        return pair<size_t,size_t>(li,lj);
     }
 
 
@@ -531,18 +614,22 @@ public:
             ifstream is( "out_scores.bin" );
             
             is.seekg(0, ios_base::end);
-            streampos size = is.tellg();
+            size_t size = is.tellg();
             is.seekg(0, ios_base::beg);
             if( size != out_scores.num_elements() * sizeof(int)) {
                 throw runtime_error( "bad external outscores\n" );
             }
             is.read((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         } else {
-            pairwise_seq_distance(qs_mapped, out_scores, m_pw_scoring_matrix, -5, -2, 4, 64);
+            pairwise_seq_distance(qs_mapped, out_scores, m_pw_scoring_matrix, -5, -2, m_num_threads, 64);
             ofstream os( "out_scores.bin" );
             os.write((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         }
         
+        return init_pw_dist_from_local_score_matrix(out_scores);
+    }
+    
+    pair<size_t,size_t> init_pw_dist_from_local_score_matrix( ivy_mike::tdmatrix<int> &out_scores ) {
         size_t li = -1, lj = -1;
         float lowest_dist = 1e8;
         
@@ -750,7 +837,7 @@ public:
         
         //
         // at this point all worker threads must be blocking on the empty queue (TODO: maybe add explicit check).
-        // it is now safe again to motify the tree
+        // it is now safe again to modify the tree
         //
         {
             //             cout << "ticks: " << eticks1 << " " << eticks2 << " " << eticks3 << "\n";
@@ -933,53 +1020,163 @@ public:
         print_newick( next_non_tip( towards_tree( m_tree_root )), os); 
     }
     
+    
+    // move raw sequence data from tree to std::map (leaving the tree in an undefined state)
+    void move_raw_seq_data_to_map( std::map<std::string,std::vector<uint8_t> > &msa ) {
+        tip_collector<lnode>tc;
+        
+        visit_lnode(m_tree_root, tc );
+        
+        for( vector< tr1::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+            my_adata *adata = (*it)->m_data->get_as<my_adata>();
+            
+            assert( msa.find( adata->tipName ) == msa.end() );
+            
+            std::vector<uint8_t> &seq = msa[adata->tipName];
+            
+            seq.swap( adata->get_raw_seq() );
+            
+        }
+    }
+    
+    static int score_for_aligned_pair( const std::vector<uint8_t> &a, const std::vector<uint8_t> &b ) {
+        if( a.size() != b.size() ) {
+            throw std::runtime_error( "a.size() != b.size()" );
+        }
+        bool gap_a = false;
+        bool gap_b = false;
+        
+        const int gap_open = -5;
+        const int gap_extend = -2;
+        const int score_mismatch = 0;
+        const int score_match = 3;
+        
+        
+        int score = 0;
+        for( size_t i = 0; i < a.size(); ++i ) {
+            bool ga = a[i] == '-';
+            bool gb = b[i] == '-';
+            
+            if( ga && gb ) {
+                continue;
+            }
+            
+            if( ga ) {
+                if( !gap_a ) {
+                    score += gap_open;
+                } else {
+                    score += gap_extend;
+                }
+            } else if( gb ) {
+                if( !gap_b ) {
+                    score += gap_open;
+                } else {
+                    score += gap_extend;
+                }
+            } else {
+                if( a[i] == b[i] ) {
+                    score += score_match;
+                } else {
+                    score += score_mismatch;
+                }
+            }
+            gap_a = ga;
+            gap_b = gb;
+        }
+        
+        
+        return score;
+    }
 };
 
 int main( int argc, char **argv ) {
     //mapped_file qsf( "test_1604/1604.fa" );
-	
-//     string ta = "GATTACAGATTACA";
-//     string tb = "GATTACAGATTA";
-//     
-//     vector<uint8_t> a(ta.begin(), ta.end());
-//     vector<uint8_t> b(tb.begin(), tb.end());
-//     
-//     scoring_matrix sm(3,0);
-//     
-//     
-//   
-//     
-//     align_freeshift( sm, a, b, -5, -3);
-//     return 0;
+    
+    //     string ta = "GATTACAGATTACA";
+    //     string tb = "GATTACAGATTA";
+    //     
+    //     vector<uint8_t> a(ta.begin(), ta.end());
+    //     vector<uint8_t> b(tb.begin(), tb.end());
+    //     
+    //     scoring_matrix sm(3,0);
+    //     
+    //     
+    //   
+    //     
+    //     align_freeshift( sm, a, b, -5, -3);
+    //     return 0;
     
     
-//     const char *filename = (argc == 2) ? argv[1] : "test_150/150.fa";
-     const char *filename = (argc == 2) ? argv[1] : "test_218/218.fa";
-
+    //     const char *filename = (argc == 2) ? argv[1] : "test_150/150.fa";
+    const char *filename = (argc == 2) ? argv[1] : "test_218/218.fa";
     
-    step_add sa(filename);
-    pair<size_t,size_t> start_pair = sa.calc_dist_matrix();
-    
-    cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
-    sa.start_tree( start_pair.first, start_pair.second );
-    
-    
-    ivy_mike::timer t1;
-    
-    
-    
-    while( sa.insertion_step() ) {
-        
-    }
+    std::map<std::string, std::vector<uint8_t> >out_msa1;
     
     {
-        ofstream os_ali( "sa_alignment.phy" );
-        sa.write_phylip( os_ali );
+        step_add sa(filename);
+        pair<size_t,size_t> start_pair = sa.calc_dist_matrix();
         
-        ofstream os_tree( "sa_tree.phy" );
-        sa.write_newick( os_tree );
+        cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
+        sa.start_tree( start_pair.first, start_pair.second );
+        
+        
+        ivy_mike::timer t1;
+        
+        
+        
+        while( sa.insertion_step() ) {
+            
+        }
+        
+        {
+            ofstream os_ali( "sa_alignment.phy" );
+            sa.write_phylip( os_ali );
+            
+            ofstream os_tree( "sa_tree.phy" );
+            sa.write_newick( os_tree );
+        }
+        
+        sa.move_raw_seq_data_to_map(out_msa1);
+        
+        cout << "time: " << t1.elapsed() << "\n";
+    }
+    for( int i = 0; i < 10; ++i )
+    {
+        step_add sa(filename);
+        pair<size_t,size_t> start_pair = sa.calc_dist_matrix_from_msa(out_msa1);
+        
+        cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
+        sa.start_tree( start_pair.first, start_pair.second );
+        
+        
+        ivy_mike::timer t1;
+        
+        
+        
+        while( sa.insertion_step() ) {
+            
+        }
+        
+        {
+            std::stringstream suffix;
+            suffix << std::setfill('0') << std::setw(3) << i << ".phy";
+            
+            ofstream os_ali( ("sa_alignment" + suffix.str()).c_str() );
+            sa.write_phylip( os_ali );
+            
+            ofstream os_tree( ("sa_tree" + suffix.str()).c_str() );
+            sa.write_newick( os_tree );
+        }
+        
+        
+        cout << "time2: " << t1.elapsed() << "\n";
+    
+        out_msa1.clear();
+        sa.move_raw_seq_data_to_map(out_msa1);
+        
+        std::cout << "out msa: " << out_msa1.size() << "\n";
+        
     }
     
-    
-    cout << "time: " << t1.elapsed() << "\n";
+  
 }

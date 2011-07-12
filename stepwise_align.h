@@ -325,8 +325,8 @@ score_t align_freeshift_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_a
     const score_t SMALL = -32000;
 
     score_t max_score = SMALL;
-    size_t max_a = 0;
-    size_t max_b = 0;
+    int max_a = 0;
+    int max_b = 0;
     
     arr.tb.resize( a.size() * b.size() );
     
@@ -435,8 +435,8 @@ score_t align_freeshift_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_a
             
             if( s_iter == s_end - 1 || lastrow ) {
                 if( sc > max_score ) {
-                    max_a = ia;
-                    max_b = ib;
+                    max_a = int(ia);
+                    max_b = int(ib);
                     max_score = sc;
                 }
                 
@@ -737,8 +737,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     const score_t SMALL = -1e8;
 
     score_t max_score = SMALL;
-    size_t max_a = 0;
-    size_t max_b = 0;
+    int max_a = 0;
+    int max_b = 0;
     
     std::vector<bool> sl_stay( a.size() * b.size() );
     std::vector<bool> su_stay( a.size() * b.size() );
@@ -833,8 +833,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
             
             if( s_iter == s_end - 1 || lastrow ) {
                 if( sc > max_score ) {
-                    max_a = ia;
-                    max_b = ib;
+                    max_a = int(ia);
+                    max_b = int(ib);
                     max_score = sc;
                 }
                 
