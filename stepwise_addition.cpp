@@ -491,7 +491,7 @@ public:
             m_thread_ncup.push_back(0);
         }
         
-        if( true ) {
+        if( !true ) {
             m_inc_ali.open( "inc_ali.txt" );
         }
         
@@ -545,7 +545,7 @@ public:
                 
                 int score = score_for_aligned_pair( seq_i->second, seq_j->second ); 
                 
-                std::cout << "score " << i << " " << j << " " << score << "\n";
+//                 std::cout << "score " << i << " " << j << " " << score << "\n";
                 
                 out_scores[i][j] = score;
                 out_scores[j][i] = score;
