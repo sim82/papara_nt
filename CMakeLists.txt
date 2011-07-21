@@ -20,15 +20,16 @@ set(SYSDEP_LIBS pthread)
 ENDIF()
 
 
-add_executable(papara_nt main.cpp pars_align_seq.cpp)
+add_executable(papara_nt main.cpp pars_align_seq.cpp parsimony.cpp )
 add_executable(smith_waterman smith_waterman.cpp )
-add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp )
+add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp )
 add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 add_executable(tbb_test tbb.cpp )
 add_executable(dtw dtw.cpp )
 add_executable(inherit_test inherit_test.cpp )
 add_executable(testbench testbench.cpp pars_align_seq.cpp )
 # add_executable(atlas_test atlas.cpp )
+add_executable(tree_similarity tree_similarity.cpp call_main2.cpp)
 
 target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
 #target_link_libraries(stepwise_addition ivymike)
@@ -39,3 +40,4 @@ target_link_libraries(tbb_test ublas_jama ivymike )
 
 target_link_libraries(dtw ivymike)
 target_link_libraries(inherit_test ivymike)
+target_link_libraries(tree_similarity ivymike)

@@ -654,7 +654,7 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
         
     }
     
-    std::cout << "max score: " << max_score << "\n";
+//     std::cout << "max score: " << max_score << "\n";
     
     
     int ia = a.size() - 1;
@@ -844,8 +844,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         
     }
     
-    std::cout << "max score: " << max_score << "\n";
-    std::cout << "max " << max_a << " " << max_b << "\n";
+//     std::cout << "max score: " << max_score << "\n";
+//     std::cout << "max " << max_a << " " << max_b << "\n";
     
     
     std::vector<uint8_t> a_tb;
@@ -924,10 +924,10 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     b.resize( b_tb.size() );
     std::copy( b_tb.rbegin(), b_tb.rend(), b.begin() );
     
-    std::copy( a.begin(), a.end(), std::ostream_iterator<char>(std::cout) );
-    std::cout << "\n";
-    std::copy( b.begin(), b.end(), std::ostream_iterator<char>(std::cout) );
-    std::cout << "\n";
+//     std::copy( a.begin(), a.end(), std::ostream_iterator<char>(std::cout) );
+//     std::cout << "\n";
+//     std::copy( b.begin(), b.end(), std::ostream_iterator<char>(std::cout) );
+//     std::cout << "\n";
 }
 
 #endif

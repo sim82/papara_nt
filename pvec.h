@@ -18,7 +18,7 @@ extern "C" {
 }
 #endif
 
-
+#include "tree_utils.h"
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"

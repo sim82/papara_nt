@@ -16,7 +16,7 @@
 #include <iomanip>
 #include <numeric>
 
-#ifndef WIN32 
+#ifndef WIN32
 
 #include <boost/dynamic_bitset.hpp>
 #include <boost/thread.hpp>
@@ -32,17 +32,19 @@
 #include "ivymike/tdmatrix.h"
 #include "ivymike/algorithm.h"
 // #include "ivymike/cycle.h"
-
+#include "tree_utils.h"
 #include "parsimony.h"
 #include "pvec.h"
 #include "fasta.h"
 #include "ivymike/tree_parser.h"
 #include "pars_align_seq.h"
-
+#include "tree_similarity.h"
 #include <ivymike/time.h>
 
 using namespace std;
 using namespace ivy_mike::tree_parser_ms;
+
+
 
 
 template<class pvec_t>
@@ -151,7 +153,7 @@ class my_fact_gen : public ivy_mike::tree_parser_ms::node_data_factory {
 // };
 
 template<class pvec_t>
-void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
+size_t do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
     typedef my_adata_gen<pvec_t> my_adata;
 
     deque<rooted_bifurcation<lnode> > trav_order;
@@ -175,9 +177,6 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
     }
 
 
-
-
-
     {
         my_adata *c1 = dynamic_cast<my_adata *>( n1->m_data.get());
         my_adata *c2 = dynamic_cast<my_adata *>( n2->m_data.get());
@@ -199,9 +198,13 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 //                 cout << "root: INNER INNER\n";
             pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), n1->backLen, n2->backLen, INNER_INNER );
         }
-
+        
+        
 
     }
+    
+    return trav_order.size();
+    
 //     cout << hex;
 //     for( vector< parsimony_state >::const_iterator it = root_pvec.begin(); it != root_pvec.end(); ++it ) {
 //         cout << *it;
@@ -211,12 +214,14 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 
 }
 
+typedef pvec_cgap pvec_t;
+    
+typedef my_adata_gen<pvec_t> my_adata;
+typedef my_fact_gen<my_adata> my_fact;
+
+
 
 class step_add {
-    typedef pvec_cgap pvec_t;
-    
-    typedef my_adata_gen<pvec_t> my_adata;
-    typedef my_fact_gen<my_adata> my_fact;
     //auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
     
     const static int score_match = 3;
@@ -225,7 +230,7 @@ class step_add {
     const static int score_gap_extend = -1;
     const static bool align_global = true;
     
-    ivy_mike::tree_parser_ms::ln_pool m_ln_pool;
+    sptr::shared_ptr<ln_pool> m_ln_pool;
     string m_seq_file_name;
     vector<string> m_qs_names;
     vector<vector<uint8_t> > m_qs_seqs;
@@ -245,6 +250,8 @@ class step_add {
     std::ofstream m_inc_ali;
     
     const size_t m_num_threads;
+
+    size_t m_sum_ncup;
     
     static void seq_to_nongappy_pvec( vector<uint8_t> &seq, vector<uint8_t> &pvec ) {
         pvec.resize( 0 );
@@ -306,7 +313,7 @@ class step_add {
             t->m_prom.set_value(res2);
             
         }
-        cout << "worker exit\n";
+//         cout << "worker exit\n";
     }
     
     static void ali_work_vec( step_add *sa, int rank ) {
@@ -330,6 +337,9 @@ class step_add {
         aligned_buffer<short> out_score(W);
         align_vec_arrays<score_t> arr;
         
+        ivy_mike::perf_timer pt;
+        
+        
         while( true ) {
             assert( tasks.empty() );
             
@@ -348,11 +358,14 @@ class step_add {
 //                 tasks.push_back(t);
 //             }
             
+            ivy_mike::perf_timer lpt;
+            
             sa->get_task_block(tasks, W);
             
             if( tasks.empty() ) {
                 break;
             }
+            
             
             
 //             std::cout << "tasks size: " << tasks.size() << "\n";
@@ -363,7 +376,7 @@ class step_add {
                 boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
             
                 for( size_t i = 0; i < tasks.size(); ++i ) {
-                    do_newview( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second, sa->m_incremental_newview );
+                    sa->m_num_newview += do_newview( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second, sa->m_incremental_newview );
                     sa->m_incremental_newview = true;
                 
                     if( i == 0 ) {
@@ -388,6 +401,9 @@ class step_add {
                 
                 
             }
+            
+            lpt.add_int();
+            
             align_pvec_score_vec<short,W,align_global>(a_prof, a_aux_prof, tasks[0]->m_qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, out_score, arr );            
             
             sa->m_thread_ncup.at(rank) += uint64_t(ref_len) * tasks.size() * tasks[0]->m_qs_pvec.size();
@@ -401,9 +417,16 @@ class step_add {
             }
             tasks.clear();
 
+            lpt.add_int();
+            pt += lpt;
             
         }
-        cout << "worker exit\n";
+//         cout << "worker exit\n";
+        {
+            boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
+            sa->m_align_pt += pt;
+        }
+
     }
     
     
@@ -457,7 +480,9 @@ class step_add {
     // shared tree: 
     // protected by m_t_mutex
     boost::mutex m_t_mutex;
-    bool m_incremental_newview;
+    volatile bool m_incremental_newview;
+    volatile size_t m_num_newview;
+    ivy_mike::perf_timer m_align_pt;
     // declared above: lnode *m_tree_root;
     // newviews inside the ali_task worker threads must be protected.
     // during modifications in the main thread the workes must be blocked
@@ -467,18 +492,24 @@ class step_add {
     boost::thread_group m_thread_group;
     
     std::vector<uint64_t> m_thread_ncup;
-    
+    ivy_mike::perf_timer m_insert_timer;
 public:
-    step_add( const char *seq_name ) 
-    : m_ln_pool( new my_fact() ),
+    step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool ) 
+    : m_ln_pool( ln_pool ),
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
-    m_num_threads(2),
+    m_num_threads(boost::thread::hardware_concurrency()),
+    m_sum_ncup(0),
     m_queue_exit(false)
     {
         {
             ifstream qsf( m_seq_file_name.c_str() );
+            
+            if( !qsf.good() ) {
+                throw std::runtime_error( "cannot read input fasta" );
+            }
+            
             read_fasta( qsf, m_qs_names, m_qs_seqs);
         } 
         m_used_seqs.resize( m_qs_names.size() );
@@ -507,6 +538,11 @@ public:
         
         m_thread_group.join_all();
         
+        std::cout << "align perf_timer: \n";
+        m_align_pt.print();
+        
+        std::cout << "overall perf_timer: \n";
+        m_insert_timer.print();
             
     }
     pair<size_t,size_t> calc_dist_matrix_from_msa( std::map<std::string,std::vector<uint8_t> > &msa ) {
@@ -669,8 +705,8 @@ public:
         return pair<size_t,size_t>(li,lj);
     }
     void start_tree( size_t a, size_t b ) {
-        lnode *na = lnode::create( m_ln_pool );
-        lnode *nb = lnode::create( m_ln_pool );
+        lnode *na = lnode::create( *m_ln_pool );
+        lnode *nb = lnode::create( *m_ln_pool );
         
         m_leafs.push_back(na);
         m_leafs.push_back(nb);
@@ -759,7 +795,7 @@ public:
     bool insertion_step() {
         size_t candidate = find_next_candidate();
         
-        cout << "candidate: " << candidate << "\n";
+//         cout << "candidate: " << candidate << "\n";
         
         bool valid = candidate != size_t(-1);
         
@@ -778,7 +814,7 @@ public:
         edge_collector<lnode> ec;
         visit_edges( m_tree_root, ec);
         
-        cout << "edges: " << ec.m_edges.size() << "\n";
+//         cout << "edges: " << ec.m_edges.size() << "\n";
         
         
         
@@ -801,7 +837,7 @@ public:
         const size_t W = 8;
         aligned_buffer<short> out_score(W);
         
-        ivy_mike::perf_timer perf_timer;
+        ivy_mike::perf_timer perf_timer(true);
         
         
         deque<ali_task *> tasks;
@@ -816,6 +852,7 @@ public:
         {
             boost::lock_guard<boost::mutex> lock( m_q_mutex );
             m_incremental_newview = false;
+            m_num_newview = 0;
             m_queue.swap(tasks);
         }
         
@@ -839,12 +876,17 @@ public:
         // at this point all worker threads must be blocking on the empty queue (TODO: maybe add explicit check).
         // it is now safe again to modify the tree
         //
+        // print timing stats
+        
         {
             //             cout << "ticks: " << eticks1 << " " << eticks2 << " " << eticks3 << "\n";
             double dt = thread_timer.elapsed();
             size_t sum_ncup = std::accumulate( m_thread_ncup.begin(), m_thread_ncup.end(), uint64_t(0) );
             std::fill( m_thread_ncup.begin(), m_thread_ncup.end(), 0 );
-            cout << sum_ncup << " in " << dt << "s : " << sum_ncup / (dt * 1e9) << " GNCUP/s\n";
+//             cout << sum_ncup << " in " << dt << "s : " << sum_ncup / (dt * 1e9) << " GNCUP/s\n";
+        
+            m_sum_ncup += sum_ncup;
+            std::cout << "newview: " << m_num_newview << " " << ec.m_edges.size() << " " << m_num_newview / double(ec.m_edges.size()) << "\n";
         }
         
         //
@@ -882,7 +924,7 @@ public:
                throw runtime_error( "alignment error" );
             }
         }
-        
+        perf_timer.add_int();
         //
         // apply traceback to reference sequences
         //
@@ -911,13 +953,13 @@ public:
 //         cout << "tip len: " << tip_seq.size() << "\n";
         
         
-        lnode *nc = lnode::create( m_ln_pool );
+        lnode *nc = lnode::create( *m_ln_pool );
         nc->m_data->setTipName(m_qs_names.at(candidate));
         nc->m_data->isTip = true;
         
         nc->m_data->get_as<my_adata>()->init_pvec(tip_seq);
         
-        lnode *nn = lnode::create( m_ln_pool );
+        lnode *nn = lnode::create( *m_ln_pool );
         parser::twiddle(nc, nn, 1.0, "I1", 0 );
         
         
@@ -979,6 +1021,9 @@ public:
         
         perf_timer.add_int();
         perf_timer.print();
+        
+        m_insert_timer += perf_timer;
+        
         
 //         std::cout << "ticks: " << eticks2 - eticks1 << " " << eticks3 - eticks2 << " " << eticks4 - eticks3 << "\n";
         
@@ -1087,6 +1132,10 @@ public:
         
         return score;
     }
+    
+    lnode *get_tree() {
+        return m_tree_root;
+    }
 };
 
 int main( int argc, char **argv ) {
@@ -1110,13 +1159,17 @@ int main( int argc, char **argv ) {
     //     const char *filename = (argc == 2) ? argv[1] : "test_150/150.fa";
     const char *filename = (argc == 2) ? argv[1] : "test_218/218.fa";
     
-    std::map<std::string, std::vector<uint8_t> >out_msa1;
     
+    
+    std::map<std::string, std::vector<uint8_t> >out_msa1;
+    sptr::shared_ptr<ln_pool> pool(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
+
+    lnode *last_tree;
     {
-        step_add sa(filename);
+        step_add sa(filename, pool);
         pair<size_t,size_t> start_pair = sa.calc_dist_matrix();
         
-        cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
+//         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
         sa.start_tree( start_pair.first, start_pair.second );
         
         
@@ -1137,15 +1190,18 @@ int main( int argc, char **argv ) {
         }
         
         sa.move_raw_seq_data_to_map(out_msa1);
-        
+        last_tree = sa.get_tree();
         cout << "time: " << t1.elapsed() << "\n";
     }
-    for( int i = 0; i < 10; ++i )
+    
+    std::vector<split_set_t> split_history;
+    
+    for( int i = 0; i < 100; ++i )
     {
-        step_add sa(filename);
+        step_add sa(filename,pool);
         pair<size_t,size_t> start_pair = sa.calc_dist_matrix_from_msa(out_msa1);
         
-        cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
+//         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
         sa.start_tree( start_pair.first, start_pair.second );
         
         
@@ -1169,12 +1225,46 @@ int main( int argc, char **argv ) {
         }
         
         
-        cout << "time2: " << t1.elapsed() << "\n";
+//         cout << "time2: " << t1.elapsed() << "\n";
     
         out_msa1.clear();
         sa.move_raw_seq_data_to_map(out_msa1);
         
-        std::cout << "out msa: " << out_msa1.size() << "\n";
+//         std::cout << "out msa: " << out_msa1.size() << "\n";
+        
+        lnode *tree2 = sa.get_tree();
+        
+        split_history.push_back( split_set_t() );
+        double v = compare_trees( last_tree, tree2, split_history.back() );
+        
+        size_t period = size_t(-1);
+        
+        for( std::vector<split_set_t>::reverse_iterator it = split_history.rbegin() + 1; it != split_history.rend(); ++it ) {
+            if( split_sets_equal( split_history.back(), *it ) ) {
+                period = it - split_history.rbegin();
+                
+                std::cout << "found cycle: " << period << "\n";
+                
+                
+            }
+        }
+        
+        
+        
+        
+        std::cout << "tree dist: " << v << "\n";
+        
+        last_tree = tree2;
+        
+        pool->clear();
+        pool->mark(last_tree);
+        pool->sweep();
+        
+        
+        if( period != size_t(-1) ) {
+            std::cout << "convergence. period " << period << "\n";
+            break;
+        }
         
     }
     

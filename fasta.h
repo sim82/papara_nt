@@ -457,7 +457,7 @@ private:
         //const size_t asize = m_alphabet.size() + 1;
         m_cmatrix.resize( m_cmatrixsize * m_cmatrixsize );
         std::fill( m_cmatrix.begin(), m_cmatrix.end(), 0 );
-        std::cerr << "cmatrix: " << m_cmatrix.size() << " " << m_cmatrixsize << "\n";
+//         std::cerr << "cmatrix: " << m_cmatrix.size() << " " << m_cmatrixsize << "\n";
         
         // copy scores from the raw scoring matrix to the compressed matrix
         for( size_t i = 0; i < asize; i++ ) {

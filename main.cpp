@@ -31,6 +31,7 @@
 #include "ivymike/demangle.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
+#include "ivymike/smart_ptr.h"
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
@@ -758,7 +759,7 @@ public:
 
 
     papara_nt( const char* opt_tree_name, const char *opt_alignment_name, const char *opt_qs_name )
-      : m_ln_pool(new ivy_mike::tree_parser_ms::ln_pool( new my_fact<my_adata> ))
+      : m_ln_pool(new ln_pool( std::auto_ptr<node_data_factory>(new my_fact<my_adata>) ))
     {
 
             //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
