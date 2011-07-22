@@ -20,7 +20,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 #include <boost/thread.hpp>
-#include <boost/thread/future.hpp>
+//#include <boost/thread/future.hpp>
 #include <boost/thread/barrier.hpp>
 
 #include <boost/array.hpp>
@@ -363,7 +363,6 @@ class step_add {
     }
     
     struct ali_task {
-        boost::promise<int> m_prom;
         pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > m_edge;
         
         // WARNINIG: the next two members are most likely references to local objects, which are kept in scope between bar1 and bar2, but not longer
@@ -563,7 +562,7 @@ public:
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
-    m_num_threads(boost::thread::hardware_concurrency()),
+    m_num_threads(4),//boost::thread::hardware_concurrency()),
     m_sum_ncup(0),
     m_pvec_gen(0),
     m_queue_exit(false),
