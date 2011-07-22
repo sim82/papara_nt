@@ -60,9 +60,9 @@ class alloc {
     typedef allocator_ugly allocator;
 #endif
 public:
-    template<typename t>
+    template<typename _Other>
     struct rebind {
-        typedef alloc<T> other;
+        typedef ab_internal_::alloc<_Other> other;
     };
     typedef T value_type;
     typedef T* pointer;
@@ -71,6 +71,13 @@ public:
     typedef const T& const_reference;
     typedef size_t size_type;
     typedef ptrdiff_t difference_type;
+
+
+	alloc( ) {}
+	alloc(const alloc<T>& _Right ) {}
+
+	template<class Other>
+	alloc(const alloc<Other>& _Right ) {}
 
     pointer allocate( size_type nobj, const void *lh = 0 ) {
         return (pointer) allocator::alloc( align, nobj * sizeof(T) );

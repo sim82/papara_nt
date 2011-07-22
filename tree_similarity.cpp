@@ -1,11 +1,13 @@
 #include <iterator>
 #include <stdexcept>
 #include <algorithm>
-#include <tr1/unordered_set>
-#include <tr1/unordered_map>
+
 #include <deque>
 #include <boost/dynamic_bitset.hpp>
-#include <boost/unordered_set.hpp>
+
+#include <boost/tr1/unordered_set.hpp>
+#include <boost/tr1/unordered_map.hpp>
+
 #include <boost/static_assert.hpp>
 
 #include "ivymike/tree_parser.h"
@@ -14,6 +16,8 @@
 #include <ivymike/time.h>
 #include "tree_similarity.h"
 #include "tree_utils.h"
+
+
 
 using namespace ivy_mike::tree_parser_ms;
 
@@ -44,7 +48,7 @@ public:
 class bitset_hash {
 public:
     inline size_t operator()( const boost::dynamic_bitset<> &bs ) const {
-        BOOST_STATIC_ASSERT( sizeof( size_t ) == sizeof( dynamic_bitset<>::block_type ) );
+        //BOOST_STATIC_ASSERT( sizeof( size_t ) == sizeof( dynamic_bitset<>::block_type ) );
         
         dynamic_bitset<>::block_type hash = 0;
         
