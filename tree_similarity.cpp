@@ -32,6 +32,11 @@ class bitset_hash_iterator : public std::iterator<std::output_iterator_tag,void,
 public:
     bitset_hash_iterator ( Block &out_hash ) : hash(out_hash), i(1) { hash = 1234; }
     
+	inline bitset_hash_iterator<Block>& operator= (const bitset_hash_iterator<Block> &other ) {
+        hash = other.hash;
+        return *this;
+    }
+
     inline bitset_hash_iterator<Block>& operator= (const Block &v ) {
         hash ^= v * i++;
         return *this;

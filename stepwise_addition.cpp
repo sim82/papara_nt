@@ -563,7 +563,7 @@ public:
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
-    m_num_threads(4),//boost::thread::hardware_concurrency()),
+    m_num_threads(boost::thread::hardware_concurrency()),
     m_sum_ncup(0),
     m_pvec_gen(0),
     m_queue_exit(false),
