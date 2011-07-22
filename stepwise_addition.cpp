@@ -365,50 +365,22 @@ class step_add {
     struct ali_task {
         boost::promise<int> m_prom;
         pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > m_edge;
-        const vector<uint8_t> &m_qs_pvec; // WARNINIG: this is most likely a reference to a local object, which is kept in scope until the promise is fullfilled (but not longer)
         
-        ali_task( pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > edge, const vector<uint8_t> &qs_pvec ) 
-        : m_edge(edge), m_qs_pvec(qs_pvec) {
+        // WARNINIG: the next two members are most likely references to local objects, which are kept in scope between bar1 and bar2, but not longer
+        const vector<uint8_t> &m_qs_pvec; 
+        int &m_result;
+        
+        ali_task( pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > edge, const vector<uint8_t> &qs_pvec, int &result ) 
+        : m_edge(edge), m_qs_pvec(qs_pvec), m_result(result) {
             
         }
         
         void work() {
-            m_prom.set_value(42);
+            
         }
         
     };
     
-    
-    static void ali_work( step_add *sa, int rank ) {
-        pvec_t root_pvec;
-        vector<uint8_t> seq_tmp;
-        vector<uint8_t> aux_tmp; 
-        align_arrays<int32_t> arr;
-        
-        while( true ) {
-            auto_ptr<ali_task> t(sa->get_task());
-            
-            if( t.get() == 0 ) {
-                break;
-            }
-            
-            {
-                boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
-                
-                do_newview( root_pvec, t->m_edge.first, t->m_edge.second, sa->m_incremental_newview );
-                sa->m_incremental_newview = true;
-            }
-            
-            root_pvec.to_int_vec(seq_tmp);
-            root_pvec.to_aux_vec(aux_tmp);
-            int res2 = align_pvec_score<int32_t,align_global>(seq_tmp, aux_tmp, t->m_qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, arr );
-//             cout << "thread align: " << res2 << "\n";
-            
-            t->m_prom.set_value(res2);
-            
-        }
-//         cout << "worker exit\n";
-    }
     
     template<size_t W>
     static void copy_to_profile( vector<pvec_t> &pvecs, aligned_buffer<short> &prof, aligned_buffer<short> &aux_prof ) {
@@ -441,7 +413,7 @@ class step_add {
         
     }
     
-    static void ali_work_vec( step_add *sa, int rank ) {
+    static void ali_work_vec_nt( step_add *sa, int rank ) {
         // TODO: code review! This went to smoothly, I don' trust it...
         
         const size_t W = 8;
@@ -465,75 +437,35 @@ class step_add {
         ivy_mike::perf_timer pt;
         
         
+        
         while( true ) {
-            assert( tasks.empty() );
             
-//             auto_ptr<ali_task> t(sa->get_task());
+            sa->m_bar1.wait();
+//             std::cout << sa->m_par_queue[rank].size() << "\n";
             
-            size_t ref_len = 0;
-            
-//             for( size_t i = 0; i < W; ++i ) {
-//                 ali_task *t = sa->get_task().release();
-//                 
-//                 if( t == 0 ) {
-//                     break;
-//                 }
-//                 
-//                 
-//                 tasks.push_back(t);
-//             }
-            
-            ivy_mike::perf_timer lpt;
-            lpt.add_int();
-            sa->get_task_block(tasks, W);
-            lpt.add_int();
-            if( tasks.empty() ) {
-                break;
-            }
-            
-            
-            
-//             std::cout << "tasks size: " << tasks.size() << "\n";
+            while( !sa->m_par_queue[rank].empty() ) {
 
-            
-            if( false )
-            {
-                boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
-            
-                for( size_t i = 0; i < tasks.size(); ++i ) {
-                    sa->m_num_newview += do_newview( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second, sa->m_incremental_newview );
-                    sa->m_incremental_newview = true;
+                ivy_mike::perf_timer lpt;
+
+
+                tasks.clear();
                 
-                    if( i == 0 ) {
-                        ref_len = root_pvecs[i].size();
-                        if( a_prof.size() < ref_len * W ) {
-                            // zero initialize on resize, so that valgrind will not complain about uninitialized reads if tasks.size() < W after resize...
-                            a_prof.resize( ref_len * W, 0 );
-                            a_aux_prof.resize( ref_len * W, 0 );
-                        }
-                    } else {
-                        if( ref_len != root_pvecs[i].size() ) {
-                            throw std::runtime_error( "quirk: ref_len != root_pvecs[i].size()" );
-                        }
-                        
-                    }
-                    
-                    
-                    
-                    // FIXME: to_aux_vec sets a_aux_prof to 0xFFFF for cgap columns. The correct value is dependent on the width of the vector unit.
-                    root_pvecs[i].to_int_vec_strided<aligned_buffer<short>::iterator,W>(a_prof.begin() + i);
-                    root_pvecs[i].to_aux_vec_strided<aligned_buffer<short>::iterator,W>(a_aux_prof.begin() + i);
+                while( tasks.size() < W && !sa->m_par_queue[rank].empty() ) {
+                    tasks.push_back(sa->m_par_queue[rank].back());
+                    sa->m_par_queue[rank].pop_back();
                 }
+                assert( !tasks.empty() );
+                
+                size_t ref_len = 0;
                 
                 
-            } else {
-//                 std::cout << "tasks: " << tasks.size() << "\n";
+                //                 std::cout << "tasks: " << tasks.size() << "\n";
                 lpt.add_int();
                 for( size_t i = 0; i < tasks.size(); ++i ) {
                     sa->m_num_newview += 1;
                     do_newview_from_ldata( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second );
-                    sa->m_incremental_newview = true;
-                
+                    
+                    
                     if( i == 0 ) {
                         ref_len = root_pvecs[i].size();
                         if( a_prof.size() < ref_len * W ) {
@@ -551,8 +483,8 @@ class step_add {
                     
                     
                     // FIXME: to_aux_vec sets a_aux_prof to 0xFFFF for cgap columns. The correct value is dependent on the width of the vector unit.
-/*                    root_pvecs[i].to_int_vec_strided<aligned_buffer<short>::iterator,W>(a_prof.begin() + i);
-                    root_pvecs[i].to_aux_vec_strided<aligned_buffer<short>::iterator,W>(a_aux_prof.begin() + i);*/
+                    /*                    root_pvecs[i].to_int_vec_strided<aligned_buffer<short>::iterator,W>(a_prof.begin() + i);
+                        *        root_pvecs[i].to_aux_vec_strided<aligned_buffer<short>::iterator,W>(a_aux_prof.begin() + i);*/
                     
                     
                 }
@@ -562,95 +494,65 @@ class step_add {
                 lpt.add_int();    
                 copy_to_profile<W>( root_pvecs, a_prof, a_aux_prof );
                 
+                lpt.add_int();
+                
+                align_pvec_score_vec<short,W,align_global>(a_prof, a_aux_prof, tasks[0]->m_qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, out_score, arr );            
+                
+                sa->m_thread_ncup.at(rank) += uint64_t(ref_len) * tasks.size() * tasks[0]->m_qs_pvec.size();
+                
+                for( size_t i = 0; i < tasks.size(); ++i ) {
+                    tasks[i]->m_result = out_score[i];
+                }
+                
+                for( std::vector< ali_task* >::iterator it = tasks.begin(); it != tasks.end(); ++it ) {
+                    delete *it;
+                }
+                tasks.clear();
+                
+                lpt.add_int();
+                pt += lpt;
             }
             
-            lpt.add_int();
             
-            align_pvec_score_vec<short,W,align_global>(a_prof, a_aux_prof, tasks[0]->m_qs_pvec, score_match, score_match_cgap, score_gap_open, score_gap_extend, out_score, arr );            
-            
-            sa->m_thread_ncup.at(rank) += uint64_t(ref_len) * tasks.size() * tasks[0]->m_qs_pvec.size();
-            
-            for( size_t i = 0; i < tasks.size(); ++i ) {
-                tasks[i]->m_prom.set_value( out_score[i] );
+            if( sa->m_queue_exit ) {
+                boost::lock_guard<boost::mutex> tree_lock( sa->m_gen_mutex );
+                sa->m_align_pt += pt;   
+                break;
             }
             
-            for( std::vector< ali_task* >::iterator it = tasks.begin(); it != tasks.end(); ++it ) {
-                delete *it;
-            }
-            tasks.clear();
+            sa->m_bar2.wait();
+            
+        }
 
-            lpt.add_int();
-            pt += lpt;
-            
-        }
-//         cout << "worker exit\n";
-        {
-            boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
-            sa->m_align_pt += pt;
-        }
 
     }
     
     
-    auto_ptr<ali_task> get_task() {
-        boost::unique_lock<boost::mutex> lock( m_q_mutex );
-        
-        while( m_queue.empty() && !m_queue_exit ) {
-            m_q_cond.wait( lock );
-        }
-        
-        if( m_queue_exit ) {
-            return auto_ptr<ali_task>(0);
-        } else {
-            ali_task *t = m_queue.front();
-            m_queue.pop_front();
-            return auto_ptr<ali_task>(t);
-        }
-    }
-    
-    bool get_task_block( vector<ali_task *> &tasks, size_t max_block_size ) {
-        boost::unique_lock<boost::mutex> lock( m_q_mutex );
-        
-        while( m_queue.empty() && !m_queue_exit ) {
-            m_q_cond.wait( lock );
-        }
-        
-        if( m_queue_exit ) {
-            return false;
-        } else {
-            assert( !m_queue.empty() );
-            while( tasks.size() < max_block_size && !m_queue.empty() ) {
-                ali_task *t = m_queue.front();
-                m_queue.pop_front();
-                tasks.push_back(t);
-//                 std::cout << "task push: " << tasks.size() << "\n";
-            }
-            
-            return true;
-        }
-    }
-    
-    // shared ali_task queue: 
-    // protected by m_q_mutex
-    boost::mutex m_q_mutex;
-    deque<ali_task *>m_queue;
+    //
+    // regarding the aligner threads, bar1 and bar2 separate the program into two sections:
+    // basic data access policies for the sections:
+    // between bar1 and bar2:
+    //  the aligner threads are working. the sequential part is sleeping.
+    //  the shared state is read-only, except for:
+    //  m_par_queue[rank] and contained ali_task instances are r/w for the respective thread.
+    //  some additional shared stuff secured by m_gen_mutex is r/w (iff m_gen_mutex is held)
+    // between bar2 and bar1:
+    //  the aligner threads are sleeping. the sequential part is running.
+    //  the whole shared state is r/w for the sequential part.
+    //
     bool m_queue_exit;
 
-    boost::condition_variable m_q_cond;
-    // end-of protected by m_q_mutex
+    std::vector<std::vector<ali_task *> > m_par_queue;
+    boost::barrier m_bar1;
+    boost::barrier m_bar2;
     
-    // shared tree: 
-    // protected by m_t_mutex
-    boost::mutex m_t_mutex;
-    volatile bool m_incremental_newview;
+    
+    // additional shared stuff, secured by m_gen_mutex
+    boost::mutex m_gen_mutex;
     volatile size_t m_num_newview;
     ivy_mike::perf_timer m_align_pt;
-    // declared above: lnode *m_tree_root;
-    // newviews inside the ali_task worker threads must be protected.
-    // during modifications in the main thread the workes must be blocked
+    // end of additional shared stuff
     
-    // end-of protected by m_t_mutex
- 
     boost::thread_group m_thread_group;
     
     std::vector<uint64_t> m_thread_ncup;
@@ -664,7 +566,10 @@ public:
     m_num_threads(boost::thread::hardware_concurrency()),
     m_sum_ncup(0),
     m_pvec_gen(0),
-    m_queue_exit(false)
+    m_queue_exit(false),
+    m_par_queue(m_num_threads),
+    m_bar1(m_num_threads + 1),
+    m_bar2(m_num_threads + 1)
     {
         {
             ifstream qsf( m_seq_file_name.c_str() );
@@ -680,8 +585,8 @@ public:
         
         
         for( size_t i = 0; i < m_num_threads; i++ ) {
-            int rank = int(m_thread_group.size());
-            m_thread_group.create_thread( boost::bind( &step_add::ali_work_vec, this, rank ) );
+            int rank = int(i);
+            m_thread_group.create_thread( boost::bind( &step_add::ali_work_vec_nt, this, rank ) );
             m_thread_ncup.push_back(0);
         }
         
@@ -693,10 +598,11 @@ public:
     
     ~step_add() {
         // cleanup the ali_task worker threads
-        m_q_mutex.lock();
+        // when m_queue_exit = true, the worker threads will exit directly after bar1
+
         m_queue_exit = true;
-        m_q_mutex.unlock();
-        m_q_cond.notify_all();
+        m_bar1.wait();
+        
         
         
         m_thread_group.join_all();
@@ -1004,34 +910,39 @@ public:
         
         
         deque<ali_task *> tasks;
-        vector<boost::shared_future<int> > futures;
-        futures.reserve(ec.m_edges.size());
+        vector<int> results;
+        results.reserve(ec.m_edges.size());
         
         m_pvec_gen++;
+        size_t circ_ptr = 0;
         for( vector< pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > >::iterator it = ec.m_edges.begin(); it != ec.m_edges.end(); ++it ) {
             lnode_newview( it->first );
             lnode_newview( it->second );
             
-            tasks.push_back( new ali_task(*it, qs_pvec) );
-            futures.push_back( boost::shared_future<int>(tasks.back()->m_prom.get_future()) );
+            //tasks.push_back( new ali_task(*it, qs_pvec) );
+            //futures.push_back( boost::shared_future<int>(tasks.back()->m_prom.get_future()) );
+            results.push_back(-1);
+            m_par_queue[circ_ptr % m_num_threads].push_back(new ali_task(*it, qs_pvec, results.back()));
+            circ_ptr++;
+            
         }
         
-        {
-            boost::lock_guard<boost::mutex> lock( m_q_mutex );
-            m_incremental_newview = false;
-            m_num_newview = 0;
-            m_queue.swap(tasks);
-        }
+        
         perf_timer.add_int();
 
-        ivy_mike::timer thread_timer;
-        m_q_cond.notify_all();
+//         std::cout << "wait1\n";
+        
+        m_bar1.wait();
+        
+//         std::cout << "wait2\n";
+        m_bar2.wait();
+//         std::cout << "done wait\n";
+        
+        perf_timer.add_int();
         
         
-        
-        assert( futures.size() == ec.m_edges.size() );
         for( size_t i = 0; i < ec.m_edges.size(); ++i ) {
-            int res = futures[i].get();
+            int res = results[i];
             //cout << "result: " << i << " = " << res << "\n";
             if( res > best_score ) {
 
