@@ -22,6 +22,7 @@
 #include <boost/thread.hpp>
 #include <boost/thread/future.hpp>
 #include <boost/thread/barrier.hpp>
+
 #include <boost/array.hpp>
 
 // there is some strange linker error on widows. can't be bothered now... visual c++ will probably do better whole program optimization than gcc anyway...
@@ -91,66 +92,47 @@ public:
 
 };
 
-template<class ndata_t>
+template<typename pvec_t>
+class my_ldata_gen : public ivy_mike::tree_parser_ms::ldata {
+    pvec_t m_pvec;
+    int m_generation;
+public:
+    my_ldata_gen() : m_generation(-1) {
+//         std::cout << "hello ldata " << sizeof(*this) << "\n";
+    }
+    
+    virtual ~my_ldata_gen() {
+//         std::cout << "bye ldata\n";
+    }
+    pvec_t &get_pvec() {
+        return m_pvec;
+    }
+    
+    int get_generation() {
+        return m_generation;
+    }
+    
+    void set_generation( int gen ) {
+        m_generation = gen;
+    }
+    
+    
+};
+
+template<class ndata_t, class ldata_t>
 class my_fact_gen : public ivy_mike::tree_parser_ms::node_data_factory {
 
     virtual ndata_t *alloc_adata() {
 
         return new ndata_t;
     }
+    
+    virtual ldata_t *alloc_ldata() {
+        return new ldata_t;
+    }
 
 };
 
-// template<class pvec_t>
-// class newview_service {
-//     boost::thread_group m_tg;
-//     boost::barrier m_barrier;
-//     boost::barrier m_barrier2;
-//     
-//     volatile bool m_finish;
-//     
-//     static void work_outer( size_t rank, newview_service<pvec_t> *this_ ) {
-//         this_->work(rank);
-//     }
-//     
-//     void work( size_t rank ) {
-//         m_barrier2.wait();
-//         while( !m_finish ) {
-//             cout << "waiting: " << rank << "\n";
-//             m_barrier.wait();
-//             
-//             
-//             cout << "waited: " << rank << "\n";
-//             
-//             m_barrier2.wait();
-//         }
-//         cout << "finished: " << rank << "\n";
-//     }
-//     
-// public:
-//     newview_service( size_t n_threads ) : m_barrier( n_threads + 1 ), m_barrier2( n_threads + 1 ), m_finish(false) {
-//         while( m_tg.size() < n_threads ) {
-//             m_tg.create_thread( boost::bind( &newview_service::work_outer, m_tg.size(), this ));
-//             
-//         }
-//         
-//         
-//   //      m_barrier2.wait();
-//         
-//     }
-//     
-//     void do_it() {
-//         m_barrier2.wait();
-//         m_barrier.wait();
-//         
-//     }
-//     
-//     ~newview_service() {
-//         m_finish = true;
-//         m_barrier2.wait();
-//         m_tg.join_all();
-//     }
-// };
 
 template<class pvec_t>
 size_t do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
@@ -214,10 +196,64 @@ size_t do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 
 }
 
+template<class pvec_t>
+void do_newview_from_ldata( pvec_t &root_pvec, lnode *n1, lnode *n2 ) {
+    // assume that the pvecs in the ldata are already valid
+    
+    
+    typedef my_adata_gen<pvec_t> my_adata;
+    typedef my_ldata_gen<pvec_t> my_ldata;
+    
+    {
+        my_adata *c1 = dynamic_cast<my_adata *>( n1->m_data.get());
+        my_adata *c2 = dynamic_cast<my_adata *>( n2->m_data.get());
+
+        my_ldata *ldc1 = dynamic_cast<my_ldata *>( n1->m_ldata.get());
+        my_ldata *ldc2 = dynamic_cast<my_ldata *>( n2->m_ldata.get());
+        
+//         tip_case tc;
+
+        if( c1->isTip && c2->isTip ) {
+//                 cout << "root: TIP TIP\n";
+            pvec_t::newview(root_pvec, ldc1->get_pvec(), ldc2->get_pvec(), n1->backLen, n2->backLen, TIP_TIP );
+        } else if( c1->isTip && !c2->isTip ) {
+//                 cout << "root: TIP INNER\n";
+            pvec_t::newview(root_pvec, ldc1->get_pvec(), ldc2->get_pvec(), n1->backLen, n2->backLen, TIP_INNER );
+//             root_pvec = c2->get_pvec();
+        } else if( !c1->isTip && c2->isTip ) {
+//                 cout << "root: INNER TIP\n";
+            pvec_t::newview(root_pvec, ldc2->get_pvec(), ldc1->get_pvec(), n1->backLen, n2->backLen, TIP_INNER );
+//             root_pvec = c1->get_pvec();
+        } else {
+//                 cout << "root: INNER INNER\n";
+            pvec_t::newview(root_pvec, ldc1->get_pvec(), ldc2->get_pvec(), n1->backLen, n2->backLen, INNER_INNER );
+        }
+        
+        
+
+    }
+    
+    
+    
+//     cout << hex;
+//     for( vector< parsimony_state >::const_iterator it = root_pvec.begin(); it != root_pvec.end(); ++it ) {
+//         cout << *it;
+//     }
+//
+//     cout << dec << endl;
+
+}
+
+
+
 typedef pvec_cgap pvec_t;
     
 typedef my_adata_gen<pvec_t> my_adata;
-typedef my_fact_gen<my_adata> my_fact;
+typedef my_ldata_gen<pvec_t> my_ldata;
+
+typedef my_fact_gen<my_adata, my_ldata> my_fact;
+
+
 
 
 
@@ -252,6 +288,8 @@ class step_add {
     const size_t m_num_threads;
 
     size_t m_sum_ncup;
+    int m_pvec_gen;
+    
     
     static void seq_to_nongappy_pvec( vector<uint8_t> &seq, vector<uint8_t> &pvec ) {
         pvec.resize( 0 );
@@ -266,7 +304,63 @@ class step_add {
         }
         
     }
-    
+    void lnode_newview( lnode *n ) {
+        my_adata *ad = dynamic_cast<my_adata *>( n->m_data.get());
+        my_ldata *ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
+        
+        //my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
+        if( ld->get_generation() < m_pvec_gen ) {
+            
+            if( ad->isTip ) {
+                ld->get_pvec() = ad->get_pvec();
+            } else {
+                lnode *c1 = n->next->back;
+                lnode *c2 = n->next->next->back;
+                
+                lnode_newview( c1 );
+                lnode_newview( c2 );
+                
+                
+                
+                
+                tip_case tc;
+                if( c1->m_data->isTip && c2->m_data->isTip ) {
+                    tc = TIP_TIP;
+                } else if( c1->m_data->isTip && !c2->m_data->isTip ) {
+                    tc = TIP_INNER;
+                } else if( !c1->m_data->isTip && c2->m_data->isTip ) {
+                    tc = TIP_INNER;
+                    std::swap( c1, c2 );
+                } else {
+                    tc = INNER_INNER;
+                }
+                
+                my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
+                my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
+                
+                pvec_t &pvc1 = ldc1->get_pvec();
+                pvec_t &pvc2 = ldc2->get_pvec();
+                
+             //   std::cout << "size: " << pvc1.size() << " " << pvc2.size() << "\n";
+                
+                pvec_t::newview( ld->get_pvec(), pvc1, pvc2, n->next->backLen, n->next->next->backLen, tc);
+            }
+            
+            ld->set_generation(m_pvec_gen);
+            //pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
+            
+      
+            
+//             if( n->towards_root ) {
+//                 if (ad->get_pvec() != ld->get_pvec()) {
+//                     throw std::runtime_error( "ad != ld pvec\n" );
+//                 }          
+//                 
+//                // std::cout << ad->get_pvec().size() << " " << ld->get_pvec().size() << " " <<  << "\n";
+//             }
+                
+        }
+    }
     
     struct ali_task {
         boost::promise<int> m_prom;
@@ -316,6 +410,37 @@ class step_add {
 //         cout << "worker exit\n";
     }
     
+    template<size_t W>
+    static void copy_to_profile( vector<pvec_t> &pvecs, aligned_buffer<short> &prof, aligned_buffer<short> &aux_prof ) {
+        size_t reflen = pvecs[0].size();
+        
+        assert( W == pvecs.size() );
+        assert( reflen * W == prof.size() );
+        assert( reflen * W == aux_prof.size() );
+        
+        aligned_buffer<short>::iterator it = prof.begin();
+        aligned_buffer<short>::iterator ait = aux_prof.begin();
+//         std::cout << "reflen: " << reflen << " " << size_t(&(*it)) << "\n";
+        
+        for( size_t i = 0; i < reflen; ++i ) {
+            for( size_t j = 0; j < W; ++j ) {
+//                 std::cout << "ij: " << i << " " << j << " " << pvecs[j].size() <<  "\n";
+                
+                
+                *it = short(pvecs[j].get_v()[i]);
+                *ait = short( (pvecs[j].get_auxv()[i] == AUX_CGAP) ? 0xFFFF : 0x0 );
+                
+                ++it;
+                ++ait;
+            }
+        }
+        
+        
+        assert( it == prof.end());
+        assert( ait == aux_prof.end());
+        
+    }
+    
     static void ali_work_vec( step_add *sa, int rank ) {
         // TODO: code review! This went to smoothly, I don' trust it...
         
@@ -359,9 +484,9 @@ class step_add {
 //             }
             
             ivy_mike::perf_timer lpt;
-            
+            lpt.add_int();
             sa->get_task_block(tasks, W);
-            
+            lpt.add_int();
             if( tasks.empty() ) {
                 break;
             }
@@ -371,7 +496,7 @@ class step_add {
 //             std::cout << "tasks size: " << tasks.size() << "\n";
 
             
-            
+            if( false )
             {
                 boost::lock_guard<boost::mutex> tree_lock( sa->m_t_mutex );
             
@@ -381,6 +506,11 @@ class step_add {
                 
                     if( i == 0 ) {
                         ref_len = root_pvecs[i].size();
+                        if( a_prof.size() < ref_len * W ) {
+                            // zero initialize on resize, so that valgrind will not complain about uninitialized reads if tasks.size() < W after resize...
+                            a_prof.resize( ref_len * W, 0 );
+                            a_aux_prof.resize( ref_len * W, 0 );
+                        }
                     } else {
                         if( ref_len != root_pvecs[i].size() ) {
                             throw std::runtime_error( "quirk: ref_len != root_pvecs[i].size()" );
@@ -388,17 +518,49 @@ class step_add {
                         
                     }
                     
-                    if( a_prof.size() < ref_len * W ) {
-                        // zero initialize on resize, so that valgrind will not complain about uninitialized reads if tasks.size() < W after resize...
-                        a_prof.resize( ref_len * W, 0 );
-                        a_aux_prof.resize( ref_len * W, 0 );
-                    }
+                    
                     
                     // FIXME: to_aux_vec sets a_aux_prof to 0xFFFF for cgap columns. The correct value is dependent on the width of the vector unit.
                     root_pvecs[i].to_int_vec_strided<aligned_buffer<short>::iterator,W>(a_prof.begin() + i);
                     root_pvecs[i].to_aux_vec_strided<aligned_buffer<short>::iterator,W>(a_aux_prof.begin() + i);
                 }
                 
+                
+            } else {
+//                 std::cout << "tasks: " << tasks.size() << "\n";
+                lpt.add_int();
+                for( size_t i = 0; i < tasks.size(); ++i ) {
+                    sa->m_num_newview += 1;
+                    do_newview_from_ldata( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second );
+                    sa->m_incremental_newview = true;
+                
+                    if( i == 0 ) {
+                        ref_len = root_pvecs[i].size();
+                        if( a_prof.size() < ref_len * W ) {
+                            // zero initialize on resize, so that valgrind will not complain about uninitialized reads if tasks.size() < W after resize...
+                            a_prof.resize( ref_len * W, 0 );
+                            a_aux_prof.resize( ref_len * W, 0 );
+                        }
+                    } else {
+                        if( ref_len != root_pvecs[i].size() ) {
+                            throw std::runtime_error( "quirk: ref_len != root_pvecs[i].size()" );
+                        }
+                        
+                    }
+                    
+                    
+                    
+                    // FIXME: to_aux_vec sets a_aux_prof to 0xFFFF for cgap columns. The correct value is dependent on the width of the vector unit.
+/*                    root_pvecs[i].to_int_vec_strided<aligned_buffer<short>::iterator,W>(a_prof.begin() + i);
+                    root_pvecs[i].to_aux_vec_strided<aligned_buffer<short>::iterator,W>(a_aux_prof.begin() + i);*/
+                    
+                    
+                }
+                for( size_t i = tasks.size(); i < W; ++i ) {
+                    root_pvecs[i] = root_pvecs[0];
+                }
+                lpt.add_int();    
+                copy_to_profile<W>( root_pvecs, a_prof, a_aux_prof );
                 
             }
             
@@ -501,6 +663,7 @@ public:
     m_seq_arrays(true),
     m_num_threads(boost::thread::hardware_concurrency()),
     m_sum_ncup(0),
+    m_pvec_gen(0),
     m_queue_exit(false)
     {
         {
@@ -843,9 +1006,13 @@ public:
         deque<ali_task *> tasks;
         vector<boost::shared_future<int> > futures;
         futures.reserve(ec.m_edges.size());
+        
+        m_pvec_gen++;
         for( vector< pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > >::iterator it = ec.m_edges.begin(); it != ec.m_edges.end(); ++it ) {
-            tasks.push_back( new ali_task(*it, qs_pvec) );
+            lnode_newview( it->first );
+            lnode_newview( it->second );
             
+            tasks.push_back( new ali_task(*it, qs_pvec) );
             futures.push_back( boost::shared_future<int>(tasks.back()->m_prom.get_future()) );
         }
         
@@ -855,9 +1022,12 @@ public:
             m_num_newview = 0;
             m_queue.swap(tasks);
         }
-        
+        perf_timer.add_int();
+
         ivy_mike::timer thread_timer;
         m_q_cond.notify_all();
+        
+        
         
         assert( futures.size() == ec.m_edges.size() );
         for( size_t i = 0; i < ec.m_edges.size(); ++i ) {
@@ -880,13 +1050,13 @@ public:
         
         {
             //             cout << "ticks: " << eticks1 << " " << eticks2 << " " << eticks3 << "\n";
-            double dt = thread_timer.elapsed();
+//             double dt = thread_timer.elapsed();
             size_t sum_ncup = std::accumulate( m_thread_ncup.begin(), m_thread_ncup.end(), uint64_t(0) );
             std::fill( m_thread_ncup.begin(), m_thread_ncup.end(), 0 );
 //             cout << sum_ncup << " in " << dt << "s : " << sum_ncup / (dt * 1e9) << " GNCUP/s\n";
         
             m_sum_ncup += sum_ncup;
-            std::cout << "newview: " << m_num_newview << " " << ec.m_edges.size() << " " << m_num_newview / double(ec.m_edges.size()) << "\n";
+     //       std::cout << "newview: " << m_num_newview << " " << ec.m_edges.size() << " " << m_num_newview / double(ec.m_edges.size()) << "\n";
         }
         
         //
@@ -898,8 +1068,10 @@ public:
             
             pvec_t root_pvec;
             
-            do_newview( root_pvec, best_edge.first, best_edge.second, true );
+            //do_newview( root_pvec, best_edge.first, best_edge.second, true );
         
+            do_newview_from_ldata( root_pvec, best_edge.first, best_edge.second );
+            
             root_pvec.to_int_vec(seq_tmp);
             root_pvec.to_aux_vec(aux_tmp);
             
@@ -925,6 +1097,13 @@ public:
             }
         }
         perf_timer.add_int();
+        
+        
+            
+            
+//             throw std::runtime_error( "xxx.\n" );
+        
+        
         //
         // apply traceback to reference sequences
         //
@@ -1193,6 +1372,7 @@ int main( int argc, char **argv ) {
         last_tree = sa.get_tree();
         cout << "time: " << t1.elapsed() << "\n";
     }
+    
     
     std::vector<split_set_t> split_history;
     

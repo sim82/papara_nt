@@ -156,6 +156,24 @@ void visit_lnode( typename visitor::lnode *n, visitor &v, bool go_back = true ) 
     }
 };
 
+template <class visitor>
+void visit_lnode_postorder( typename visitor::lnode *n, visitor &v, bool go_back = true ) {
+
+    if( go_back && n->back != 0 ) {
+        visit_lnode( n->back, v, false );
+    }
+    if( n->next->back != 0 ) {
+        visit_lnode( n->next->back, v, false );   
+    }
+
+    if( n->next->next->back != 0 ) {
+        visit_lnode( n->next->next->back, v, false );
+    }
+    
+    v( n );
+    
+};
+
 template <class LNODE, class CONT = std::vector<sptr::shared_ptr<LNODE> > >
 struct tip_collector {
     typedef LNODE lnode;

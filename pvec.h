@@ -38,10 +38,19 @@ public:
         std::transform( seq.begin(), seq.end(), auxv.begin(), dna_parsimony_mapping::d2aux );
     }
 
+    inline const std::vector<parsimony_state> &get_v() {
+        return v;
+    }
+    inline const std::vector<int> &get_auxv() {
+        return auxv;
+    }
+
     static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, tip_case tc ) {
+//         std::cout << "size2: " << c1.size() << " " << c2.size() << "\n";
         assert( c1.v.size() == c2.v.size() );
 
         if( c1.v.size() != c2.v.size() ) {
+            std::cerr << "not equal: " << c1.size() << " " << c2.size() << "\n";
             throw std::runtime_error( "newview: vectors have different lengths (illegal incremetal newview on modified data?)" );
         }
         
@@ -155,6 +164,15 @@ public:
 
 
     }
+    
+    bool operator==( const pvec_cgap &other ) const {
+        return v == other.v && auxv == other.auxv;
+    }
+    
+    bool operator!=( const pvec_cgap &other ) const {
+        return !(*this == other);
+    }
+    
 };
 
 using namespace boost::numeric;
