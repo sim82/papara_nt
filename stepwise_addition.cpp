@@ -15,8 +15,8 @@
 #include <functional>
 #include <iomanip>
 #include <numeric>
+#include <deque>
 
-#ifndef WIN32
 
 #include <boost/dynamic_bitset.hpp>
 #include <boost/thread.hpp>
@@ -25,6 +25,7 @@
 
 #include <boost/array.hpp>
 
+#ifndef WIN32
 // there is some strange linker error on widows. can't be bothered now... visual c++ will probably do better whole program optimization than gcc anyway...
 #define PWDIST_INLINE
 #endif
@@ -562,7 +563,7 @@ public:
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
-    m_num_threads(4),//boost::thread::hardware_concurrency()),
+    m_num_threads(boost::thread::hardware_concurrency()),
     m_sum_ncup(0),
     m_pvec_gen(0),
     m_queue_exit(false),
@@ -1134,12 +1135,12 @@ public:
         }
         
         size_t max_name_len = 0;
-        for( vector< tr1::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
             max_name_len = max(max_name_len, (*it)->m_data->tipName.size());
         }
         size_t seq_len = tc.m_nodes.front()->m_data->get_as<my_adata>()->get_raw_seq().size();
         os << tc.m_nodes.size() << " " << seq_len << "\n";
-        for( vector< tr1::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
             my_adata *adata = (*it)->m_data->get_as<my_adata>();
 
             
@@ -1161,7 +1162,7 @@ public:
         
         visit_lnode(m_tree_root, tc );
         
-        for( vector< tr1::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
             my_adata *adata = (*it)->m_data->get_as<my_adata>();
             
             assert( msa.find( adata->tipName ) == msa.end() );
