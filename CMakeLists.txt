@@ -30,6 +30,8 @@ add_executable(inherit_test inherit_test.cpp )
 add_executable(testbench testbench.cpp pars_align_seq.cpp )
 # add_executable(atlas_test atlas.cpp )
 add_executable(tree_similarity tree_similarity.cpp call_main2.cpp)
+add_executable(test_bitset test_bitset.cpp)
+
 
 target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
 #target_link_libraries(stepwise_addition ivymike)
@@ -41,3 +43,4 @@ target_link_libraries(tbb_test ublas_jama ivymike )
 target_link_libraries(dtw ivymike)
 target_link_libraries(inherit_test ivymike)
 target_link_libraries(tree_similarity ivymike)
+target_link_libraries(test_bitset ivymike)
