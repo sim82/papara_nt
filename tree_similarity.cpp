@@ -53,8 +53,10 @@ public:
 class bitset_hash {
 public:
     inline size_t operator()( const boost::dynamic_bitset<> &bs ) const {
-        //BOOST_STATIC_ASSERT( sizeof( size_t ) == sizeof( dynamic_bitset<>::block_type ) );
-        
+        #ifndef WIN32
+	// TODO: find out why the asser fails under 64bit win32
+	BOOST_STATIC_ASSERT( sizeof( size_t ) == sizeof( dynamic_bitset<>::block_type ) );
+        #endif
         dynamic_bitset<>::block_type hash = 0;
         
         to_block_range( bs, bitset_hash_iterator<dynamic_bitset<>::block_type>(hash));
