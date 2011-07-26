@@ -42,6 +42,7 @@
 #include "pars_align_seq.h"
 #include "tree_similarity.h"
 #include <ivymike/time.h>
+#include <boost/tr1/unordered_set.hpp>
 
 using namespace std;
 using namespace ivy_mike::tree_parser_ms;
@@ -305,7 +306,260 @@ class step_add {
         }
         
     }
+    
+    
+    
+    std::tr1::unordered_set<lnode *> done;
+    
+    boost::mutex m_ln_mutex;
+    boost::condition_variable m_ln_cond;
+    boost::condition_variable m_ln_cond_done;
+    volatile bool m_ln_exit;
+    std::vector<lnode *> m_ln_stack;
+    std::tr1::unordered_set<lnode *> m_ln_inuse;
+    
+    volatile lnode *m_ln_root;
+    
+    void lnode_newview_worker( size_t rank ) {
+        while( !m_ln_exit ) {
+            lnode *n = 0;
+            my_adata *ad = 0;
+            my_ldata *ld = 0;
+            {
+                boost::unique_lock<boost::mutex> lock( m_ln_mutex );
+                while( m_ln_stack.empty() && !m_ln_exit ) {
+                    m_ln_cond.wait(lock);
+                }
+                if( m_ln_exit ) {
+                    break;
+                }
+                
+                assert( !m_ln_stack.empty() );
+                
+                n = m_ln_stack.back();
+                
+                size_t ct = std::count( m_ln_stack.begin(), m_ln_stack.end(), n );
+//                 std::cout << "ct: " << ct << " " << m_ln_stack.size() << "\n";
+                
+                m_ln_stack.pop_back();
+
+                
+                
+                assert( std::find( m_ln_stack.begin(), m_ln_stack.end(), n ) == m_ln_stack.end() );
+                
+                
+                
+                
+                if( done.find( n ) != done.end() ) {
+                    if( n == m_ln_root ) {
+                        m_ln_root = 0;
+                        m_ln_cond_done.notify_all();
+                    }
+                    continue;
+                }
+//                 std::cout << "worker: " << rank <<  *(n->m_data) << "\n";
+                
+                ad = dynamic_cast<my_adata *>( n->m_data.get());
+                ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
+                
+                if( ad->isTip ) {
+                    ld->get_pvec() = ad->get_pvec();
+                    done.insert( n );
+                    if( n == m_ln_root ) {
+                        m_ln_root = 0;
+                        m_ln_cond_done.notify_all();
+                    }
+                    continue;
+                } else {
+                    lnode *c1 = n->next->back;
+                    lnode *c2 = n->next->next->back;
+            
+                
+                    bool hc1 = done.find( c1 ) != done.end();
+                    bool hc2 = done.find( c2 ) != done.end();
+            
+                    if( !(hc1 && hc2) ) {
+                        m_ln_stack.push_back(n);
+                        
+                        if( !hc1 ) {
+                            if( m_ln_inuse.find(c1) == m_ln_inuse.end() ) {
+                                m_ln_stack.push_back(c1);
+                            }
+                        }
+                        if( !hc2 ) {
+                            if( m_ln_inuse.find(c2) == m_ln_inuse.end() ) {
+                                m_ln_stack.push_back(c2);
+                            }
+                        }   
+                        lock.unlock();
+                        m_ln_cond.notify_all();
+                        
+                        continue;
+                    }
+                }
+                m_ln_inuse.insert( n );
+//                 std::cout << "here: " << rank << "\n";
+            }
+            
+            assert( n != 0 );
+            assert( ad != 0 );
+            assert( ld != 0 );
+            lnode *c1 = n->next->back;
+            lnode *c2 = n->next->next->back;
+            
+            tip_case tc;
+            if( c1->m_data->isTip && c2->m_data->isTip ) {
+                tc = TIP_TIP;
+            } else if( c1->m_data->isTip && !c2->m_data->isTip ) {
+                tc = TIP_INNER;
+            } else if( !c1->m_data->isTip && c2->m_data->isTip ) {
+                tc = TIP_INNER;
+                std::swap( c1, c2 );
+            } else {
+                tc = INNER_INNER;
+            }
+            
+            my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
+            my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
+            
+            pvec_t &pvc1 = ldc1->get_pvec();
+            pvec_t &pvc2 = ldc2->get_pvec();
+            
+            //   std::cout << "size: " << pvc1.size() << " " << pvc2.size() << "\n";
+//             std::cout << "newview: " << ld << "\n";
+            pvec_t::newview( ld->get_pvec(), pvc1, pvc2, n->next->backLen, n->next->next->backLen, tc);
+            
+            {
+                boost::lock_guard<boost::mutex> lock( m_ln_mutex );
+                done.insert( n );
+                m_ln_inuse.erase( n );
+                
+                if( n == m_ln_root ) {
+                    m_ln_root = 0;
+                    m_ln_cond_done.notify_all();
+                }
+            }
+            m_ln_cond.notify_one();
+            
+        }
+        
+    }
+    
+    
+    void lnode_newview_iter( lnode *n_ ) {
+//         std::cout << "lnv_iter\n";
+        
+        
+        {
+            boost::unique_lock<boost::mutex> lock( m_ln_mutex );
+            m_ln_root = n_;
+            m_ln_stack.push_back(n_);
+            
+        
+            m_ln_cond.notify_all();
+        
+            while( m_ln_root != 0 ) {
+                m_ln_cond_done.wait(lock);
+            }
+            
+            
+        }
+        
+        
+        
+//         std::cout << "finished\n";
+        return;
+        
+        std::vector<lnode *> stack;
+        
+        
+//         std::tr1::unordered_set<int> done;
+       
+        
+        stack.push_back( n_ );
+      
+        while( !stack.empty() ) {
+            lnode *n = stack.back();
+            stack.pop_back();
+            
+            
+            
+            
+            
+            my_adata *ad = dynamic_cast<my_adata *>( n->m_data.get());
+            my_ldata *ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
+            
+            if( done.find( n ) != done.end() ) {
+                continue;
+            }
+//             std::cout << "node: " << ad->m_serial << "\n";
+            
+            if( ad->isTip ) {
+                ld->get_pvec() = ad->get_pvec();
+                done.insert( n );
+                
+            } else {
+                lnode *c1 = n->next->back;
+                lnode *c2 = n->next->next->back;
+                
+                int cs1 = c1->m_data->m_serial;
+                int cs2 = c2->m_data->m_serial;
+                bool hc1 = done.find( c1 ) != done.end();
+                bool hc2 = done.find( c1 ) != done.end();
+                
+                if( !(hc1 && hc2) ) {
+                    stack.push_back(n);
+                    
+                    if( !hc1 ) {
+                        stack.push_back(c1);
+                    }
+                    if( !hc2 ) {
+                        stack.push_back(c2);
+                    }
+                } else {
+                
+                    tip_case tc;
+                    if( c1->m_data->isTip && c2->m_data->isTip ) {
+                        tc = TIP_TIP;
+                    } else if( c1->m_data->isTip && !c2->m_data->isTip ) {
+                        tc = TIP_INNER;
+                    } else if( !c1->m_data->isTip && c2->m_data->isTip ) {
+                        tc = TIP_INNER;
+                        std::swap( c1, c2 );
+                    } else {
+                        tc = INNER_INNER;
+                    }
+                    
+                    my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
+                    my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
+                    
+                    pvec_t &pvc1 = ldc1->get_pvec();
+                    pvec_t &pvc2 = ldc2->get_pvec();
+                    
+                    //   std::cout << "size: " << pvc1.size() << " " << pvc2.size() << "\n";
+                    
+                    pvec_t::newview( ld->get_pvec(), pvc1, pvc2, n->next->backLen, n->next->next->backLen, tc);
+                    done.insert( n );
+//                     std::cout << "nv: " << ad->m_serial << "\n";
+                    
+                }
+                
+                
+                
+            }
+        }
+//         std::cout << "done\n";
+
+
+    }
+    
+    
     void lnode_newview( lnode *n ) {
+        if( !false ) {
+            lnode_newview_iter( n );
+            return;
+        }
+        
         my_adata *ad = dynamic_cast<my_adata *>( n->m_data.get());
         my_ldata *ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
         
@@ -557,6 +811,11 @@ class step_add {
     
     std::vector<uint64_t> m_thread_ncup;
     ivy_mike::perf_timer m_insert_timer;
+    
+    
+    boost::thread_group m_ln_thread_group;
+    
+    ivy_mike::timer m_temp_timer;
 public:
     step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool ) 
     : m_ln_pool( ln_pool ),
@@ -588,6 +847,8 @@ public:
             int rank = int(i);
             m_thread_group.create_thread( boost::bind( &step_add::ali_work_vec_nt, this, rank ) );
             m_thread_ncup.push_back(0);
+            
+            m_ln_thread_group.create_thread( boost::bind( &step_add::lnode_newview_worker, this, rank ) );
         }
         
         if( !true ) {
@@ -715,7 +976,7 @@ public:
         ivy_mike::tdmatrix<int> out_scores(m_qs_names.size(), m_qs_names.size());
         
         
-        if( false ) {
+        if( !false ) {
             ifstream is( "out_scores.bin" );
             
             is.seekg(0, ios_base::end);
@@ -914,6 +1175,8 @@ public:
         results.reserve(ec.m_edges.size());
         
         m_pvec_gen++;
+//         std::cout << "clear\n";
+        done.clear();
         size_t circ_ptr = 0;
         for( vector< pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > >::iterator it = ec.m_edges.begin(); it != ec.m_edges.end(); ++it ) {
             lnode_newview( it->first );
@@ -1113,6 +1376,11 @@ public:
         perf_timer.print();
         
         m_insert_timer += perf_timer;
+
+        if( m_temp_timer.elapsed() > 10 ) {
+            m_insert_timer.print();
+            m_temp_timer = ivy_mike::timer();
+        }
         
         
 //         std::cout << "ticks: " << eticks2 - eticks1 << " " << eticks3 - eticks2 << " " << eticks4 - eticks3 << "\n";
