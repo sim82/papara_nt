@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 project(papara_nt)
+set( VERBOSE 0 )
 add_subdirectory(ivy_mike)
 add_subdirectory(ublasJama-1.0.2.3)
 
