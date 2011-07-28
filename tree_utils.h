@@ -7,8 +7,9 @@
 #include <set>
 #include <cassert>
 #include <stdint.h>
-
+#include <boost/tr1/unordered_set.hpp>
 #include "ivymike/smart_ptr.h"
+#include "ivymike/tree_parser.h"
 
 enum tip_case {
     TIP_TIP,
@@ -248,6 +249,96 @@ public:
 };
 
 
+class node_level_assignment {
+	typedef ivy_mike::tree_parser_ms::lnode lnode;
+
+    std::vector<std::pair<int,lnode *> > m_level_mapping;
+
+    std::tr1::unordered_set<lnode *>m_mix;
+    std::tr1::unordered_set<lnode *>m_closed;
+
+
+
+
+    size_t round( int level ) {
+
+//        std::cerr << "round " << level << " " << m_mix.size() << "\n";
+
+        std::tr1::unordered_set<lnode *> cand;
+
+        std::vector<lnode *>rm;
+
+
+        for( std::tr1::unordered_set<lnode *>::iterator it = m_mix.begin(); it != m_mix.end(); ++it ) {
+        	lnode *n = *it;
+//        	std::cout << "mix: " << level << " " << n << " " << n->next << "\n";
+
+        	assert( !n->m_data->isTip );
+
+        	if( m_mix.find(n->next) != m_mix.end() ) {
+//        		std::cout << "level: " << level << " " << *(n->next->next->m_data) << "\n";
+
+//        		m_level_mapping.push_back( std::pair<int,lnode*>(level, n->next->next ));
+        		rm.push_back( n );
+//        		rm.push_back( n->next );
+//        		if( m_closed.find( n->next->next->back ) == m_closed.end() ) {
+//        			m_mix.insert( n->next->next->back );
+//        		}
+        	}
+
+        }
+
+        for( std::vector<lnode *>::iterator it = rm.begin(); it != rm.end(); ++it ) {
+        	lnode *n = *it;
+        	m_level_mapping.push_back( std::pair<int,lnode*>(level, n->next->next ));
+        	m_closed.insert(n->next->next);
+
+        	m_mix.erase( *it );
+        	m_mix.erase( (*it)->next );
+        }
+        for( std::vector<lnode *>::iterator it = rm.begin(); it != rm.end(); ++it ) {
+        	lnode *n = *it;
+        	if( m_closed.find( n->next->next->back ) == m_closed.end() ) {
+        		m_mix.insert( n->next->next->back );
+        	}
+        }
+
+    	return m_mix.size();
+    }
+
+public:
+    node_level_assignment( std::vector<lnode *> tips ) {
+
+        for( std::vector<lnode *>::iterator it = tips.begin(); it != tips.end(); ++it ) {
+            m_level_mapping.push_back( std::pair<int,lnode*>( 0, *it ) );
+//            m_closed.insert( *it );
+
+            m_closed.insert(*it);
+            assert( (*it)->back != 0 );
+
+            if( !(*it)->back->m_data->isTip ) {
+            	m_mix.insert( (*it)->back );
+            }
+
+        }
+
+        int level = 1;
+
+        while( round( level++ ) != 0 ) {}
+
+
+//        for( std::vector<std::pair<int,lnode *> >::iterator it = m_level_mapping.begin(); it != m_level_mapping.end(); ++it ) {
+//        	std::cout << "level: " << it->first << " " << *(it->second->m_data) << "\n";
+//        }
+
+//        std::cout << "end\n";
+    }
+
+    std::vector<std::pair<int,lnode *> > &get_level_mapping() {
+    	return m_level_mapping;
+
+    }
+};
 
 
 

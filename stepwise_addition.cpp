@@ -41,67 +41,16 @@
 #include "ivymike/tree_parser.h"
 #include "pars_align_seq.h"
 #include "tree_similarity.h"
-#include <ivymike/time.h>
+#include "ivymike/time.h"
+#include "ivymike/getopt.h"
 #include <boost/tr1/unordered_set.hpp>
+#include "ivymike/concurrent.h"
 
 using namespace std;
 using namespace ivy_mike::tree_parser_ms;
 
 
 
-template<int PAD>
-class lockfree_spin_barrier {
-public:
-	int m_num;
-	volatile char *m_flags;
-
-	void clear() {
-		for (int i = 0; i < m_num; i++) {
-			m_flags[i * PAD] = 0;
-		}
-	}
-
-	lockfree_spin_barrier(int num) :
-			m_num(num), m_flags(0) {
-		alloc();
-
-	}
-
-	void alloc() {
-#if 0
-		m_flags = ((char *)memalign(64, num * PAD + 60)) + 60;
-		//m_flags = ((char *)memalign(64, num * PAD + 40)) + 40;
-#else
-
-		//m_flags = (volatile char *)memalign(64, m_num * PAD );
-		m_flags = (volatile char *) malloc(m_num * PAD);
-#endif
-		clear();
-	}
-
-	inline void wait(const int slot) {
-
-		if (slot == 0) {
-
-			int sum = 0;
-			do {
-				sum = 0;
-
-				for (int i = 0; i < m_num * PAD; i += PAD) {
-					sum += m_flags[i];
-				}
-// 	    printf( "sum: %d %d\n", slot, sum );
-			} while (sum != m_num - 1);
-			clear();
-		} else {
-			m_flags[slot * PAD] = 1;
-		}
-	}
-
-	const char *id() {
-		return "lockfree_spin_barrier";
-	}
-};
 
 
 template<class pvec_t>
@@ -318,96 +267,6 @@ typedef my_ldata_gen<pvec_t> my_ldata;
 
 typedef my_fact_gen<my_adata, my_ldata> my_fact;
 
-struct node_levels {
-
-
-    std::vector<std::pair<int,lnode *> > m_level_mapping;
-
-    std::vector<lnode *> m_new_open;
-    std::tr1::unordered_set<lnode *>m_open;
-
-    std::tr1::unordered_set<lnode *>m_mix;
-    std::tr1::unordered_set<lnode *>m_closed;
-
-
-
-
-    size_t round( int level ) {
-
-//        std::cerr << "round " << level << " " << m_mix.size() << "\n";
-
-        std::tr1::unordered_set<lnode *> cand;
-
-        std::vector<lnode *>rm;
-
-
-        for( std::tr1::unordered_set<lnode *>::iterator it = m_mix.begin(); it != m_mix.end(); ++it ) {
-        	lnode *n = *it;
-//        	std::cout << "mix: " << level << " " << n << " " << n->next << "\n";
-
-        	assert( !n->m_data->isTip );
-
-        	if( m_mix.find(n->next) != m_mix.end() ) {
-//        		std::cout << "level: " << level << " " << *(n->next->next->m_data) << "\n";
-
-//        		m_level_mapping.push_back( std::pair<int,lnode*>(level, n->next->next ));
-        		rm.push_back( n );
-//        		rm.push_back( n->next );
-//        		if( m_closed.find( n->next->next->back ) == m_closed.end() ) {
-//        			m_mix.insert( n->next->next->back );
-//        		}
-        	}
-
-        }
-
-        for( std::vector<lnode *>::iterator it = rm.begin(); it != rm.end(); ++it ) {
-        	lnode *n = *it;
-        	m_level_mapping.push_back( std::pair<int,lnode*>(level, n->next->next ));
-        	m_closed.insert(n->next->next);
-
-        	m_mix.erase( *it );
-        	m_mix.erase( (*it)->next );
-        }
-        for( std::vector<lnode *>::iterator it = rm.begin(); it != rm.end(); ++it ) {
-        	lnode *n = *it;
-        	if( m_closed.find( n->next->next->back ) == m_closed.end() ) {
-        		m_mix.insert( n->next->next->back );
-        	}
-        }
-
-    	return m_mix.size();
-    }
-
-public:
-    node_levels( std::vector<lnode *> tips ) {
-        m_new_open = tips;
-        m_open.insert(tips.begin(), tips.end());
-
-        for( std::vector<lnode *>::iterator it = tips.begin(); it != tips.end(); ++it ) {
-            m_level_mapping.push_back( std::pair<int,lnode*>( 0, *it ) );
-//            m_closed.insert( *it );
-
-            m_closed.insert(*it);
-            assert( (*it)->back != 0 );
-
-            if( !(*it)->back->m_data->isTip ) {
-            	m_mix.insert( (*it)->back );
-            }
-
-        }
-
-        int level = 1;
-
-        while( round( level++ ) != 0 ) {}
-
-
-//        for( std::vector<std::pair<int,lnode *> >::iterator it = m_level_mapping.begin(); it != m_level_mapping.end(); ++it ) {
-//        	std::cout << "level: " << it->first << " " << *(it->second->m_data) << "\n";
-//        }
-
-//        std::cout << "end\n";
-    }
-};
 
 
 struct tip_collector_xp {
@@ -431,6 +290,244 @@ public:
     }
 };
 
+
+
+class lnode_newview_background {
+
+    std::vector<lnode *>m_nv_range;
+    boost::barrier m_nv_bar1;
+    boost::barrier m_nv_bar2;
+
+    ivy_mike::lockfree_spin_barrier<1> m_nv_bar2x;
+    volatile size_t m_nv_signal;
+    volatile bool m_nv_exit_inner;
+    volatile bool m_nv_exit_outer;
+    boost::thread_group m_nv_tg;
+    volatile int m_generation;
+
+    static void newview_one_level( lnode *n, int generation ) {
+
+		my_adata *ad = dynamic_cast<my_adata *>( n->m_data.get());
+		my_ldata *ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
+
+		//my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
+
+		assert( ld->get_generation() != generation );
+		if( ld->get_generation() < generation ) {
+
+			if( ad->isTip ) {
+				ld->get_pvec() = ad->get_pvec();
+			} else {
+				lnode *c1 = n->next->back;
+				lnode *c2 = n->next->next->back;
+
+
+
+
+
+
+				tip_case tc;
+				if( c1->m_data->isTip && c2->m_data->isTip ) {
+					tc = TIP_TIP;
+				} else if( c1->m_data->isTip && !c2->m_data->isTip ) {
+					tc = TIP_INNER;
+				} else if( !c1->m_data->isTip && c2->m_data->isTip ) {
+					tc = TIP_INNER;
+					std::swap( c1, c2 );
+				} else {
+					tc = INNER_INNER;
+				}
+
+				my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
+				my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
+
+				assert( ldc1->get_generation() == generation );
+				assert( ldc2->get_generation() == generation );
+
+				pvec_t &pvc1 = ldc1->get_pvec();
+				pvec_t &pvc2 = ldc2->get_pvec();
+
+			 //   std::cout << "size: " << pvc1.size() << " " << pvc2.size() << "\n";
+
+				pvec_t::newview( ld->get_pvec(), pvc1, pvc2, n->next->backLen, n->next->next->backLen, tc);
+			}
+
+			ld->set_generation(generation);
+			//pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
+
+
+
+//             if( n->towards_root ) {
+//                 if (ad->get_pvec() != ld->get_pvec()) {
+//                     throw std::runtime_error( "ad != ld pvec\n" );
+//                 }
+//
+//                // std::cout << ad->get_pvec().size() << " " << ld->get_pvec().size() << " " <<  << "\n";
+//             }
+
+		}
+	}
+
+    static void newview_worker( lnode_newview_background *sa, size_t rank, size_t num ) {
+
+
+    	while( true ) {
+    		size_t done = 0;
+
+//    		size_t old_signal = sa->m_nv_signal;
+    		bool old_signal = true;
+
+    		sa->m_nv_bar1.wait();
+
+
+
+    		if( sa->m_nv_exit_outer ) {
+    			break;
+    		}
+
+    		while( true ) {
+//    			std::cerr << rank << " " << std::endl;
+    			while( sa->m_nv_signal != old_signal ) {}
+    			//old_signal = sa->m_nv_signal;
+    			old_signal = !old_signal;
+
+    			if( sa->m_nv_exit_inner ) {
+    				//sa->m_nv_bar2x.wait(rank + 1);
+    				break;
+    			}
+
+    			size_t rs = sa->m_nv_range.size();
+
+				for( size_t i = rank; i < rs; i+=num ) {
+					//std::cerr << "nv: " << rank << " " << i << " " << sa->m_nv_range[i] << " " << old_signal << "\n";
+//		    		std::cerr << rs << " " << std::endl;
+//					std::cerr << old_signal << " " << std::endl;
+					sa->newview_one_level(sa->m_nv_range[i], sa->m_generation);
+
+
+					done++;
+				}
+
+
+				sa->m_nv_bar2x.wait(rank + 1);
+    		}
+//    		std::cerr << rank << " " << std::endl;
+
+//    		std::cout << "wdone: " << rank << " " << done << "\n";
+//    		sa->m_nv_bar2.wait();
+
+    	}
+
+    	std::cout << "nv worker exit\n";
+
+    }
+
+public:
+    lnode_newview_background( int n_threads ) :
+    	m_nv_bar1( n_threads + 1 ),
+    	m_nv_bar2( n_threads + 1 ),
+
+    	m_nv_bar2x( n_threads + 1 ),
+    	m_nv_signal(false),
+    	m_nv_exit_outer( false )
+
+    {
+
+    	for( size_t i = 0; i < n_threads; i++ ) {
+			int rank = int(i);
+
+			m_nv_tg.create_thread( boost::bind( &lnode_newview_background::newview_worker, this, rank, n_threads ) );
+
+		}
+
+    }
+
+    ~lnode_newview_background() {
+        m_nv_exit_outer = true;
+		m_nv_bar1.wait();
+		m_nv_tg.join_all();
+
+    }
+
+    void newview_complete( lnode *n, int generation, ivy_mike::perf_timer &pt ) {
+    	m_generation = generation;
+
+    	tip_collector_dumb<lnode> tc;
+    	visit_lnode( n, tc );
+
+    	node_level_assignment nl( tc.m_nodes );
+    	std::vector<std::pair<int,lnode *> > &level_mapping = nl.get_level_mapping();
+    	while( level_mapping.size() >= 2 )
+    	{
+    		std::vector<std::pair<int,lnode *> >::reverse_iterator rit = level_mapping.rbegin();
+    		if( rit->second->m_data == (rit+1)->second->m_data ) {
+				level_mapping.pop_back();
+			}else{
+				break;
+			}
+		}
+
+		pt.add_int();
+		m_nv_exit_inner = false;
+		assert( m_nv_range.empty() );
+		m_nv_bar1.wait();
+
+		int level = 0;
+		{
+			std::vector<std::pair<int,lnode*> >::iterator it = level_mapping.begin();
+			while(it != level_mapping.end()){
+				m_nv_range.clear();
+				while(it != level_mapping.end()){
+					if(it->first != level){
+						break;
+					}
+					m_nv_range.push_back(it->second);
+					++it;
+				}
+
+				++level;
+				if(!m_nv_range.empty()){
+					m_nv_signal = !m_nv_signal;
+					m_nv_bar2x.wait(0);
+				}
+			}
+
+			assert( level > 0 );
+		}
+		{
+			std::vector<std::pair<int,lnode*> >::reverse_iterator rit = level_mapping.rbegin();
+			while(rit != level_mapping.rend()){
+				m_nv_range.clear();
+				while(rit != level_mapping.rend()){
+					if(rit->first != level){
+						break;
+					}
+					if(!rit->second->m_data->isTip){
+						m_nv_range.push_back(rit->second->next);
+						m_nv_range.push_back(rit->second->next->next);
+					}
+					++rit;
+				}
+
+				--level;
+				if(!m_nv_range.empty()){
+					m_nv_signal = !m_nv_signal;
+					m_nv_bar2x.wait(0);
+				}
+			}
+
+			assert( level == -1 );
+		}
+		m_nv_range.clear();
+		m_nv_exit_inner = true;
+		m_nv_signal = !m_nv_signal;
+
+    }
+
+
+
+
+};
 
 class step_add {
     //auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
@@ -460,7 +557,7 @@ class step_add {
 
     std::ofstream m_inc_ali;
 
-    const size_t m_num_threads;
+
 
     size_t m_sum_ncup;
     int m_pvec_gen;
@@ -543,8 +640,9 @@ class step_add {
                 lnode *c1 = n->next->back;
                 lnode *c2 = n->next->next->back;
 
-                int cs1 = c1->m_data->m_serial;
-                int cs2 = c2->m_data->m_serial;
+
+
+//                int cs2 = c2->m_data->m_serial;
                 bool hc1 = done.find( c1 ) != done.end();
                 bool hc2 = done.find( c1 ) != done.end();
 
@@ -594,172 +692,6 @@ class step_add {
 
     }
 
-    std::vector<lnode *>m_nv_range;
-    boost::barrier m_nv_bar1;
-    boost::barrier m_nv_bar2;
-
-    lockfree_spin_barrier<1> m_nv_bar2x;
-    volatile size_t m_nv_signal;
-    volatile bool m_nv_exit_inner;
-    volatile bool m_nv_exit_outer;
-    boost::thread_group m_nv_tg;
-
-    static void newview_worker( step_add *sa, size_t rank, size_t num ) {
-
-
-    	while( true ) {
-    		size_t done = 0;
-
-//    		size_t old_signal = sa->m_nv_signal;
-    		bool old_signal = true;
-
-    		sa->m_nv_bar1.wait();
-
-
-
-    		if( sa->m_nv_exit_outer ) {
-    			break;
-    		}
-
-    		while( true ) {
-//    			std::cerr << rank << " " << std::endl;
-    			while( sa->m_nv_signal != old_signal ) {}
-    			//old_signal = sa->m_nv_signal;
-    			old_signal = !old_signal;
-
-    			if( sa->m_nv_exit_inner ) {
-    				//sa->m_nv_bar2x.wait(rank + 1);
-    				break;
-    			}
-
-    			size_t rs = sa->m_nv_range.size();
-
-				for( size_t i = rank - 1; i < rs; i+=num ) {
-					//std::cerr << "nv: " << rank << " " << i << " " << sa->m_nv_range[i] << " " << old_signal << "\n";
-//		    		std::cerr << rs << " " << std::endl;
-//					std::cerr << old_signal << " " << std::endl;
-					sa->lnode_newview_one_level(sa->m_nv_range[i]);
-
-
-					done++;
-				}
-
-
-				sa->m_nv_bar2x.wait(rank);
-    		}
-//    		std::cerr << rank << " " << std::endl;
-
-//    		std::cout << "wdone: " << rank << " " << done << "\n";
-//    		sa->m_nv_bar2.wait();
-
-    	}
-
-    	std::cout << "nv worker exit\n";
-
-    }
-
-    void lnode_newview_complete( lnode *n, ivy_mike::perf_timer &pt ) {
-    	tip_collector_dumb<lnode> tc;
-    	visit_lnode( n, tc );
-
-    	node_levels nl( tc.m_nodes );
-
-    	while( nl.m_level_mapping.size() >= 2 )
-    	{
-    		std::vector<std::pair<int,lnode *> >::reverse_iterator rit = nl.m_level_mapping.rbegin();
-    		if( rit->second->m_data == (rit+1) ->second->m_data ) {
-//    			std::cout << "pop dup\n";
-    			nl.m_level_mapping.pop_back();
-    		} else {
-    			break;
-    		}
-
-    	}
-
-    	pt.add_int();
-    	m_nv_exit_inner = false;
-    	assert( m_nv_range.empty() );
-		m_nv_bar1.wait();
-
-
-
-
-    	int level = 0;
-    	{
-
-			std::vector<std::pair<int,lnode *> >::iterator it = nl.m_level_mapping.begin();
-
-			while( it != nl.m_level_mapping.end() ) {
-				m_nv_range.clear();
-				while( it != nl.m_level_mapping.end() ) {
-					if( it->first != level ) {
-						break;
-					}
-//					std::cout << "lnode newview up " << it->second << " " << *(it->second->m_data) << "\n";
-
-//					lnode_newview_one_level( it->second );
-					m_nv_range.push_back(it->second);
-					++it;
-				}
-				++level;
-
-				if( !m_nv_range.empty() ) {
-//					std::cerr << "start " << m_nv_range.size() << "\n";
-//					getchar();
-					m_nv_signal = !m_nv_signal;
-					m_nv_bar2x.wait(0);
-//					std::cout << "done\n";
-				}
-
-			}
-			assert( level > 0 );
-    	}
-//    	std::cout << "levels: " << level << "\n";
-
-    	{
-    		std::vector<std::pair<int,lnode *> >::reverse_iterator rit = nl.m_level_mapping.rbegin();
-			while( rit != nl.m_level_mapping.rend() ) {
-				m_nv_range.clear();
-				while( rit != nl.m_level_mapping.rend() ) {
-					if( rit->first != level ) {
-						break;
-					}
-					if( !rit->second->m_data->isTip ) {
-//						std::cout << "lnode newview down1 " << rit->second->next << " " << *(rit->second->next->m_data) << "\n";
-//						std::cout << "lnode newview down2 " << rit->second->next->next << " " << *(rit->second->next->next->m_data) << "\n";
-						//lnode_newview_one_level( rit->second->next );
-						//lnode_newview_one_level( rit->second->next->next );
-						m_nv_range.push_back( rit->second->next );
-						m_nv_range.push_back( rit->second->next->next );
-
-					}
-					++rit;
-				}
-				--level;
-
-				if( !m_nv_range.empty() ) {
-//					std::cerr << "start2 " << m_nv_range.size() << "\n";
-//					getchar();
-					m_nv_signal = !m_nv_signal;
-					m_nv_bar2x.wait(0);
-//					std::cout << "done2\n";
-				}
-
-			}
-
-			assert( level == -1 );
-    	}
-
-    	m_nv_range.clear();
-    	m_nv_exit_inner = true;
-//    	__sync_synchronize();
-//    	std::cout << "end\n";
-		m_nv_signal = !m_nv_signal;
-
-
-//		m_nv_bar2.wait();
-
-    }
 
     void lnode_newview( lnode *n ) {
 
@@ -820,68 +752,6 @@ class step_add {
         }
     }
 
-    void lnode_newview_one_level( lnode *n ) {
-
-            my_adata *ad = dynamic_cast<my_adata *>( n->m_data.get());
-            my_ldata *ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
-
-            //my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
-
-            assert( ld->get_generation() != m_pvec_gen );
-            if( ld->get_generation() < m_pvec_gen ) {
-
-                if( ad->isTip ) {
-                    ld->get_pvec() = ad->get_pvec();
-                } else {
-                    lnode *c1 = n->next->back;
-                    lnode *c2 = n->next->next->back;
-
-
-
-
-
-
-                    tip_case tc;
-                    if( c1->m_data->isTip && c2->m_data->isTip ) {
-                        tc = TIP_TIP;
-                    } else if( c1->m_data->isTip && !c2->m_data->isTip ) {
-                        tc = TIP_INNER;
-                    } else if( !c1->m_data->isTip && c2->m_data->isTip ) {
-                        tc = TIP_INNER;
-                        std::swap( c1, c2 );
-                    } else {
-                        tc = INNER_INNER;
-                    }
-
-                    my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
-                    my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
-
-                    assert( ldc1->get_generation() == m_pvec_gen );
-                    assert( ldc2->get_generation() == m_pvec_gen );
-
-                    pvec_t &pvc1 = ldc1->get_pvec();
-                    pvec_t &pvc2 = ldc2->get_pvec();
-
-                 //   std::cout << "size: " << pvc1.size() << " " << pvc2.size() << "\n";
-
-                    pvec_t::newview( ld->get_pvec(), pvc1, pvc2, n->next->backLen, n->next->next->backLen, tc);
-                }
-
-                ld->set_generation(m_pvec_gen);
-                //pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
-
-
-
-    //             if( n->towards_root ) {
-    //                 if (ad->get_pvec() != ld->get_pvec()) {
-    //                     throw std::runtime_error( "ad != ld pvec\n" );
-    //                 }
-    //
-    //                // std::cout << ad->get_pvec().size() << " " << ld->get_pvec().size() << " " <<  << "\n";
-    //             }
-
-            }
-        }
 
 
     struct ali_task {
@@ -1062,7 +932,7 @@ class step_add {
     //  the whole shared state is r/w for the sequential part.
     //
     bool m_queue_exit;
-
+    const size_t m_num_ali_threads;
     std::vector<std::vector<ali_task *> > m_par_queue;
     boost::barrier m_bar1;
     boost::barrier m_bar2;
@@ -1083,27 +953,29 @@ class step_add {
     boost::thread_group m_ln_thread_group;
 
     ivy_mike::timer m_temp_timer;
+
+    lnode_newview_background m_lnode_nv_bg;
+    bool m_threaded_newview;
+
 public:
-    step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool )
+    step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool, int num_ali_threads, int num_nv_threads )
     : m_ln_pool( ln_pool ),
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
-    m_num_threads(boost::thread::hardware_concurrency()),
     m_sum_ncup(0),
     m_pvec_gen(0),
-    m_nv_bar1( m_num_threads),
-	m_nv_bar2( m_num_threads),
-
-	m_nv_bar2x( m_num_threads),
-	m_nv_signal(false),
-	m_nv_exit_outer( false ),
     m_queue_exit(false),
-    m_par_queue(m_num_threads),
-    m_bar1(m_num_threads + 1),
-    m_bar2(m_num_threads + 1)
+    m_num_ali_threads( num_ali_threads ),
+    m_par_queue(num_ali_threads),
+    m_bar1(num_ali_threads + 1),
+    m_bar2(num_ali_threads + 1),
+    m_lnode_nv_bg( num_nv_threads )
 
     {
+    	m_threaded_newview = num_nv_threads >= 2;
+
+
         {
             ifstream qsf( m_seq_file_name.c_str() );
 
@@ -1117,14 +989,12 @@ public:
 
 
 
-        for( size_t i = 0; i < m_num_threads; i++ ) {
+        for( size_t i = 0; i < num_ali_threads; i++ ) {
             int rank = int(i);
             m_thread_group.create_thread( boost::bind( &step_add::ali_work_vec_nt, this, rank ) );
             m_thread_ncup.push_back(0);
 
-            if( i > 0 ) {
-            	m_nv_tg.create_thread( boost::bind( &step_add::newview_worker, this, rank, m_num_threads - 1 ) );
-            }
+
         }
 
         if( !true ) {
@@ -1145,9 +1015,7 @@ public:
         m_thread_group.join_all();
 
 
-        m_nv_exit_outer = true;
-        m_nv_bar1.wait();
-        m_nv_tg.join_all();
+
 
         std::cout << "align perf_timer: \n";
         m_align_pt.print();
@@ -1257,7 +1125,7 @@ public:
         ivy_mike::tdmatrix<int> out_scores(m_qs_names.size(), m_qs_names.size());
 
 
-        if( false ) {
+        if( !false ) {
             ifstream is( "out_scores.bin" );
 
             is.seekg(0, ios_base::end);
@@ -1270,7 +1138,7 @@ public:
             }
             is.read((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         } else {
-            pairwise_seq_distance(qs_mapped, out_scores, m_pw_scoring_matrix, -5, -2, m_num_threads, 64);
+            pairwise_seq_distance(qs_mapped, out_scores, m_pw_scoring_matrix, -5, -2, m_num_ali_threads, 64);
             ofstream os( "out_scores.bin" );
             os.write((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         }
@@ -1458,19 +1326,24 @@ public:
         results.reserve(ec.m_edges.size());
 
         m_pvec_gen++;
-        lnode_newview_complete(m_tree_root, perf_timer);
+
+        if( m_threaded_newview ) {
+        	m_lnode_nv_bg.newview_complete(m_tree_root, m_pvec_gen, perf_timer);
+        }
 
 //         std::cout << "clear\n";
         done.clear();
         size_t circ_ptr = 0;
         for( vector< pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > >::iterator it = ec.m_edges.begin(); it != ec.m_edges.end(); ++it ) {
-//            lnode_newview( it->first );
-//            lnode_newview( it->second );
 
+        	if( !m_threaded_newview ) {
+				lnode_newview( it->first );
+				lnode_newview( it->second );
+        	}
             //tasks.push_back( new ali_task(*it, qs_pvec) );
             //futures.push_back( boost::shared_future<int>(tasks.back()->m_prom.get_future()) );
             results.push_back(-1);
-            m_par_queue[circ_ptr % m_num_threads].push_back(new ali_task(*it, qs_pvec, results.back()));
+            m_par_queue[circ_ptr % m_num_ali_threads].push_back(new ali_task(*it, qs_pvec, results.back()));
             circ_ptr++;
 
         }
@@ -1665,6 +1538,7 @@ public:
         if( m_temp_timer.elapsed() > 10 ) {
             m_insert_timer.print();
             m_temp_timer = ivy_mike::timer();
+            std::cout << "size: " << m_leafs.size() << "\n";
         }
 
 
@@ -1782,25 +1656,37 @@ public:
 };
 
 int main( int argc, char **argv ) {
-    //mapped_file qsf( "test_1604/1604.fa" );
+	ivy_mike::getopt::parser igp;
+	std::string opt_seq_file;
 
-    //     string ta = "GATTACAGATTACA";
-    //     string tb = "GATTACAGATTA";
-    //
-    //     vector<uint8_t> a(ta.begin(), ta.end());
-    //     vector<uint8_t> b(tb.begin(), tb.end());
-    //
-    //     scoring_matrix sm(3,0);
-    //
-    //
-    //
-    //
-    //     align_freeshift( sm, a, b, -5, -3);
-    //     return 0;
+	int num_cores = boost::thread::hardware_concurrency();
+
+	int opt_num_ali_threads;
+	int opt_num_nv_threads;
+	igp.add_opt('h', false );
+	igp.add_opt('f', ivy_mike::getopt::value<std::string>(opt_seq_file) );
+	igp.add_opt('j', ivy_mike::getopt::value<int>(opt_num_ali_threads).set_default(num_cores) );
+	igp.add_opt('k', ivy_mike::getopt::value<int>(opt_num_nv_threads).set_default(1) );
+
+	bool ret = igp.parse(argc, argv);
+
+	if( igp.opt_count('h') != 0 || !ret ) {
+		std::cout <<
+		"  -h        print help message\n";
+		return 0;
+
+	}
 
 
-    //     const char *filename = (argc == 2) ? argv[1] : "test_150/150.fa";
-    const char *filename = (argc == 2) ? argv[1] : "test_218/218.fa";
+	if( igp.opt_count('f') != 1 ) {
+		std::cerr << "missing option -f\n";
+#ifndef WIN32 // hack. make it easier to start inside visual studio
+		return 0;
+#endif
+		opt_seq_file = "test_218/218.fa";
+	}
+
+    const char *filename = opt_seq_file.c_str();
 
 
 
@@ -1809,7 +1695,7 @@ int main( int argc, char **argv ) {
 
     lnode *last_tree;
     {
-        step_add sa(filename, pool);
+        step_add sa(filename, pool, opt_num_ali_threads, opt_num_nv_threads);
         pair<size_t,size_t> start_pair = sa.calc_dist_matrix();
 
 //         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
@@ -1842,7 +1728,7 @@ int main( int argc, char **argv ) {
 
     for( int i = 0; i < 100; ++i )
     {
-        step_add sa(filename,pool);
+        step_add sa(filename,pool,opt_num_ali_threads, opt_num_nv_threads);
         pair<size_t,size_t> start_pair = sa.calc_dist_matrix_from_msa(out_msa1);
 
 //         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
