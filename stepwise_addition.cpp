@@ -149,68 +149,6 @@ public:
 
 
 template<class pvec_t>
-size_t do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
-    typedef my_adata_gen<pvec_t> my_adata;
-
-    deque<rooted_bifurcation<lnode> > trav_order;
-
-//     cout << "traversal for branch: " << *(n1->m_data) << " " << *(n2->m_data) << "\n";
-
-    rooted_traveral_order( n1, n2, trav_order, incremental );
-//     cout << "traversal: " << trav_order.size() << "\n";
-
-    for( deque< rooted_bifurcation< ivy_mike::tree_parser_ms::lnode > >::iterator it = trav_order.begin(); it != trav_order.end(); ++it ) {
-//         cout << *it << "\n";
-
-        my_adata *p = dynamic_cast<my_adata *>( it->parent->m_data.get());
-        my_adata *c1 = dynamic_cast<my_adata *>( it->child1->m_data.get());
-        my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
-//         rooted_bifurcation<ivy_mike::tree_parser_ms::lnode>::tip_case tc = it->tc;
-
-//         cout << "tip case: " << (*it) << "\n";
-        pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
-
-    }
-
-
-    {
-        my_adata *c1 = dynamic_cast<my_adata *>( n1->m_data.get());
-        my_adata *c2 = dynamic_cast<my_adata *>( n2->m_data.get());
-
-//         tip_case tc;
-
-        if( c1->isTip && c2->isTip ) {
-//                 cout << "root: TIP TIP\n";
-            pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), n1->backLen, n2->backLen, TIP_TIP );
-        } else if( c1->isTip && !c2->isTip ) {
-//                 cout << "root: TIP INNER\n";
-            pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), n1->backLen, n2->backLen, TIP_INNER );
-//             root_pvec = c2->get_pvec();
-        } else if( !c1->isTip && c2->isTip ) {
-//                 cout << "root: INNER TIP\n";
-            pvec_t::newview(root_pvec, c2->get_pvec(), c1->get_pvec(), n1->backLen, n2->backLen, TIP_INNER );
-//             root_pvec = c1->get_pvec();
-        } else {
-//                 cout << "root: INNER INNER\n";
-            pvec_t::newview(root_pvec, c1->get_pvec(), c2->get_pvec(), n1->backLen, n2->backLen, INNER_INNER );
-        }
-
-
-
-    }
-
-    return trav_order.size();
-
-//     cout << hex;
-//     for( vector< parsimony_state >::const_iterator it = root_pvec.begin(); it != root_pvec.end(); ++it ) {
-//         cout << *it;
-//     }
-//
-//     cout << dec << endl;
-
-}
-
-template<class pvec_t>
 void do_newview_from_ldata( pvec_t &root_pvec, lnode *n1, lnode *n2 ) {
     // assume that the pvecs in the ldata are already valid
 
@@ -294,16 +232,21 @@ public:
 
 class lnode_newview_background {
 
-    std::vector<lnode *>m_nv_range;
-    boost::barrier m_nv_bar1;
-    boost::barrier m_nv_bar2;
 
+    boost::barrier m_nv_bar1;
     ivy_mike::lockfree_spin_barrier<1> m_nv_bar2x;
     volatile size_t m_nv_signal;
+
+
+	std::pair<int,lnode *> * volatile m_range_begin;
+    std::pair<int,lnode *> * volatile m_range_end;
     volatile bool m_nv_exit_inner;
     volatile bool m_nv_exit_outer;
-    boost::thread_group m_nv_tg;
+    volatile bool m_down_pass;
     volatile int m_generation;
+
+    boost::thread_group m_nv_tg;
+
 
     static void newview_one_level( lnode *n, int generation ) {
 
@@ -368,6 +311,7 @@ class lnode_newview_background {
 		}
 	}
 
+
     static void newview_worker( lnode_newview_background *sa, size_t rank, size_t num ) {
 
 
@@ -396,13 +340,23 @@ class lnode_newview_background {
     				break;
     			}
 
-    			size_t rs = sa->m_nv_range.size();
 
-				for( size_t i = rank; i < rs; i+=num ) {
+    			bool down_pass = sa->m_down_pass;
+
+    			std::pair<int,lnode *> *it = sa->m_range_begin + rank;
+    			std::pair<int,lnode *> *it_end = sa->m_range_end;
+
+				for( ; it < it_end; it+=num ) {
 					//std::cerr << "nv: " << rank << " " << i << " " << sa->m_nv_range[i] << " " << old_signal << "\n";
 //		    		std::cerr << rs << " " << std::endl;
 //					std::cerr << old_signal << " " << std::endl;
-					sa->newview_one_level(sa->m_nv_range[i], sa->m_generation);
+
+					if( !down_pass ) {
+						sa->newview_one_level(it->second, sa->m_generation);
+					} else {
+						sa->newview_one_level(it->second->next, sa->m_generation);
+						sa->newview_one_level(it->second->next->next, sa->m_generation);
+					}
 
 
 					done++;
@@ -423,15 +377,15 @@ class lnode_newview_background {
     }
 
 public:
-    lnode_newview_background( int n_threads ) :
+    lnode_newview_background( size_t n_threads ) :
     	m_nv_bar1( n_threads + 1 ),
-    	m_nv_bar2( n_threads + 1 ),
-
     	m_nv_bar2x( n_threads + 1 ),
     	m_nv_signal(false),
     	m_nv_exit_outer( false )
 
     {
+    	assert( n_threads != size_t(-1) );
+
 
     	for( size_t i = 0; i < n_threads; i++ ) {
 			int rank = int(i);
@@ -450,6 +404,20 @@ public:
     }
 
     void newview_complete( lnode *n, int generation, ivy_mike::perf_timer &pt ) {
+    	//
+    	// level-wise multi threaded newview, using the 'up/down sweep' technique.
+    	// needs one sync per level. It still seems fairly inefficient for small trees.
+    	//
+    	// There are two 'operation' modes: idle and busy.
+    	//
+    	// In idle mode, the threads wait (non-busy) on m_bar1.
+    	// After m_bar1 (=the 'main-thread is inside this function) the threads switch to 'low-latency' mode,
+    	// and do a busy wait on m_signal.
+    	// After m_signal is triggered, the main-thread waits on m_bar2x (busy) while the threads
+    	// do their work (m_nv_range) and then signal m_bar2x. When m_signal is triggered while m_exit_inner=true,
+    	// the workers switch back to idle mode.
+    	//
+
     	m_generation = generation;
 
     	tip_collector_dumb<lnode> tc;
@@ -457,36 +425,48 @@ public:
 
     	node_level_assignment nl( tc.m_nodes );
     	std::vector<std::pair<int,lnode *> > &level_mapping = nl.get_level_mapping();
+
+    	//
+    	// if the leaf-count is odd, all three lnodes of the inner-most node are added (this is just how the node-level assignment is implemented...).
+    	// For the level-wise newview only one lnode is needed (the other two are done in the down pass, so the duplicates are removed)
+    	//
     	while( level_mapping.size() >= 2 )
     	{
     		std::vector<std::pair<int,lnode *> >::reverse_iterator rit = level_mapping.rbegin();
     		if( rit->second->m_data == (rit+1)->second->m_data ) {
 				level_mapping.pop_back();
-			}else{
+			} else {
 				break;
 			}
 		}
 
 		pt.add_int();
 		m_nv_exit_inner = false;
-		assert( m_nv_range.empty() );
 		m_nv_bar1.wait();
 
 		int level = 0;
 		{
+			// up pass
+
+			m_down_pass = false;
+
 			std::vector<std::pair<int,lnode*> >::iterator it = level_mapping.begin();
-			while(it != level_mapping.end()){
-				m_nv_range.clear();
+			while(it != level_mapping.end()) {
+
+				// generate list of lnodes in current level
+//				m_nv_range.clear();
+				m_range_begin = &(*it);
+
 				while(it != level_mapping.end()){
 					if(it->first != level){
 						break;
 					}
-					m_nv_range.push_back(it->second);
+					//m_nv_range.push_back(it->second);
 					++it;
 				}
-
+				m_range_end = &(*it);
 				++level;
-				if(!m_nv_range.empty()){
+				if(m_range_begin != m_range_end ){
 					m_nv_signal = !m_nv_signal;
 					m_nv_bar2x.wait(0);
 				}
@@ -495,30 +475,44 @@ public:
 			assert( level > 0 );
 		}
 		{
+			// down pass
+			m_down_pass = true;
+
 			std::vector<std::pair<int,lnode*> >::reverse_iterator rit = level_mapping.rbegin();
 			while(rit != level_mapping.rend()){
-				m_nv_range.clear();
+
+				if( level == 0 ) {
+					break;
+				}
+//				m_nv_range.clear();
+
+				m_range_begin = &(*rit);
 				while(rit != level_mapping.rend()){
 					if(rit->first != level){
 						break;
 					}
-					if(!rit->second->m_data->isTip){
-						m_nv_range.push_back(rit->second->next);
-						m_nv_range.push_back(rit->second->next->next);
-					}
+//					if(!rit->second->m_data->isTip){
+//					m_nv_range.push_back(rit->second);
+//						m_nv_range.push_back(rit->second->next);
+//						m_nv_range.push_back(rit->second->next->next);
+//					}
 					++rit;
 				}
+				m_range_end = &(*rit);
+				m_range_begin++;
+				m_range_end++;
+				std::swap( m_range_begin, m_range_end );
 
 				--level;
-				if(!m_nv_range.empty()){
+				if( m_range_begin != m_range_end ){
 					m_nv_signal = !m_nv_signal;
 					m_nv_bar2x.wait(0);
 				}
 			}
 
-			assert( level == -1 );
+			assert( level == 0 );
 		}
-		m_nv_range.clear();
+//		m_nv_range.clear();
 		m_nv_exit_inner = true;
 		m_nv_signal = !m_nv_signal;
 
@@ -958,7 +952,7 @@ class step_add {
     bool m_threaded_newview;
 
 public:
-    step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool, int num_ali_threads, int num_nv_threads )
+    step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool, size_t num_ali_threads, size_t num_nv_threads )
     : m_ln_pool( ln_pool ),
     m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
@@ -1222,33 +1216,70 @@ public:
         m_tree_root = na;
     }
 
+
+    std::vector<float> m_dist_acc;
+
     size_t find_next_candidate() {
-        size_t f = m_used_seqs.find_first();
+    	if( m_dist_acc.empty() ) {
+    		//
+    		// create initial distance accumulator if it does not exist.
+    		//
+            size_t f = m_used_seqs.find_first();
 
-        vector<float> dist_sum;
+            vector<float> dist_sum;
 
-        while( f != m_used_seqs.npos ) {
-            ivy_mike::odmatrix<float> slice = m_pw_dist[f];
-            if( dist_sum.empty() ) {
-                dist_sum.assign( slice.begin(), slice.end() );
-            } else {
-                ivy_mike::binary_twizzle( dist_sum.begin(), dist_sum.end(), slice.begin(), dist_sum.begin(), plus<float>() );
+            while( f != m_used_seqs.npos ) {
+                ivy_mike::odmatrix<float> slice = m_pw_dist[f];
+                if( dist_sum.empty() ) {
+                    dist_sum.assign( slice.begin(), slice.end() );
+                } else {
+                    ivy_mike::binary_twizzle( dist_sum.begin(), dist_sum.end(), slice.begin(), dist_sum.begin(), plus<float>() );
+                }
+
+                f = m_used_seqs.find_next(f);
             }
+            m_dist_acc.swap( dist_sum );
+    	}
 
-            f = m_used_seqs.find_next(f);
-        }
+    	float min_dist = 1e8;
+		size_t min_element = size_t(-1);
+		for( size_t i = 0; i < m_dist_acc.size(); i++ ) {
+			if( !m_used_seqs[i] && m_dist_acc[i] < min_dist ) {
+				min_dist = m_dist_acc[i];
+				min_element = i;
+			}
+		}
 
-        float min_dist = 1e8;
-        size_t min_element = size_t(-1);
-        for( size_t i = 0; i < dist_sum.size(); i++ ) {
-            if( !m_used_seqs[i] && dist_sum[i] < min_dist ) {
-                min_dist = dist_sum[i];
-                min_element = i;
-            }
-        }
 
-        return min_element;
+		// update accumulator
+		assert( min_element != size_t(-1));
+		ivy_mike::odmatrix<float> slice = m_pw_dist[min_element];
+
+		assert( slice.size() == m_dist_acc.size() );
+		ivy_mike::binary_twizzle( m_dist_acc.begin(), m_dist_acc.end(), slice.begin(), m_dist_acc.begin(), plus<float>() );
+
+		return min_element;
+
     }
+
+//    size_t find_next_candidate2() {
+//        size_t f = m_used_seqs.find_first();
+//
+//        vector<float> dist_sum;
+//
+//        while( f != m_used_seqs.npos ) {
+//            ivy_mike::odmatrix<float> slice = m_pw_dist[f];
+//            if( dist_sum.empty() ) {
+//                dist_sum.assign( slice.begin(), slice.end() );
+//            } else {
+//                ivy_mike::binary_twizzle( dist_sum.begin(), dist_sum.end(), slice.begin(), dist_sum.begin(), plus<float>() );
+//            }
+//
+//            f = m_used_seqs.find_next(f);
+//        }
+//
+//
+//    }
     void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<uint8_t> &raw, std::vector<uint8_t> &out, uint8_t gap_char, bool upper ) {
 
         std::vector<uint8_t>::const_reverse_iterator rit = raw.rbegin();
@@ -1274,7 +1305,10 @@ public:
         std::reverse(out.begin(), out.end());
     }
     bool insertion_step() {
+    	ivy_mike::perf_timer perf_timer(true);
         size_t candidate = find_next_candidate();
+
+        perf_timer.add_int();
 
 //         cout << "candidate: " << candidate << "\n";
 
@@ -1318,7 +1352,7 @@ public:
         const size_t W = 8;
         aligned_buffer<short> out_score(W);
 
-        ivy_mike::perf_timer perf_timer(true);
+
 
 
         deque<ali_task *> tasks;
@@ -1538,7 +1572,8 @@ public:
         if( m_temp_timer.elapsed() > 10 ) {
             m_insert_timer.print();
             m_temp_timer = ivy_mike::timer();
-            std::cout << "size: " << m_leafs.size() << "\n";
+            my_adata *adata = m_leafs.front()->m_data->get_as<my_adata>();
+            std::cout << "size: " << m_leafs.size() << " " << adata->get_raw_seq().size() << std::endl;
         }
 
 
