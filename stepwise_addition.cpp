@@ -46,7 +46,17 @@
 #include <boost/tr1/unordered_set.hpp>
 #include "ivymike/concurrent.h"
 
-using namespace std;
+using std::string;
+using std::vector;
+using std::map;
+using std::pair;
+using std::deque;
+
+using std::ios_base;
+using std::ifstream;
+using std::ofstream;
+
+
 using namespace ivy_mike::tree_parser_ms;
 
 
@@ -100,7 +110,7 @@ public:
 template<typename pvec_t>
 class my_ldata_gen : public ivy_mike::tree_parser_ms::ldata {
     pvec_t m_pvec;
-    int m_generation;
+    volatile int m_generation;
     const int m_serial;
     int m_level;
 public:
@@ -235,7 +245,7 @@ class lnode_newview_background {
 
     boost::barrier m_nv_bar1;
     ivy_mike::lockfree_spin_barrier<1> m_nv_bar2x;
-    volatile size_t m_nv_signal;
+    volatile bool m_nv_signal;
 
 
 	std::pair<int,lnode *> * volatile m_range_begin;
@@ -1119,7 +1129,7 @@ public:
         ivy_mike::tdmatrix<int> out_scores(m_qs_names.size(), m_qs_names.size());
 
 
-        if( !false ) {
+        if( false ) {
             ifstream is( "out_scores.bin" );
 
             is.seekg(0, ios_base::end);
@@ -1128,7 +1138,7 @@ public:
             if( size != out_scores.num_elements() * sizeof(int)) {
             	std::cerr << size << " vs " << out_scores.num_elements() * sizeof(int) << "\n";
 
-                throw runtime_error( "bad external outscores\n" );
+                throw std::runtime_error( "bad external outscores\n" );
             }
             is.read((char*)out_scores.begin(), sizeof(int) * out_scores.num_elements() );
         } else {
@@ -1233,7 +1243,7 @@ public:
                 if( dist_sum.empty() ) {
                     dist_sum.assign( slice.begin(), slice.end() );
                 } else {
-                    ivy_mike::binary_twizzle( dist_sum.begin(), dist_sum.end(), slice.begin(), dist_sum.begin(), plus<float>() );
+                    ivy_mike::binary_twizzle( dist_sum.begin(), dist_sum.end(), slice.begin(), dist_sum.begin(), std::plus<float>() );
                 }
 
                 f = m_used_seqs.find_next(f);
@@ -1250,14 +1260,17 @@ public:
 			}
 		}
 
+		assert( min_element != size_t(-1) || m_used_seqs.count() == m_used_seqs.size() );
 
-		// update accumulator
-		assert( min_element != size_t(-1));
-		ivy_mike::odmatrix<float> slice = m_pw_dist[min_element];
+		if( min_element != size_t(-1) ) {
 
-		assert( slice.size() == m_dist_acc.size() );
-		ivy_mike::binary_twizzle( m_dist_acc.begin(), m_dist_acc.end(), slice.begin(), m_dist_acc.begin(), plus<float>() );
+			// update accumulator
+			assert( min_element != size_t(-1));
+			ivy_mike::odmatrix<float> slice = m_pw_dist[min_element];
 
+			assert( slice.size() == m_dist_acc.size() );
+			ivy_mike::binary_twizzle( m_dist_acc.begin(), m_dist_acc.end(), slice.begin(), m_dist_acc.begin(), std::plus<float>() );
+		}
 		return min_element;
 
     }
@@ -1458,8 +1471,8 @@ public:
             }
 
             if( res2 != best_score ) {
-                cerr << "res2 != best_score: " << res2 << " " << best_score << "\n";
-               throw runtime_error( "alignment error" );
+               std::cerr << "res2 != best_score: " << res2 << " " << best_score << "\n";
+               throw std::runtime_error( "alignment error" );
             }
         }
         perf_timer.add_int();
@@ -1555,7 +1568,7 @@ public:
             for( std::vector< ivy_mike::tree_parser_ms::lnode* >::const_iterator it = m_leafs.begin(); it != m_leafs.end(); ++it ) {
                 my_adata *adata = (*it)->m_data->get_as<my_adata>();
 
-                copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), ostream_iterator<char>(m_inc_ali) );
+                copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), std::ostream_iterator<char>(m_inc_ali) );
 
                 m_inc_ali << "\n";
             }
@@ -1583,7 +1596,7 @@ public:
         return valid;
 
     }
-    void write_phylip( ostream &os ) {
+    void write_phylip( std::ostream &os ) {
         //
         // write sequences in dfs-ordering, so that topologically close sequences cluster in the output phylip file
         //
@@ -1593,12 +1606,12 @@ public:
         visit_lnode(m_tree_root, tc );
 
         if( tc.m_nodes.empty() ) {
-            throw runtime_error( "tip_collector: empty" );
+            throw std::runtime_error( "tip_collector: empty" );
         }
 
         size_t max_name_len = 0;
         for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-            max_name_len = max(max_name_len, (*it)->m_data->tipName.size());
+            max_name_len = std::max(max_name_len, (*it)->m_data->tipName.size());
         }
         size_t seq_len = tc.m_nodes.front()->m_data->get_as<my_adata>()->get_raw_seq().size();
         os << tc.m_nodes.size() << " " << seq_len << "\n";
@@ -1607,13 +1620,13 @@ public:
 
 
 
-            os << setw(max_name_len + 1) << left << setfill( ' ' ) << adata->tipName;
-            copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), ostream_iterator<char>(os) );
+            os << std::setw(max_name_len + 1) << std::left << std::setfill( ' ' ) << adata->tipName;
+            copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), std::ostream_iterator<char>(os) );
 
             os << "\n";
         }
     }
-    void write_newick( ostream &os ) {
+    void write_newick( std::ostream &os ) {
         print_newick( next_non_tip( towards_tree( m_tree_root )), os);
     }
 
@@ -1755,7 +1768,7 @@ int main( int argc, char **argv ) {
 
         sa.move_raw_seq_data_to_map(out_msa1);
         last_tree = sa.get_tree();
-        cout << "time: " << t1.elapsed() << "\n";
+        std::cout << "time: " << t1.elapsed() << "\n";
     }
 
 
