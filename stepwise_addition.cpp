@@ -240,7 +240,7 @@ public:
 
 
 
-class lnode_newview_background {
+class lnode_newview_background_racy {
 
 
     boost::barrier m_nv_bar1;
@@ -294,6 +294,11 @@ class lnode_newview_background {
 				my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
 				my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
 
+
+				if( ldc1->get_generation() != generation ) {
+					std::cerr << ldc1->get_generation() << " vs " << generation << std::endl;
+
+				}
 				assert( ldc1->get_generation() == generation );
 				assert( ldc2->get_generation() == generation );
 
@@ -322,7 +327,7 @@ class lnode_newview_background {
 	}
 
 
-    static void newview_worker( lnode_newview_background *sa, size_t rank, size_t num ) {
+    static void newview_worker( lnode_newview_background_racy *sa, size_t rank, size_t num ) {
 
 
     	while( true ) {
@@ -344,6 +349,8 @@ class lnode_newview_background {
     			while( sa->m_nv_signal != old_signal ) {}
     			//old_signal = sa->m_nv_signal;
     			old_signal = !old_signal;
+
+    			__asm__ __volatile__ ("" ::: "memory");
 
     			if( sa->m_nv_exit_inner ) {
     				//sa->m_nv_bar2x.wait(rank + 1);
@@ -387,7 +394,7 @@ class lnode_newview_background {
     }
 
 public:
-    lnode_newview_background( size_t n_threads ) :
+    lnode_newview_background_racy( size_t n_threads ) :
     	m_nv_bar1( n_threads + 1 ),
     	m_nv_bar2x( n_threads + 1 ),
     	m_nv_signal(false),
@@ -400,13 +407,13 @@ public:
     	for( size_t i = 0; i < n_threads; i++ ) {
 			int rank = int(i);
 
-			m_nv_tg.create_thread( boost::bind( &lnode_newview_background::newview_worker, this, rank, n_threads ) );
+			m_nv_tg.create_thread( boost::bind( &lnode_newview_background_racy::newview_worker, this, rank, n_threads ) );
 
 		}
 
     }
 
-    ~lnode_newview_background() {
+    ~lnode_newview_background_racy() {
         m_nv_exit_outer = true;
 		m_nv_bar1.wait();
 		m_nv_tg.join_all();
@@ -459,7 +466,7 @@ public:
 			// up pass
 
 			m_down_pass = false;
-
+			__asm__ __volatile__ ("" ::: "memory");
 			std::vector<std::pair<int,lnode*> >::iterator it = level_mapping.begin();
 			while(it != level_mapping.end()) {
 
@@ -487,7 +494,7 @@ public:
 		{
 			// down pass
 			m_down_pass = true;
-
+			__asm__ __volatile__ ("" ::: "memory");
 			std::vector<std::pair<int,lnode*> >::reverse_iterator rit = level_mapping.rbegin();
 			while(rit != level_mapping.rend()){
 
@@ -532,6 +539,278 @@ public:
 
 
 };
+
+
+
+class lnode_newview_background {
+
+	boost::barrier m_bar1;
+	boost::barrier m_bar2;
+
+	std::pair<int,lnode *> * m_range_begin;
+    std::pair<int,lnode *> * m_range_end;
+
+    bool m_nv_exit_outer;
+    bool m_down_pass;
+    int m_generation;
+
+    boost::thread_group m_nv_tg;
+
+
+    static void newview_one_level( lnode *n, int generation ) {
+
+		my_adata *ad = dynamic_cast<my_adata *>( n->m_data.get());
+		my_ldata *ld = dynamic_cast<my_ldata *>( n->m_ldata.get());
+
+		//my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
+
+		assert( ld->get_generation() != generation );
+		if( ld->get_generation() < generation ) {
+
+			if( ad->isTip ) {
+				ld->get_pvec() = ad->get_pvec();
+			} else {
+				lnode *c1 = n->next->back;
+				lnode *c2 = n->next->next->back;
+
+
+
+
+
+
+				tip_case tc;
+				if( c1->m_data->isTip && c2->m_data->isTip ) {
+					tc = TIP_TIP;
+				} else if( c1->m_data->isTip && !c2->m_data->isTip ) {
+					tc = TIP_INNER;
+				} else if( !c1->m_data->isTip && c2->m_data->isTip ) {
+					tc = TIP_INNER;
+					std::swap( c1, c2 );
+				} else {
+					tc = INNER_INNER;
+				}
+
+				my_ldata *ldc1 = dynamic_cast<my_ldata *>( c1->m_ldata.get());
+				my_ldata *ldc2 = dynamic_cast<my_ldata *>( c2->m_ldata.get());
+
+
+				if( ldc1->get_generation() != generation ) {
+					std::cerr << ldc1->get_generation() << " vs " << generation << std::endl;
+
+				}
+				assert( ldc1->get_generation() == generation );
+				assert( ldc2->get_generation() == generation );
+
+				pvec_t &pvc1 = ldc1->get_pvec();
+				pvec_t &pvc2 = ldc2->get_pvec();
+
+			 //   std::cout << "size: " << pvc1.size() << " " << pvc2.size() << "\n";
+
+				pvec_t::newview( ld->get_pvec(), pvc1, pvc2, n->next->backLen, n->next->next->backLen, tc);
+			}
+
+			ld->set_generation(generation);
+			//pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
+
+
+
+//             if( n->towards_root ) {
+//                 if (ad->get_pvec() != ld->get_pvec()) {
+//                     throw std::runtime_error( "ad != ld pvec\n" );
+//                 }
+//
+//                // std::cout << ad->get_pvec().size() << " " << ld->get_pvec().size() << " " <<  << "\n";
+//             }
+
+		}
+	}
+
+
+    static void newview_worker( lnode_newview_background *sa, size_t rank, size_t num ) {
+
+
+    	while( true ) {
+    		size_t done = 0;
+
+
+    		sa->m_bar1.wait();
+    		if( sa->m_nv_exit_outer ) {
+    			break;
+    		}
+
+
+
+
+			bool down_pass = sa->m_down_pass;
+
+			std::pair<int,lnode *> *it = sa->m_range_begin + rank;
+			std::pair<int,lnode *> *it_end = sa->m_range_end;
+
+			for( ; it < it_end; it+=num ) {
+				//std::cerr << "nv: " << rank << " " << i << " " << sa->m_nv_range[i] << " " << old_signal << "\n";
+//		    		std::cerr << rs << " " << std::endl;
+//					std::cerr << old_signal << " " << std::endl;
+
+				if( !down_pass ) {
+					sa->newview_one_level(it->second, sa->m_generation);
+				} else {
+					sa->newview_one_level(it->second->next, sa->m_generation);
+					sa->newview_one_level(it->second->next->next, sa->m_generation);
+				}
+
+
+				done++;
+			}
+
+			sa->m_bar2.wait();
+//    		std::cerr << rank << " " << std::endl;
+
+//    		std::cout << "wdone: " << rank << " " << done << "\n";
+//    		sa->m_nv_bar2.wait();
+
+    	}
+
+    	std::cout << "nv worker exit\n";
+
+    }
+
+public:
+    lnode_newview_background( size_t n_threads ) :
+    	m_bar1( n_threads + 1 ),
+    	m_bar2( n_threads + 1 ),
+    	m_nv_exit_outer( false )
+
+    {
+    	assert( n_threads != size_t(-1) );
+
+
+    	for( size_t i = 0; i < n_threads; i++ ) {
+			int rank = int(i);
+
+			m_nv_tg.create_thread( boost::bind( &lnode_newview_background::newview_worker, this, rank, n_threads ) );
+
+		}
+
+    }
+
+    ~lnode_newview_background() {
+        m_nv_exit_outer = true;
+		m_bar1.wait();
+		m_nv_tg.join_all();
+
+    }
+
+    void newview_complete( lnode *n, int generation, ivy_mike::perf_timer &pt ) {
+    	//
+    	// level-wise multi threaded newview, using the 'up/down sweep' technique.
+    	// needs one sync per level. It still seems fairly inefficient for small trees.
+    	//
+    	// There are two 'operation' modes: idle and busy.
+    	//
+    	// In idle mode, the threads wait (non-busy) on m_bar1.
+    	// After m_bar1 (=the 'main-thread is inside this function) the threads switch to 'low-latency' mode,
+    	// and do a busy wait on m_signal.
+    	// After m_signal is triggered, the main-thread waits on m_bar2x (busy) while the threads
+    	// do their work (m_nv_range) and then signal m_bar2x. When m_signal is triggered while m_exit_inner=true,
+    	// the workers switch back to idle mode.
+    	//
+
+    	m_generation = generation;
+
+    	tip_collector_dumb<lnode> tc;
+    	visit_lnode( n, tc );
+
+    	node_level_assignment nl( tc.m_nodes );
+    	std::vector<std::pair<int,lnode *> > &level_mapping = nl.get_level_mapping();
+
+    	//
+    	// if the leaf-count is odd, all three lnodes of the inner-most node are added (this is just how the node-level assignment is implemented...).
+    	// For the level-wise newview only one lnode is needed (the other two are done in the down pass, so the duplicates are removed)
+    	//
+    	while( level_mapping.size() >= 2 )
+    	{
+    		std::vector<std::pair<int,lnode *> >::reverse_iterator rit = level_mapping.rbegin();
+    		if( rit->second->m_data == (rit+1)->second->m_data ) {
+				level_mapping.pop_back();
+			} else {
+				break;
+			}
+		}
+
+		pt.add_int();
+
+
+		int level = 0;
+		{
+			// up pass
+
+			m_down_pass = false;
+			std::vector<std::pair<int,lnode*> >::iterator it = level_mapping.begin();
+			while(it != level_mapping.end()) {
+
+				// generate list of lnodes in current level
+//				m_nv_range.clear();
+				m_range_begin = &(*it);
+
+				while(it != level_mapping.end()){
+					if(it->first != level){
+						break;
+					}
+					//m_nv_range.push_back(it->second);
+					++it;
+				}
+				m_range_end = &(*it);
+				++level;
+				if(m_range_begin != m_range_end ){
+					m_bar1.wait();
+					m_bar2.wait();
+				}
+			}
+
+			assert( level > 0 );
+		}
+		{
+			// down pass
+			m_down_pass = true;
+			std::vector<std::pair<int,lnode*> >::reverse_iterator rit = level_mapping.rbegin();
+			while(rit != level_mapping.rend()){
+
+				if( level == 0 ) {
+					break;
+				}
+//				m_nv_range.clear();
+
+				m_range_begin = &(*rit);
+				while(rit != level_mapping.rend()){
+					if(rit->first != level){
+						break;
+					}
+//					if(!rit->second->m_data->isTip){
+//					m_nv_range.push_back(rit->second);
+//						m_nv_range.push_back(rit->second->next);
+//						m_nv_range.push_back(rit->second->next->next);
+//					}
+					++rit;
+				}
+				m_range_end = &(*rit);
+				m_range_begin++;
+				m_range_end++;
+				std::swap( m_range_begin, m_range_end );
+
+				--level;
+				if( m_range_begin != m_range_end ){
+					m_bar1.wait();
+					m_bar2.wait();
+				}
+			}
+
+			assert( level == 0 );
+		}
+
+    }
+};
+
+
 
 class step_add {
     //auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
@@ -857,7 +1136,7 @@ class step_add {
                 //                 std::cout << "tasks: " << tasks.size() << "\n";
                 lpt.add_int();
                 for( size_t i = 0; i < tasks.size(); ++i ) {
-                    sa->m_num_newview += 1;
+
                     do_newview_from_ldata( root_pvecs[i], tasks[i]->m_edge.first, tasks[i]->m_edge.second );
 
 
@@ -944,7 +1223,7 @@ class step_add {
 
     // additional shared stuff, secured by m_gen_mutex
     boost::mutex m_gen_mutex;
-    volatile size_t m_num_newview;
+
     ivy_mike::perf_timer m_align_pt;
     // end of additional shared stuff
 
@@ -1109,7 +1388,7 @@ public:
     }
 
 
-    pair<size_t,size_t> calc_dist_matrix() {
+    pair<size_t,size_t> calc_dist_matrix( bool load_scores ) {
         m_pw_dist.init_size(m_qs_names.size(), m_qs_names.size());
 
         vector<vector<uint8_t> > qs_mapped;
@@ -1129,7 +1408,7 @@ public:
         ivy_mike::tdmatrix<int> out_scores(m_qs_names.size(), m_qs_names.size());
 
 
-        if( false ) {
+        if( load_scores ) {
             ifstream is( "out_scores.bin" );
 
             is.seekg(0, ios_base::end);
@@ -1711,11 +1990,13 @@ int main( int argc, char **argv ) {
 
 	int opt_num_ali_threads;
 	int opt_num_nv_threads;
+	bool opt_load_scores;
+
 	igp.add_opt('h', false );
 	igp.add_opt('f', ivy_mike::getopt::value<std::string>(opt_seq_file) );
 	igp.add_opt('j', ivy_mike::getopt::value<int>(opt_num_ali_threads).set_default(num_cores) );
 	igp.add_opt('k', ivy_mike::getopt::value<int>(opt_num_nv_threads).set_default(1) );
-
+	igp.add_opt('l', ivy_mike::getopt::value<bool>(opt_load_scores, true).set_default(false) );
 	bool ret = igp.parse(argc, argv);
 
 	if( igp.opt_count('h') != 0 || !ret ) {
@@ -1744,7 +2025,7 @@ int main( int argc, char **argv ) {
     lnode *last_tree;
     {
         step_add sa(filename, pool, opt_num_ali_threads, opt_num_nv_threads);
-        pair<size_t,size_t> start_pair = sa.calc_dist_matrix();
+        pair<size_t,size_t> start_pair = sa.calc_dist_matrix( opt_load_scores );
 
 //         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
         sa.start_tree( start_pair.first, start_pair.second );
