@@ -371,11 +371,20 @@ static void read_fasta( input &is, std::vector<std::string> &names, std::vector<
         
         bool success = f.next_seq( names.back(), data.back() );
         
+
+
         if( !success ) {
             names.pop_back();
             data.pop_back();
             break;
         }
+
+        if( data.back().empty() ) {
+			std::cout << "empty: " << names.back() << "\n";
+			names.pop_back();
+			data.pop_back();
+		}
+
     }
 }
 

@@ -854,6 +854,9 @@ class step_add {
 
             if( ps == 0x1 || ps == 0x2 || ps == 0x4 || ps == 0x8 ) {
                 pvec.push_back(ps);
+            } else {
+            	std::cout << "drop: " << seq[i] << "\n";
+
             }
 
         }
@@ -1240,6 +1243,17 @@ class step_add {
     lnode_newview_background m_lnode_nv_bg;
     bool m_threaded_newview;
 
+
+    void to_nongappy( const std::vector<uint8_t> &in, std::vector<uint8_t> &out ) {
+		for( std::vector<uint8_t>::const_iterator it = in.begin(); it != in.end(); ++it ) {
+			if( !dna_parsimony_mapping::is_gap( *it ) ) {
+				out.push_back( *it );
+			}
+
+		}
+	}
+
+
 public:
     step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool, size_t num_ali_threads, size_t num_nv_threads )
     : m_ln_pool( ln_pool ),
@@ -1268,6 +1282,15 @@ public:
 
             read_fasta( qsf, m_qs_names, m_qs_seqs);
         }
+
+        vector<uint8_t> tmp;
+        for( vector<vector<uint8_t> >::iterator it = m_qs_seqs.begin(); it != m_qs_seqs.end(); ++it ) {
+        	tmp.clear();
+
+        	to_nongappy( *it, tmp );
+        	it->swap(tmp);
+        }
+
         m_used_seqs.resize( m_qs_names.size() );
 
 
@@ -1468,6 +1491,8 @@ public:
 
         return pair<size_t,size_t>(li,lj);
     }
+
+
     void start_tree( size_t a, size_t b ) {
         lnode *na = lnode::create( *m_ln_pool );
         lnode *nb = lnode::create( *m_ln_pool );
@@ -1486,7 +1511,13 @@ public:
 
         vector<uint8_t> atmp = m_qs_seqs.at(a);
         vector<uint8_t> btmp = m_qs_seqs.at(b);
+
+
         scoring_matrix sm( 3, 0 );
+
+
+
+
 
         align_freeshift(sm, atmp, btmp, -5, -3 );
 
@@ -1593,7 +1624,10 @@ public:
                 ++rit;
             }
         }
+        if( rit != raw.rend() ) {
 
+        	std::cerr << "too short tb: " << raw.rend() - rit << " upper: " << upper << "\n";
+        }
         std::reverse(out.begin(), out.end());
     }
     bool insertion_step() {
@@ -1627,6 +1661,8 @@ public:
 
         vector<uint8_t> qs_pvec;
         seq_to_nongappy_pvec(m_qs_seqs.at(candidate), qs_pvec);
+
+        assert( qs_pvec.size() == m_qs_seqs[candidate].size() );
 
         //
         // search for best insertion edge
@@ -1785,9 +1821,19 @@ public:
         // apply traceback to query sequence and insert new tip into tree
         //
 
+
+
         vector<uint8_t> tip_seq;
         gapstream_to_alignment(best_tb, m_qs_seqs[candidate], tip_seq, '-', false );
 //         cout << "tip len: " << tip_seq.size() << "\n";
+
+        if( m_qs_names[candidate] == "AAAAAAAACR") {
+        	std::cout << "tip len: " << tip_seq.size() << "\n";
+
+        	std::copy( tip_seq.begin(), tip_seq.end(), std::ostream_iterator<uint8_t>(std::cout));
+        	std::cout << "\n";
+
+        }
 
 
         lnode *nc = lnode::create( *m_ln_pool );
@@ -1809,9 +1855,11 @@ public:
         m_leafs.push_back(nc);
         perf_timer.add_int();
 #if 0
+        std::cout << m_qs_names[candidate] << " " << m_leafs.size() << "\n";
+
         {
-            stringstream ss;
-            ss << "tree_" << setw(5) << setfill('0') << m_leafs.size();
+            std::stringstream ss;
+            ss << "tree_" << std::setw(5) << std::setfill('0') << m_leafs.size();
 
             ofstream os( ss.str().c_str() );
 //         cout << ">>>>>>>>>>>>>>\n";
@@ -1819,8 +1867,8 @@ public:
 //         cout << "<<<<<<<<<<<<<<\n";
         }
         {
-            stringstream ss;
-            ss << "ali_" << setw(5) << setfill('0') << m_leafs.size();
+        	std::stringstream ss;
+            ss << "ali_" << std::setw(5) << std::setfill('0') << m_leafs.size();
 
             ofstream os( ss.str().c_str() );
 //         cout << ">>>>>>>>>>>>>>\n";
@@ -1843,7 +1891,7 @@ public:
 #endif
 
         if( m_inc_ali.good() ) {
-            m_inc_ali << m_leafs.size() << "\n";
+            m_inc_ali << m_qs_names[candidate] << " " << m_leafs.size() << "\n";
             for( std::vector< ivy_mike::tree_parser_ms::lnode* >::const_iterator it = m_leafs.begin(); it != m_leafs.end(); ++it ) {
                 my_adata *adata = (*it)->m_data->get_as<my_adata>();
 
