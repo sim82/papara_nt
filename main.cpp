@@ -11,7 +11,7 @@
 
 #include <boost/iostreams/tee.hpp>
 #include <boost/iostreams/stream.hpp>
-
+#include <boost/bind.hpp>
 
 
 
@@ -20,6 +20,7 @@
 #include "pvec.h"
 
 #include "pars_align_seq.h"
+#include "pars_align_gapp_seq.h"
 #include "fasta.h"
 #include "vec_unit.h"
 #include "align_pvec_vec.h"
@@ -463,15 +464,22 @@ public:
     virtual void print_best_scores( std::ostream & ) = 0;
     virtual void write_result_phylip( std::ostream &, std::ostream &) = 0;
 };
+struct scoring_result {
+	size_t edge;
+	size_t qs;
 
+	int res;
+
+	scoring_result( size_t edge_, size_t qs_, int res_ ) : edge( edge_), qs(qs_), res(res_) {}
+};
 
 template<typename pvec_t>
 class papara_nt : public papara_nt_i {
 
-    const static int score_gap_open = 1;
+    const static int score_gap_open = 3;
     const static int score_gap_extend = 1;
     const static int score_mismatch = 1;
-    const static int score_match_cgap = 4;
+    const static int score_match_cgap = 3;
     
     //typedef pvec_pgap pvec_t;
     typedef my_adata_gen<pvec_t> my_adata;
@@ -512,6 +520,7 @@ class papara_nt : public papara_nt_i {
 
     std::vector<std::vector <int> > m_ref_pvecs;
     std::vector<std::vector <unsigned int> > m_ref_aux;
+    std::vector<std::vector <double> > m_ref_gapp;
 
     ivy_mike::mutex m_qmtx; // mutex for the block queue and the qs best score/edge arrays
     std::deque<block_t> m_blockqueue;
@@ -695,6 +704,19 @@ class papara_nt : public papara_nt_i {
 
             root_pvec.to_int_vec(m_ref_pvecs.back());
             root_pvec.to_aux_vec(m_ref_aux.back());
+
+
+            m_ref_gapp.push_back( std::vector<double>() );
+
+            if( ivy_mike::same_type<pvec_t,pvec_pgap>::result ) {
+            	// WTF: this is why mixing static and dynamic polymorphism is a BAD idea!
+            	pvec_pgap *rvp = reinterpret_cast<pvec_pgap *>(&root_pvec);
+            	rvp->to_gap_post_vec(m_ref_gapp.back());
+
+            	std::transform( m_ref_gapp.back().begin(), m_ref_gapp.back().end(), std::ostream_iterator<int>(std::cout), ivy_mike::scaler_clamp<double>(10,0,9) );
+
+            	std::cout << "\n";
+            }
 
 
         }
@@ -905,30 +927,127 @@ public:
     }
 
 
+
+    ivy_mike::mutex m_score_mtx;
+
+    struct tb_thread_entry {
+    	papara_nt *pnt;
+    	size_t rank;
+    	size_t num;
+
+    	tb_thread_entry (papara_nt *pnt_, size_t rank_, size_t num_ ) : pnt(pnt_), rank(rank_), num(num_) {}
+
+    	void operator()() {
+    		pnt->calc_scores_testbench(rank, num);
+    	}
+    };
+
+
+
+
+    void calc_scores_testbench( size_t rank = 0, size_t num_threads = 0 ) {
+
+
+    	pars_align_gapp_seq::arrays arrays;
+
+
+    	std::vector<scoring_result>results;
+
+    	const size_t num_edges = m_ref_pvecs.size();
+
+    	for( size_t j = 0; j < num_edges; ++j ) {
+
+    		if( num_threads != 0 && (j % num_threads) != rank ) {
+    			continue;
+    		}
+
+    		std::cout << "thread " << rank << " " << j << "\n";
+
+    		int *seqptr = m_ref_pvecs[j].data();
+    		double *gappptr = m_ref_gapp[j].data();
+
+    		assert( !m_ref_gapp[j].empty());
+
+
+    		size_t ref_len = m_ref_pvecs[j].size();
+
+			for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
+
+
+
+				size_t stride = 1;
+				size_t aux_stride = 1;
+
+
+				pars_align_gapp_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, gappptr, aux_stride, arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+				int res = pas.alignFreeshift(INT_MAX);
+				results.push_back(scoring_result(j, i, res));
+
+			}
+    	}
+
+    	{
+			ivy_mike::lock_guard<ivy_mike::mutex> lock(m_score_mtx);
+
+			for( std::vector<scoring_result>::iterator it = results.begin(); it != results.end(); ++it ) {
+				if( it->res < m_qs_bestscore[it->qs] || (it->res == m_qs_bestscore[it->qs] && int(it->edge) < m_qs_bestedge[it->qs] )) {
+
+					m_qs_bestscore[it->qs] = it->res;
+					m_qs_bestedge[it->qs] = it->edge;
+				}
+
+			}
+
+
+
+		}
+
+
+    }
+
     void calc_scores( size_t n_threads ) {
 
-        //
-        // build the alignment blocks
-        //
+
+    	if( false ) {
+			//
+			// build the alignment blocks
+			//
 
 
-        build_block_queue();
+			build_block_queue();
 
-        //
-        // work
-        //
-        ivy_mike::timer t1;
-        ivy_mike::thread_group tg;
-        lout << "start scoring, using " << n_threads <<  " threads\n";
+			//
+			// work
+			//
+			ivy_mike::timer t1;
+			ivy_mike::thread_group tg;
+			lout << "start scoring, using " << n_threads <<  " threads\n";
 
 
-        while( tg.size() < n_threads ) {
-            tg.create_thread(worker(*this, tg.size()));
-        }
-        tg.join_all();
+			while( tg.size() < n_threads ) {
+				tg.create_thread(worker(*this, tg.size()));
+			}
+			tg.join_all();
 
-        lout << "scoring finished: " << t1.elapsed() << "\n";
+			lout << "scoring finished: " << t1.elapsed() << "\n";
+    	} else {
 
+
+    		if( !false ) {
+				ivy_mike::thread_group tg;
+
+				size_t num_threads = 4;
+				for( size_t i = 0; i < num_threads; ++i ) {
+					tg.create_thread( tb_thread_entry( this, i, num_threads));
+				}
+
+				tg.join_all();
+				std::cout << "joined threads\n";
+    		} else {
+    			calc_scores_testbench();
+    		}
+
+    	}
     }
 
     void print_best_scores( std::ostream &os ) {
@@ -950,7 +1069,7 @@ public:
             if ( *git == 1) {
                 out.push_back(gap_char);
             } else if ( *git == 0 ) {
-
+            	assert( rit < raw.rend() );
                 out.push_back(*rit);
                 ++rit;
             } else {
@@ -988,6 +1107,7 @@ public:
         lout << "generating best scoring alignments\n";
         ivy_mike::timer t1;
         pars_align_seq::arrays seq_arrays(true);
+        pars_align_gapp_seq::arrays seq_arrays_gapp(true);
 
         double mean_quality = 0.0;
         double n_quality = 0.0;
@@ -997,19 +1117,39 @@ public:
 
             assert( best_edge >= 0 && size_t(best_edge) < m_ref_pvecs.size() );
 
-            const int *seqptr = m_ref_pvecs[best_edge].data();
-            const unsigned int *auxptr = m_ref_aux[best_edge].data();
-
-            const size_t ref_len = m_ref_pvecs[best_edge].size();
-
-            const size_t stride = 1;
-            const size_t aux_stride = 1;
-            pars_align_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
-            int res = pas.alignFreeshift(INT_MAX);
-
-
+            int res = -1;
             std::vector<uint8_t> tbv;
-            pas.tracebackCompressed(tbv);
+
+            if( false ) {
+				const int *seqptr = m_ref_pvecs[best_edge].data();
+				const unsigned int *auxptr = m_ref_aux[best_edge].data();
+
+				const size_t ref_len = m_ref_pvecs[best_edge].size();
+
+				const size_t stride = 1;
+				const size_t aux_stride = 1;
+				pars_align_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+				res = pas.alignFreeshift(INT_MAX);
+				pas.tracebackCompressed(tbv);
+            } else {
+            	const int *seqptr = m_ref_pvecs[best_edge].data();
+
+            	assert( !m_ref_gapp[best_edge].empty() );
+
+				const double *gappptr = m_ref_gapp[best_edge].data();
+
+				const size_t ref_len = m_ref_pvecs[best_edge].size();
+
+				const size_t stride = 1;
+				const size_t aux_stride = 1;
+				pars_align_gapp_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, gappptr, aux_stride, seq_arrays_gapp, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+				res = pas.alignFreeshift(INT_MAX);
+				pas.tracebackCompressed(tbv);
+            }
+//            std::copy( tbv.begin(), tbv.end(), std::ostream_iterator<int>(std::cout, " " ));
+//            std::cout << "\n";
+
+
 
             std::vector<uint8_t> out_qs;
 
@@ -1056,7 +1196,7 @@ public:
                 size_t num_equal = ivy_mike::count_equal( map_ref.begin(), map_ref.end(), map_aligned.begin() );
                 
                 //std::cout << "size: " << map_ref.size() << " " << map_aligned.size() << " " << m_qs_seqs[i].size() << "\n";
-               // std::cout << num_equal << " equal of " << map_ref.size() << "\n"; 
+                std::cout << num_equal << " equal of " << map_ref.size() << "\n";
                 
                 double score = num_equal / double(map_ref.size());
                 //double score = alignment_quality( out_qs, m_qs_seqs[i], debug );

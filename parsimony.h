@@ -108,7 +108,8 @@ public:
     }
 
     static bool is_gap( uint8_t c ) {
-        return d2p(c) == 0xf;
+//        return d2p(c) == 0xf;
+    	return c == '-';
     }
 };
 

@@ -21,7 +21,7 @@ set(SYSDEP_LIBS pthread)
 ENDIF()
 
 
-add_executable(papara_nt main.cpp pars_align_seq.cpp parsimony.cpp )
+add_executable(papara_nt main.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp )
 add_executable(smith_waterman smith_waterman.cpp )
 add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp )
 add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )

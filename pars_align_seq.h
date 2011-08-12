@@ -173,7 +173,7 @@ public:
         score_t * __restrict sLp = m_arr.scoreL;
         uint8_t * __restrict dir = m_arr.dir;
 
-
+        assert( dir != 0 );
 
 
         for ( size_t ib = 0; ib < m_nb; ib++ ) {

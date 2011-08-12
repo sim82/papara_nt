@@ -46,7 +46,10 @@ public:
     }
 
     static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, tip_case tc ) {
-//         std::cout << "size2: " << c1.size() << " " << c2.size() << "\n";
+
+    	if( c1.v.size() != c2.v.size() ) {
+    		std::cout << "size2: " << c1.size() << " " << c2.size() << "\n";
+    	}
         assert( c1.v.size() == c2.v.size() );
 
         if( c1.v.size() != c2.v.size() ) {
@@ -185,6 +188,9 @@ class probgap_model {
     ublas::diagonal_matrix<double> m_evals_diag; // used temporarily.
     ublas::matrix<double> m_prob_matrix;
     ublas::matrix<double> m_temp_matrix;
+
+    double m_gap_freq;
+
     double calc_gap_freq ( const std::vector< std::vector< uint8_t > > &seqs ) {
         size_t ngaps = 0;
         size_t nres = 0;
@@ -204,9 +210,9 @@ public:
     probgap_model( const std::vector< std::vector<uint8_t> > &seqs ) : m_evals_diag(2), m_prob_matrix(2,2), m_temp_matrix(2,2) {
         // initialize probgap model from input sequences
 
-        double gap_freq = calc_gap_freq( seqs );
+        m_gap_freq = calc_gap_freq( seqs );
 
-        double f[2] = {1-gap_freq, gap_freq};
+        double f[2] = {1-m_gap_freq, m_gap_freq};
 
         ublas::matrix<double> rate_matrix(2,2);
         rate_matrix(0,0) = -f[0];
@@ -257,7 +263,7 @@ public:
     }
 
 
-
+    inline double gap_freq() { return m_gap_freq; }
 
 };
 
@@ -296,6 +302,9 @@ public:
 
     }
 
+
+
+
     static void newview( pvec_pgap &p, pvec_pgap &c1, pvec_pgap &c2, double z1, double z2, tip_case tc ) {
         assert( c1.v.size() == c2.v.size() );
 
@@ -307,6 +316,9 @@ public:
 
         ublas::matrix<double> p1 = pgap_model->setup_pmatrix(z1);
         ublas::matrix<double> p2 = pgap_model->setup_pmatrix(z2);
+
+
+
 #if 1
         ublas::matrix<double> t1 = ublas::prod(p1, c1.gap_prob);
         ublas::matrix<double> t2 = ublas::prod(p2, c2.gap_prob);
@@ -333,6 +345,30 @@ public:
         }
 #endif   
         p.gap_prob = ublas::element_prod( t1, t2 );
+
+
+        const static double twotothe256 = 115792089237316195423570985008687907853269984665640564039457584007913129639936.0;
+                                                     /*  2**256 (exactly)  */
+
+        const static double minlikelihood  = 1.0/twotothe256;
+
+        for( ublas::matrix<double>::iterator2 it = p.gap_prob.begin2(); it != p.gap_prob.end2(); ++it ) {
+        	double &p1 = *it;
+        	double &p2 = *(it.begin() + 1);
+
+        	if( fabs(p1) < minlikelihood && fabs(p2) < minlikelihood ) {
+//        		std::cout << "scale: " << p1 << " " << p2;
+
+        		p1 *= twotothe256;
+        		p2 *= twotothe256;
+
+
+//        		std::cout << " -> " << p1 << " " << p2 << "\n";
+        	}
+
+
+        }
+
         //ublas::matrix< double >::const_iterator1 xxx = p.gap_prob.begin1();
        // xxx.
 
@@ -381,13 +417,58 @@ public:
 
     }
     
-    
+
+    static inline double gap_posterior( double v1, double v2 ) {
+    	assert( pgap_model.is_valid_ptr() );
+    	//return v1 / (v1 + v2);
+
+    	v1 *= 1 - pgap_model->gap_freq();
+    	v1 *= pgap_model->gap_freq();
+
+    	float v = v1 / (v1 + v2);
+
+    	if( v != v ) {
+     		std::cerr << "meeeeep: " << v1 << " " << v2 << "\n";
+
+     		throw std::runtime_error("bailing out.");
+    	}
+
+    	return v;
+    }
+
+
+
+    inline void to_gap_post_vec( std::vector<double> &outv ) {
+
+    	const ublas::matrix<double> &t = get_pgap();
+
+    	outv.clear();
+    	outv.resize(v.size());
+
+    	ivy_mike::binary_twizzle(t.begin2(), t.end2(), (t.begin1() + 1).begin(), outv.begin(), gap_posterior );
+
+    }
    
+
+
 
     template<typename vt>
     inline void to_aux_vec( std::vector<vt> &outv ) {
     
 //         std::cout << "v: " << v.size() << "\n";
+
+
+//    	{
+//    		std::vector<double> postv;
+//    		to_gap_post_vec(postv);
+//
+//
+//
+//    		//std::copy( postv.begin(), postv.end(), std::ostream_iterator<double>(std::cout, " " ));
+//
+//    		std::transform( postv.begin(), postv.end(), std::ostream_iterator<int>(std::cout), scaler<double>(10,0,9) );
+//    		std::cout << "\n";
+//    	}
 
         outv.clear();
         outv.reserve(v.size());

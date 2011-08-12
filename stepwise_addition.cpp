@@ -43,6 +43,8 @@
 #include "tree_similarity.h"
 #include "ivymike/time.h"
 #include "ivymike/getopt.h"
+#include "ivymike/multiple_alignment.h"
+
 #include <boost/tr1/unordered_set.hpp>
 #include "ivymike/concurrent.h"
 
@@ -59,6 +61,57 @@ using std::ofstream;
 
 using namespace ivy_mike::tree_parser_ms;
 
+
+class empty_column_remover {
+	boost::dynamic_bitset<> m_cm;
+	size_t m_num_columns;
+
+	typedef std::vector<uint8_t> seq_t;
+
+public:
+
+	template<typename iter>
+	empty_column_remover( iter first, iter last ) {
+
+		for( iter it = first; it != last; ++it ) {
+			seq_t &seq = *it;
+
+			boost::dynamic_bitset<> cm;
+
+			for( seq_t::iterator sit = seq.begin(); sit != seq.end(); ++sit ) {
+				cm.push_back( *sit != '-' );
+			}
+
+			if( m_cm.empty() ) {
+				m_cm.swap(cm);
+			} else {
+				m_cm |= cm;
+			}
+		}
+
+		m_num_columns = m_cm.count();
+
+		std::cout << "keep: " << m_num_columns << " of " << m_cm.size() << "\n";
+
+	}
+
+	void filter( const seq_t &in, seq_t &out ) {
+		assert( in.size() >= m_cm.size() );
+		assert( out.empty() );
+
+		out.reserve(m_num_columns);
+		size_t next = m_cm.find_first();
+
+		while( next != m_cm.npos ) {
+
+			out.push_back(in[next]);
+			next = m_cm.find_next(next);
+		}
+	}
+
+
+
+};
 
 
 
@@ -815,14 +868,19 @@ public:
 class step_add {
     //auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
 
-    const static int score_match = 3;
-    const static int score_match_cgap = -4;
-    const static int score_gap_open = -3;
-    const static int score_gap_extend = -1;
-    const static bool align_global = true;
+//    const static int score_match = 3;
+//    const static int score_match_cgap = -4;
+//    const static int score_gap_open = -3;
+//    const static int score_gap_extend = -1;
+
+	const static int score_match = 2;
+	const static int score_match_cgap = -2;
+	const static int score_gap_open = -4;
+	const static int score_gap_extend = -1;
+    const static bool align_global = false;
 
     sptr::shared_ptr<ln_pool> m_ln_pool;
-    string m_seq_file_name;
+    //string m_seq_file_name;
     vector<string> m_qs_names;
     vector<vector<uint8_t> > m_qs_seqs;
 //    vector<vector<uint8_t> > m_qs_seqs_mapped; // the content of m_qs_seqs, but mapped by m_pw_scoring_matrix
@@ -852,12 +910,17 @@ class step_add {
         for( unsigned int i = 0; i < seq.size(); i++ ) {
             uint8_t ps = dna_parsimony_mapping::d2p(seq[i]);
 
-            if( ps == 0x1 || ps == 0x2 || ps == 0x4 || ps == 0x8 ) {
-                pvec.push_back(ps);
-            } else {
-            	std::cout << "drop: " << seq[i] << "\n";
 
-            }
+            // TEST: we actually allow for 'undefined characters' in the unaligned qs (character N).
+            // just make sure that there are no real gaps in the qs
+            assert( seq[i] != '-');
+            pvec.push_back(ps);
+//            if( ps != 0xf ) {
+//                pvec.push_back(ps);
+//            } else {
+//            	std::cout << "drop: " << seq[i] << "\n";
+//
+//            }
 
         }
 
@@ -1255,9 +1318,8 @@ class step_add {
 
 
 public:
-    step_add( const char *seq_name, sptr::shared_ptr<ln_pool> ln_pool, size_t num_ali_threads, size_t num_nv_threads )
+    step_add( sptr::shared_ptr<ln_pool> ln_pool, size_t num_ali_threads, size_t num_nv_threads )
     : m_ln_pool( ln_pool ),
-    m_seq_file_name(seq_name),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
     m_sum_ncup(0),
@@ -1272,26 +1334,6 @@ public:
     {
     	m_threaded_newview = num_nv_threads >= 2;
 
-
-        {
-            ifstream qsf( m_seq_file_name.c_str() );
-
-            if( !qsf.good() ) {
-                throw std::runtime_error( "cannot read input fasta" );
-            }
-
-            read_fasta( qsf, m_qs_names, m_qs_seqs);
-        }
-
-        vector<uint8_t> tmp;
-        for( vector<vector<uint8_t> >::iterator it = m_qs_seqs.begin(); it != m_qs_seqs.end(); ++it ) {
-        	tmp.clear();
-
-        	to_nongappy( *it, tmp );
-        	it->swap(tmp);
-        }
-
-        m_used_seqs.resize( m_qs_names.size() );
 
 
 
@@ -1330,6 +1372,87 @@ public:
         m_insert_timer.print();
 
     }
+
+    template<typename iter, typename idx_t>
+    void build_index( const iter first, const iter last, idx_t &idx ) {
+
+
+    	for( iter it = first; it != last; ++it ) {
+    		idx[*it] = (it - first);
+    	}
+    }
+
+    void load_start_tree( const char *treename, const char *aliname ) {
+    	parser tp( treename, *m_ln_pool );
+		lnode * n = tp.parse();
+
+		m_tree_root = n;
+
+		tip_collector_dumb<lnode> tc;
+		visit_lnode( m_tree_root, tc );
+
+
+
+
+    	ivy_mike::multiple_alignment ma;
+    	ma.load_phylip( aliname );
+
+
+    	std::map<std::string,size_t> ma_nti;
+
+    	build_index( ma.names.begin(), ma.names.end(), ma_nti );
+
+    	empty_column_remover ecr( ma.data.begin(), ma.data.end() );
+    	std::vector<uint8_t> tmp;
+    	for( std::vector<lnode *>::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+    		std::map<std::string,size_t>::iterator nit = ma_nti.find((*it)->m_data->tipName);
+    		if( nit == ma_nti.end() ) {
+    			throw std::runtime_error( "cannot find tree species in alignment" );
+    		}
+
+    		size_t idx = nit->second;
+
+
+    		tmp.clear();
+    		ecr.filter( ma.data[idx], tmp );
+
+    		//(*it)->m_data->get_as<my_adata>()->init_pvec(ma.data[idx]);
+    		(*it)->m_data->get_as<my_adata>()->init_pvec(tmp);
+    	}
+    	m_leafs = tc.m_nodes;
+
+
+    }
+
+
+    void load_qs( const char *filename ) {
+    	{
+			ifstream qsf( filename );
+
+			if( !qsf.good() ) {
+				throw std::runtime_error( "cannot read input fasta" );
+			}
+
+			read_fasta( qsf, m_qs_names, m_qs_seqs);
+		}
+
+		vector<uint8_t> tmp;
+		for( vector<vector<uint8_t> >::iterator it = m_qs_seqs.begin(); it != m_qs_seqs.end(); ++it ) {
+			tmp.clear();
+
+			to_nongappy( *it, tmp );
+
+//			std::copy( tmp.begin(), tmp.end(), std::ostream_iterator<char>(std::cout));
+//			std::cout << "\n";
+//			getchar();
+			it->swap(tmp);
+		}
+
+		m_used_seqs.resize( m_qs_names.size() );
+
+
+    }
+
     pair<size_t,size_t> calc_dist_matrix_from_msa( std::map<std::string,std::vector<uint8_t> > &msa ) {
         typedef std::map<std::string,std::vector<uint8_t> > msa_t;
 
@@ -1540,6 +1663,11 @@ public:
     std::vector<float> m_dist_acc;
 
     size_t find_next_candidate() {
+
+    	if( m_pw_dist.size() == 0 ) {
+    		throw std::runtime_error( "find_next_candidate called with empty pw-dist matrix");
+    	}
+
     	if( m_dist_acc.empty() ) {
     		//
     		// create initial distance accumulator if it does not exist.
@@ -1631,10 +1759,10 @@ public:
         std::reverse(out.begin(), out.end());
     }
     bool insertion_step() {
-    	ivy_mike::perf_timer perf_timer(true);
+
         size_t candidate = find_next_candidate();
 
-        perf_timer.add_int();
+
 
 //         cout << "candidate: " << candidate << "\n";
 
@@ -1642,8 +1770,18 @@ public:
 
         if( !valid ) {
             return false;
+        } else {
+        	insertion_step( candidate );
+        	return true;
         }
+    }
+	void insertion_step( size_t candidate ) {
 
+    	ivy_mike::perf_timer perf_timer(true);
+
+
+
+		assert( candidate < m_qs_seqs.size() );
 
         m_used_seqs[candidate] = true;
 
@@ -1896,10 +2034,12 @@ public:
                 my_adata *adata = (*it)->m_data->get_as<my_adata>();
 
                 copy( adata->get_raw_seq().begin(), adata->get_raw_seq().end(), std::ostream_iterator<char>(m_inc_ali) );
-
+                       
+                
                 m_inc_ali << "\n";
             }
 
+            
             m_inc_ali << "\n\n";
 
         }
@@ -1915,34 +2055,49 @@ public:
             my_adata *adata = m_leafs.front()->m_data->get_as<my_adata>();
             std::cout << "size: " << m_leafs.size() << " " << adata->get_raw_seq().size() << std::endl;
         }
-
-
-//         std::cout << "ticks: " << eticks2 - eticks1 << " " << eticks3 - eticks2 << " " << eticks4 - eticks3 << "\n";
-
-
-        return valid;
-
     }
-    void write_phylip( std::ostream &os ) {
-        //
-        // write sequences in dfs-ordering, so that topologically close sequences cluster in the output phylip file
-        //
 
-        tip_collector<lnode>tc;
 
-        visit_lnode(m_tree_root, tc );
+	void insert_qs_ordered() {
 
-        if( tc.m_nodes.empty() ) {
-            throw std::runtime_error( "tip_collector: empty" );
-        }
+
+		for( size_t i = 0 ; i < m_qs_seqs.size(); ++i ) {
+			insertion_step(i);
+		}
+	}
+
+    void write_phylip( std::ostream &os, const bool in_trav_order = false ) {
+
+        vector<lnode*>::iterator first;
+        vector<lnode*>::iterator last;
+
+		tip_collector_dumb<lnode>tc;
+
+		if( in_trav_order ) {
+			//
+			// write sequences in dfs-ordering, so that topologically close sequences cluster in the output phylip file
+			//
+
+			visit_lnode(m_tree_root, tc );
+
+			if( tc.m_nodes.empty() ) {
+				throw std::runtime_error( "tip_collector: empty" );
+			}
+			first = tc.m_nodes.begin();
+			last = tc.m_nodes.end();
+    	} else {
+    		// write in insertion order
+    		first = m_leafs.begin();
+    		last = m_leafs.end();
+    	}
 
         size_t max_name_len = 0;
-        for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        for( vector<lnode*>::iterator it = first; it != last; ++it ) {
             max_name_len = std::max(max_name_len, (*it)->m_data->tipName.size());
         }
-        size_t seq_len = tc.m_nodes.front()->m_data->get_as<my_adata>()->get_raw_seq().size();
-        os << tc.m_nodes.size() << " " << seq_len << "\n";
-        for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        size_t seq_len = (*first)->m_data->get_as<my_adata>()->get_raw_seq().size();
+        os << (last - first) << " " << seq_len << "\n";
+        for( vector<lnode *>::iterator it = first; it != last; ++it ) {
             my_adata *adata = (*it)->m_data->get_as<my_adata>();
 
 
@@ -2030,6 +2185,94 @@ public:
     }
 };
 
+
+int main3( int argc, char **argv ) {
+
+	ivy_mike::getopt::parser igp;
+	std::string opt_seq_file;
+	std::string opt_tree_file;
+	std::string opt_ali_file;
+
+	int num_cores = boost::thread::hardware_concurrency();
+
+	int opt_num_ali_threads;
+	int opt_num_nv_threads;
+	bool opt_load_scores;
+
+	igp.add_opt('h', false );
+	igp.add_opt('a', ivy_mike::getopt::value<std::string>(opt_ali_file) );
+	igp.add_opt('t', ivy_mike::getopt::value<std::string>(opt_tree_file) );
+	igp.add_opt('f', ivy_mike::getopt::value<std::string>(opt_seq_file) );
+	igp.add_opt('j', ivy_mike::getopt::value<int>(opt_num_ali_threads).set_default(num_cores) );
+	igp.add_opt('k', ivy_mike::getopt::value<int>(opt_num_nv_threads).set_default(1) );
+	igp.add_opt('l', ivy_mike::getopt::value<bool>(opt_load_scores, true).set_default(false) );
+	bool ret = igp.parse(argc, argv);
+
+	if( igp.opt_count('h') != 0 || !ret ) {
+		std::cout <<
+		"  -h        print help message\n";
+		return 0;
+
+	}
+
+
+	if( igp.opt_count('f') != 1 ) {
+		std::cerr << "missing option -f\n";
+#ifndef WIN32 // hack. make it easier to start inside visual studio
+		return 0;
+#endif
+		opt_seq_file = "test_218/218.fa";
+	}
+
+	if( igp.opt_count('a') != 1 ) {
+		std::cerr << "missing option -a\n";
+		return 0;
+	}
+
+	if( igp.opt_count('t') != 1 ) {
+		std::cerr << "missing option -t\n";
+		return 0;
+	}
+
+
+
+	const char *filename = opt_seq_file.c_str();
+
+
+
+	std::map<std::string, std::vector<uint8_t> >out_msa1;
+	sptr::shared_ptr<ln_pool> pool(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
+
+	lnode *last_tree;
+	{
+		step_add sa(pool, opt_num_ali_threads, opt_num_nv_threads);
+		sa.load_qs(filename);
+
+		sa.load_start_tree(opt_tree_file.c_str(), opt_ali_file.c_str());
+
+
+		ivy_mike::timer t1;
+
+
+		sa.insert_qs_ordered();
+
+
+
+		{
+			ofstream os_ali( "sa_alignment.phy" );
+			sa.write_phylip( os_ali );
+
+			ofstream os_tree( "sa_tree.phy" );
+			sa.write_newick( os_tree );
+		}
+
+		sa.move_raw_seq_data_to_map(out_msa1);
+		last_tree = sa.get_tree();
+		std::cout << "time: " << t1.elapsed() << "\n";
+	}
+	return 0;
+}
+
 int main( int argc, char **argv ) {
 	ivy_mike::getopt::parser igp;
 	std::string opt_seq_file;
@@ -2072,7 +2315,8 @@ int main( int argc, char **argv ) {
 
     lnode *last_tree;
     {
-        step_add sa(filename, pool, opt_num_ali_threads, opt_num_nv_threads);
+        step_add sa( pool, opt_num_ali_threads, opt_num_nv_threads);
+        sa.load_qs(filename);
         pair<size_t,size_t> start_pair = sa.calc_dist_matrix( opt_load_scores );
 
 //         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
@@ -2105,7 +2349,9 @@ int main( int argc, char **argv ) {
 
     for( int i = 0; i < 100; ++i )
     {
-        step_add sa(filename,pool,opt_num_ali_threads, opt_num_nv_threads);
+        step_add sa(pool,opt_num_ali_threads, opt_num_nv_threads);
+        sa.load_qs(filename);
+
         pair<size_t,size_t> start_pair = sa.calc_dist_matrix_from_msa(out_msa1);
 
 //         cout << "start: " << start_pair.first << " " << start_pair.second << "\n";
