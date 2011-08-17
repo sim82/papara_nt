@@ -208,6 +208,7 @@ public:
         return new ldata_t(m_next_serial++);
     }
 
+    virtual ~my_fact_gen() {}
 };
 
 
@@ -445,6 +446,11 @@ class lnode_newview_background_racy {
     	std::cout << "nv worker exit\n";
 
     }
+
+    // FIXME: a private copy constructor would still have to initialize the boost::barrier members. it's not worth the effort
+	// wait for c++0x explicit constructor delete...
+    //lnode_newview_background_racy( const lnode_newview_background_racy &other ) {}
+    const lnode_newview_background_racy& operator=( const lnode_newview_background_racy & other ) { return *this; }
 
 public:
     lnode_newview_background_racy( size_t n_threads ) :
@@ -726,6 +732,10 @@ class lnode_newview_background {
     	std::cout << "nv worker exit\n";
 
     }
+    // FIXME: a private copy constructor would still have to initialize the boost::barrier members. it's not worth the effort
+	// wait for c++0x explicit constructor delete...
+    //lnode_newview_background( const lnode_newview_background &other ) {}
+    const lnode_newview_background &operator=( const lnode_newview_background &other ) { return *this; }
 
 public:
     lnode_newview_background( size_t n_threads ) :
@@ -1315,6 +1325,10 @@ class step_add {
 
 		}
 	}
+    // FIXME: a private copy constructor would still have to initialize the scoring_matrix (and others without default constructors) member. it's not worth the effort
+	// wait for c++0x explicit constructor delete...
+    //step_add( const step_add &other ) {}
+    const step_add &operator=( const step_add & other ) { return *this; }
 
 
 public:

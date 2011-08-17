@@ -713,9 +713,9 @@ class papara_nt : public papara_nt_i {
             	pvec_pgap *rvp = reinterpret_cast<pvec_pgap *>(&root_pvec);
             	rvp->to_gap_post_vec(m_ref_gapp.back());
 
-            	std::transform( m_ref_gapp.back().begin(), m_ref_gapp.back().end(), std::ostream_iterator<int>(std::cout), ivy_mike::scaler_clamp<double>(10,0,9) );
-
-            	std::cout << "\n";
+//            	std::transform( m_ref_gapp.back().begin(), m_ref_gapp.back().end(), std::ostream_iterator<int>(std::cout), ivy_mike::scaler_clamp<double>(10,0,9) );
+//
+//            	std::cout << "\n";
             }
 
 
@@ -961,7 +961,7 @@ public:
     			continue;
     		}
 
-    		std::cout << "thread " << rank << " " << j << "\n";
+//    		std::cout << "thread " << rank << " " << j << "\n";
 
     		int *seqptr = m_ref_pvecs[j].data();
     		double *gappptr = m_ref_gapp[j].data();
@@ -1031,14 +1031,14 @@ public:
 
 			lout << "scoring finished: " << t1.elapsed() << "\n";
     	} else {
-
+    		lout << "testbench mode\n";
 
     		if( !false ) {
 				ivy_mike::thread_group tg;
 
-				size_t num_threads = 4;
-				for( size_t i = 0; i < num_threads; ++i ) {
-					tg.create_thread( tb_thread_entry( this, i, num_threads));
+
+				for( size_t i = 0; i < n_threads; ++i ) {
+					tg.create_thread( tb_thread_entry( this, i, n_threads));
 				}
 
 				tg.join_all();

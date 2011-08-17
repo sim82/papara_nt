@@ -23,6 +23,10 @@ public:
     };
 
     class arrays {
+    	arrays( const arrays & ) {}
+    	const arrays& operator=(const arrays &) {return *this;}
+
+
     public:
 
         size_t m_s;
@@ -116,6 +120,11 @@ private:
     inline int getAuxA ( size_t a ) {
         return m_aAux[a * m_aAuxStride];
     }
+
+    // FIXME: a private copy constructor would still have to initialize the const data members. it's not worth the effort
+    // wait for c++0x explicit constructor delete...
+    //pars_align_seq( const pars_align_seq &other ) {}
+    const pars_align_seq &operator=( const pars_align_seq &other ) { return *this; }
 
 public:
 
