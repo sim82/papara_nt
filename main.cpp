@@ -485,7 +485,7 @@ class papara_nt : public papara_nt_i {
     typedef my_adata_gen<pvec_t> my_adata;
 
 
-    const static size_t VW = 8;
+    const static size_t VW = 4;
 
     struct block_t {
         block_t() {
@@ -496,6 +496,7 @@ class papara_nt : public papara_nt_i {
         // make sure they stay valid!
         const int *seqptrs[VW];
         const unsigned int *auxptrs[VW];
+        const double *gapp_ptrs[VW];
         size_t ref_len;
         int edges[VW];
         int num_valid;
@@ -538,6 +539,7 @@ class papara_nt : public papara_nt_i {
         void operator()() {
 
             pars_align_seq::arrays seq_arrays(true);
+            pars_align_gapp_seq::arrays seq_arrays_gapp(true);
             
             ivy_mike::timer tstatus;
             double last_tstatus = 0.0;
@@ -559,7 +561,8 @@ class papara_nt : public papara_nt_i {
                         last_tstatus = tstatus.elapsed();
                     }
                 }
-
+#if 0
+                assert( VW == 8 );
                 const align_pvec_score<short,8> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
                 for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
 
@@ -600,6 +603,55 @@ class papara_nt : public papara_nt_i {
                     }
                 }
             }
+#else
+
+            assert( block.gapp_ptrs[0] != 0 );
+            assert( VW == 4 );
+            const align_pvec_gapp_score<4> aligner( block.seqptrs, block.gapp_ptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
+            for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
+
+                size_t stride = 1;
+                size_t aux_stride = 1;
+
+                aligner.align(m_pnt.m_qs_pvecs[i]);
+                const float *score_vec = aligner.get_scores();
+
+                ncup += block.num_valid * block.ref_len * m_pnt.m_qs_pvecs[i].size();
+                {
+                    ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
+
+                    for( int k = 0; k < block.num_valid; k++ ) {
+
+
+
+                        if( score_vec[k] < m_pnt.m_qs_bestscore[i] || (score_vec[k] == m_pnt.m_qs_bestscore[i] && block.edges[k] < m_pnt.m_qs_bestedge[i] )) {
+                            const bool validate = false;
+                            if( validate ) {
+                                const int *seqptr = block.seqptrs[k];
+                                const double *gapp_ptr = block.gapp_ptrs[k];
+
+//                                std::vector<double> gapp_tmp(gapp_ptr, gapp_ptr + block.ref_len);
+
+
+                                pars_align_gapp_seq pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, gapp_ptr, aux_stride, seq_arrays_gapp, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+                                int res = pas.alignFreeshift(INT_MAX);
+
+                                if( res != score_vec[k] ) {
+
+
+                                    std::cout << "meeeeeeep! score: " << score_vec[k] << " " << res << "\n";
+                                }
+                            }
+
+                            m_pnt.m_qs_bestscore[i] = score_vec[k];
+                            m_pnt.m_qs_bestedge[i] = block.edges[k];
+                        }
+                    }
+                }
+            }
+        }
+
+#endif
             {
                 ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
                 std::cout << "thread " << m_rank << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
@@ -642,6 +694,13 @@ class papara_nt : public papara_nt_i {
 
                     block.seqptrs[i] = m_ref_pvecs[edge].data();
                     block.auxptrs[i] = m_ref_aux[edge].data();
+
+                    if( !m_ref_gapp[edge].empty() ) {
+                    	block.gapp_ptrs[i] = m_ref_gapp[edge].data();
+                    } else {
+                    	block.gapp_ptrs[i] = 0;
+                    }
+
                     block.ref_len = m_ref_pvecs[edge].size();
                     //                     do_newview( root_pvec, m_ec.m_edges[edge].first, m_ec.m_edges[edge].second, true );
 //                     root_pvec.to_int_vec(seqlist[i]);
@@ -661,6 +720,7 @@ class papara_nt : public papara_nt_i {
 
                     block.seqptrs[i] = block.seqptrs[i-1];
                     block.auxptrs[i] = block.auxptrs[i-1];
+                    block.gapp_ptrs[i] = block.gapp_ptrs[i-1];
                 }
 
             }
@@ -887,6 +947,10 @@ public:
         if( opt_qs_name != 0 ) {
             std::ifstream qsf( opt_qs_name );
 
+            if( qsf.bad() ) {
+            	throw std::runtime_error( "cannot open qs file");
+            }
+
             // mix them with the qs from the ref alignment
             read_fasta( qsf, m_qs_names, m_qs_seqs);
         }
@@ -1008,7 +1072,7 @@ public:
     void calc_scores( size_t n_threads ) {
 
 
-    	if( false ) {
+    	if( true ) {
 			//
 			// build the alignment blocks
 			//
@@ -1196,7 +1260,7 @@ public:
                 size_t num_equal = ivy_mike::count_equal( map_ref.begin(), map_ref.end(), map_aligned.begin() );
                 
                 //std::cout << "size: " << map_ref.size() << " " << map_aligned.size() << " " << m_qs_seqs[i].size() << "\n";
-                std::cout << num_equal << " equal of " << map_ref.size() << "\n";
+                //std::cout << num_equal << " equal of " << map_ref.size() << "\n";
                 
                 double score = num_equal / double(map_ref.size());
                 //double score = alignment_quality( out_qs, m_qs_seqs[i], debug );

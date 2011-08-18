@@ -167,7 +167,7 @@ struct vector_unit<int, 4> {
         _mm_store_si128( (vec_t*)addr, v );
     }
     
-    static inline const vec_t load( T* addr ) {
+    static inline const vec_t load( const T* addr ) {
         return _mm_load_si128( (vec_t*)addr );
     }
     
@@ -266,6 +266,10 @@ struct vector_unit<float, 4> {
     const static T BIAS = 0;
     const static size_t W = 4;
     
+    static inline vec_t cast_from_int( const __m128i &iv ) {
+    	return _mm_castsi128_ps( iv );
+    }
+
     static inline vec_t setzero() {
         return set1(0);
     }
@@ -284,7 +288,7 @@ struct vector_unit<float, 4> {
         _mm_store_ps( (T*)addr, v );
     }
     
-    static inline const vec_t load( T* addr ) {
+    static inline const vec_t load( const T* addr ) {
         return _mm_load_ps( (T*)addr );
     }
     
@@ -304,6 +308,10 @@ struct vector_unit<float, 4> {
     static inline const vec_t add( const vec_t &a, const vec_t &b ) {
         return _mm_add_ps( a, b );
     }
+    static inline const vec_t mul( const vec_t &a, const vec_t &b ) {
+		return _mm_mul_ps( a, b );
+	}
+
     static inline const vec_t adds( const vec_t &a, const vec_t &b ) {
         // float add is always saturating, kind of!?
         return _mm_add_ps( a, b );
@@ -311,6 +319,8 @@ struct vector_unit<float, 4> {
     static inline const vec_t sub( const vec_t &a, const vec_t &b ) {
         return _mm_sub_ps( a, b );
     }
+
+
     static inline const vec_t cmp_zero( const vec_t &a ) {
         return _mm_cmpeq_ps( a, setzero() );
     }
@@ -356,7 +366,7 @@ struct vector_unit<float, 4> {
 
 #endif
 #ifdef HAVE_AVX
-// AVX is the most pointless thin in the world, as fas as integers are concerned.
+// AVX is the most pointless thing in the world, as far as integers are concerned.
 // waiting for AVX5.7
 
 // AVX 16x16bit vector unit
