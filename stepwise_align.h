@@ -446,8 +446,8 @@ score_t align_freeshift_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_a
         
     }
     
-    std::cout << "max score: " << max_score << "\n";
-    std::cout << "max " << max_a << " " << max_b << "\n";
+//    std::cout << "max score: " << max_score << "\n";
+//    std::cout << "max " << max_a << " " << max_b << "\n";
     
     int ia = a.size() - 1;
     int ib = b.size() - 1;
@@ -844,9 +844,9 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         
     }
     
-    std::cout << "max score: " << max_score << "\n";
-    std::cout << "max " << max_a << " " << max_b << "\n";
-    std::cout << "size " << a.size() << " " << b.size() << "\n";
+//    std::cout << "max score: " << max_score << "\n";
+//    std::cout << "max " << max_a << " " << max_b << "\n";
+//    std::cout << "size " << a.size() << " " << b.size() << "\n";
     
     std::vector<uint8_t> a_tb;
     std::vector<uint8_t> b_tb;

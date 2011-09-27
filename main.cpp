@@ -456,7 +456,7 @@ static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t
 
 void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq );
 
-class papara_nt_i {
+class papara_nt_i : boost::noncopyable{
 public:
     virtual ~papara_nt_i() {}
 
@@ -502,8 +502,8 @@ class papara_nt : public papara_nt_i {
         int num_valid;
     };
 
-    papara_nt( const papara_nt &other );
-    papara_nt & operator=( const papara_nt &other );
+//    papara_nt( const papara_nt &other );
+//    papara_nt & operator=( const papara_nt &other );
 
 
 
@@ -840,7 +840,7 @@ public:
 
 
 
-    papara_nt( const char* opt_tree_name, const char *opt_alignment_name, const char *opt_qs_name )
+    papara_nt( const char* opt_tree_name, const char *opt_alignment_name, const char *opt_qs_name, bool write_testbench )
       : m_ln_pool(new ln_pool( std::auto_ptr<node_data_factory>(new my_fact<my_adata>) ))
     {
 
@@ -985,8 +985,11 @@ public:
             seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
         }
         
-        write_qs_pvecs( "qs.bin" );
-        write_ref_pvecs( "ref.bin" );
+        if( write_testbench ) {
+
+        	write_qs_pvecs( "qs.bin" );
+        	write_ref_pvecs( "ref.bin" );
+        }
 
     }
 
@@ -1383,6 +1386,8 @@ int main( int argc, char *argv[] ) {
     bool opt_use_cgap;
     int opt_num_threads;
     std::string opt_run_name;
+    bool opt_write_testbench;
+
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
@@ -1390,6 +1395,7 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'c', igo::value<bool>(opt_use_cgap, true).set_default(false) );
     igp.add_opt( 'j', igo::value<int>(opt_num_threads).set_default(1) );
     igp.add_opt( 'n', igo::value<std::string>(opt_run_name).set_default("default") );
+    igp.add_opt( 'b', igo::value<bool>(opt_write_testbench, true).set_default(false) );
     
     igp.parse(argc,argv);
 
@@ -1425,9 +1431,9 @@ int main( int argc, char *argv[] ) {
     std::auto_ptr<papara_nt_i> pnt_ptr;
 
     if( !opt_use_cgap ) {
-        pnt_ptr.reset( new papara_nt<pvec_pgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name ));
+        pnt_ptr.reset( new papara_nt<pvec_pgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name, opt_write_testbench ));
     } else {
-        pnt_ptr.reset( new papara_nt<pvec_cgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name ));
+        pnt_ptr.reset( new papara_nt<pvec_cgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name, opt_write_testbench ));
     }
     
 //     return 0;

@@ -20,6 +20,8 @@
 
 
 using ivy_mike::tree_parser_ms::lnode;
+using ivy_mike::tree_parser_ms::adata;
+using ivy_mike::tree_parser_ms::ln_pool;
 
 namespace {
 
@@ -314,4 +316,156 @@ void optimize_branch_lengths( ivy_mike::tree_parser_ms::lnode *tree, const std::
 	perf_timer.add_int();
 
 	perf_timer.print();
+}
+
+
+lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const std::map<std::string, const std::vector<uint8_t> * const> &name_to_seq, ln_pool &pool ) {
+	ivy_mike::perf_timer perf_timer(!true);
+
+
+//	for( std::vector<boost::dynamic_bitset<> >::iterator it = splits.begin(); it != splits.end(); ++it ) {
+//		std::cout << "split: " << (*it) << "\n";
+//	}
+//
+//	for( std::vector<lnode*>::iterator it = sorted_tips.begin(); it != sorted_tips.end(); ++it ) {
+//		//(*it)->m_data->print(std::cout);
+//		//std::cout << "\n";
+//
+//		std::cout << "tip: " << (*(*it)->m_data) << "\n";
+//
+//	}
+
+	tip_collector_dumb<ivy_mike::tree_parser_ms::lnode> tc;
+	visit_lnode(tree, tc );
+
+
+	std::map<std::string, sptr::shared_ptr<lnode> > tip_map;
+
+	for( std::vector<lnode *>::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+		tip_map.insert( std::make_pair( (*it)->m_data->tipName, (*it)->get_smart_ptr() ) );
+	}
+
+
+	std::cout << "nodes: " << tc.m_nodes.size() << "\n";
+
+	if( tc.m_nodes.size() < 4 ) {
+
+		return 0;
+	}
+
+
+	perf_timer.add_int();
+	const bool gap_model = false;
+	{
+		std::ofstream ost( "tmp_tree" );
+		ivy_mike::tree_parser_ms::print_newick( next_non_tip( towards_tree( tree )), ost );
+
+
+		std::ofstream osa( "tmp_ali" );
+		write_phylip( name_to_seq, osa, gap_model );
+	}
+
+
+	perf_timer.add_int();
+	Poco::Process::Args args;
+	args.push_back( "-T" );
+	args.push_back( "4" );
+	args.push_back( "-f" );
+	args.push_back( "e" );
+	args.push_back( "-m" );
+	if( gap_model ) {
+		args.push_back( "BINCAT" );
+	} else {
+		args.push_back( "GTRCAT" );
+	}
+	args.push_back( "-n" );
+	args.push_back( "Tyyy" );
+	args.push_back( "-s" );
+	args.push_back( "tmp_ali" );
+	args.push_back( "-t" );
+	args.push_back( "tmp_tree" );
+
+	std::string raxml( "/home/sim/src_exelixis/standard-RAxML/raxmlHPC-PTHREADS-SSE3" );
+
+
+	// remove old raxml output
+	Poco::File f( "RAxML_info.Tyyy" );
+
+	if( f.exists() ) {
+		assert( f.exists() && f.canWrite() && f.isFile() && "file not readable" );
+		f.remove();
+	}
+
+
+#if 1
+	Poco::Pipe raxout_pipe;
+
+	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, &raxout_pipe, 0 );
+
+
+//	std::vector<char> raxbuf;
+//	pipe_into_vector( raxout_pipe, raxbuf );
+	std::deque<char> raxbuf;
+	pipe_into_deque( raxout_pipe, raxbuf );
+
+	std::cout << "raxml wrote " << raxbuf.size() << "\n";
+#else
+	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, 0, 0 );
+#endif
+
+	int ret = proc.wait();
+
+	perf_timer.add_int();
+	std::cout << "wait for raxml: " << ret << "\n";
+
+
+	const char *raxml_tree = "RAxML_result.Tyyy";
+	ivy_mike::tree_parser_ms::parser p( raxml_tree, pool );
+
+	ivy_mike::tree_parser_ms::lnode *rax_tree = p.parse();
+
+	tip_collector_dumb<ivy_mike::tree_parser_ms::lnode> rax_tc;
+	visit_lnode(rax_tree, rax_tc );
+
+	lnode *ret_node = rax_tree;
+	// link adata from old tree into corresponding tips of the new tree.
+	for( std::vector<lnode *>::iterator it = rax_tc.m_nodes.begin(); it != rax_tc.m_nodes.end(); ++it ) {
+
+
+		std::string name = (*it)->m_data->tipName;
+
+		std::map<std::string, sptr::shared_ptr<lnode> >::iterator op = tip_map.find( name );
+
+		assert( op != tip_map.end() && "could not find tip from new tree in old tree");
+//		sptr::shared_ptr<adata> old_adata( op->second->m_data );
+
+		lnode *old_node = op->second.get();
+
+		lnode *new_node = *it;
+
+		if( new_node == ret_node ) {
+			ret_node = old_node;
+		}
+
+		assert( old_node->back != 0 );
+		assert( new_node->back != 0 );
+
+		new_node->back->back = old_node;
+		//new_node->back->backLen = old_node->backLen;
+
+		old_node->back->back = 0;
+		old_node->back = new_node->back;
+		old_node->backLen = new_node->backLen;
+
+		new_node->back = 0;
+		//sptr::shared_ptr<lnode> old_node =
+	}
+
+	perf_timer.add_int();
+
+	perf_timer.print();
+
+	assert( ret_node->back != 0 );
+	assert( ret_node->back->back != 0 );
+	return ret_node;
 }

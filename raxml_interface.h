@@ -9,4 +9,5 @@
 #include <stdint.h>
 
 void optimize_branch_lengths( ivy_mike::tree_parser_ms::lnode *tree, const std::map<std::string, const std::vector<uint8_t> * const> &name_to_seq );
+ivy_mike::tree_parser_ms::lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const std::map<std::string, const std::vector<uint8_t> * const> &name_to_seq, ivy_mike::tree_parser_ms::ln_pool &pool );
 #endif

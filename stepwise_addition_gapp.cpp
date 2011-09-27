@@ -1386,7 +1386,7 @@ public:
 
         for( size_t i = 0; i < ec.m_edges.size(); ++i ) {
             int res = results[i];
-            //cout << "result: " << i << " = " << res << "\n";
+            std::cout << "result: " << i << " = " << res << "\n";
             if( res > best_score ) {
 
                 best_score = res;
@@ -1527,13 +1527,33 @@ public:
 
 
         // TEST: optimize tree branch lengths
+
+        if( m_leafs.size() % 20 == 0 )
         {
         	std::map< std::string, const std::vector<uint8_t> * const> name_to_seq;
 
 
         	build_name_to_seq_map(m_tree_root, name_to_seq );
-        	optimize_branch_lengths(m_tree_root, name_to_seq );
+        	//optimize_branch_lengths(m_tree_root, name_to_seq );
 
+        	lnode * new_tree = optimize_branch_lengths2(m_tree_root, name_to_seq, *(m_ln_pool.get()) );
+
+        	std::cout << "old tree " << m_tree_root << "\n";
+        	std::cout << "new tree " << new_tree << "\n";
+
+
+        	m_tree_root = new_tree;
+
+        	assert( m_tree_root->back != 0 );
+			assert( m_tree_root->back->back != 0 );
+
+        	m_ln_pool->clear();
+        	m_ln_pool->mark( m_tree_root );
+        	m_ln_pool->sweep();
+
+
+        	assert( m_tree_root->back != 0 );
+        	assert( m_tree_root->back->back != 0 );
         }
 
 #if 0
@@ -1787,7 +1807,7 @@ int main3( int argc, char **argv ) {
 	std::map<std::string, std::vector<uint8_t> >out_msa1;
 	sptr::shared_ptr<ln_pool> pool(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
 
-	lnode *last_tree;
+//	lnode *last_tree;
 	{
 		step_add sa(pool, opt_num_ali_threads );
 		sa.load_qs(filename);
@@ -1811,7 +1831,7 @@ int main3( int argc, char **argv ) {
 		}
 
 		sa.move_raw_seq_data_to_map(out_msa1);
-		last_tree = sa.get_tree();
+//		last_tree = sa.get_tree();
 		std::cout << "time: " << t1.elapsed() << "\n";
 	}
 	return 0;
@@ -1895,6 +1915,14 @@ int main( int argc, char **argv ) {
 
     for( int i = 0; i < 100; ++i )
     {
+    	assert( last_tree != 0 );
+
+    	ln_pool_pin pin_last( last_tree, *pool );
+
+    	pool->clear();
+		//pool->mark(last_tree);
+		pool->sweep();
+
         step_add sa(pool,opt_num_ali_threads );
         sa.load_qs(filename);
 
@@ -1953,11 +1981,10 @@ int main( int argc, char **argv ) {
 
         std::cout << "tree dist: " << v << "\n";
 
+        //pin_last.release();
         last_tree = tree2;
 
-        pool->clear();
-        pool->mark(last_tree);
-        pool->sweep();
+
 
 
         if( period != size_t(-1) ) {

@@ -185,11 +185,12 @@ class probgap_model {
     ublas::vector<double> m_evals;
     ublas::matrix<double> m_evecs_inv;
 
-    ublas::diagonal_matrix<double> m_evals_diag; // used temporarily.
-    ublas::matrix<double> m_prob_matrix;
-    ublas::matrix<double> m_temp_matrix;
+//    ublas::diagonal_matrix<double> m_evals_diag; // used temporarily.
+//    ublas::matrix<double> m_prob_matrix;
+//    ublas::matrix<double> m_temp_matrix;
 
     double m_gap_freq;
+    bool m_valid;
 
     double calc_gap_freq ( const std::vector< std::vector< uint8_t > > &seqs ) {
         size_t ngaps = 0;
@@ -207,51 +208,59 @@ class probgap_model {
     }
 
 public:
-    probgap_model( const std::vector< std::vector<uint8_t> > &seqs ) : m_evals_diag(2), m_prob_matrix(2,2), m_temp_matrix(2,2) {
-        // initialize probgap model from input sequences
+    probgap_model() : m_valid(false) {}
 
-        m_gap_freq = calc_gap_freq( seqs );
-
-        double f[2] = {1-m_gap_freq, m_gap_freq};
-
-        ublas::matrix<double> rate_matrix(2,2);
-        rate_matrix(0,0) = -f[0];
-        rate_matrix(0,1) = f[0];
-        rate_matrix(1,0) = f[1];
-        rate_matrix(1,1) = -f[1];
-
-        ublas::EigenvalueDecomposition ed(rate_matrix);
-
-        m_evecs = ed.getV();
-        m_evals = ed.getRealEigenvalues();
-
-        // use builtin ublas lu-factorization rather than jama
-        {
-            ublas::matrix<double> A(m_evecs);
-            ublas::permutation_matrix<size_t> pm( A.size1() );
-            size_t res = ublas::lu_factorize(A,pm);
-            if( res != 0 ) {
-                throw std::runtime_error( " ublas::lu_factorize failed" );
-            }
-            m_evecs_inv = ublas::identity_matrix<double>( A.size1());
-
-            ublas::lu_substitute(A,pm,m_evecs_inv);
-        }
-//         ublas::LUDecomposition lud(m_evecs);
-//         m_evecs_inv = lud.pseudoinverse();
-//         std::cout << "inv jama: " << m_evecs_inv << "\n";
+    probgap_model( const std::vector< std::vector<uint8_t> > &seqs ) : m_valid(false) {
+    	reset( seqs );
     }
 
-    const ublas::matrix<double> &setup_pmatrix( double t ) {
+    void reset( const std::vector< std::vector<uint8_t> > &seqs ) {
+	   // initialize probgap model from input sequences
+    	reset( calc_gap_freq( seqs ) );
+    }
+    void reset( double gap_freq ) {
+    	m_gap_freq = gap_freq;
+		double f[2] = {1-m_gap_freq, m_gap_freq};
+
+		ublas::matrix<double> rate_matrix(2,2);
+		rate_matrix(0,0) = -f[0];
+		rate_matrix(0,1) = f[0];
+		rate_matrix(1,0) = f[1];
+		rate_matrix(1,1) = -f[1];
+
+		ublas::EigenvalueDecomposition ed(rate_matrix);
+
+		m_evecs = ed.getV();
+		m_evals = ed.getRealEigenvalues();
+
+		// use builtin ublas lu-factorization rather than jama
+		{
+			ublas::matrix<double> A(m_evecs);
+			ublas::permutation_matrix<size_t> pm( A.size1() );
+			size_t res = ublas::lu_factorize(A,pm);
+			if( res != 0 ) {
+				throw std::runtime_error( " ublas::lu_factorize failed" );
+			}
+			m_evecs_inv = ublas::identity_matrix<double>( A.size1());
+
+			ublas::lu_substitute(A,pm,m_evecs_inv);
+		}
+		m_valid = true;
+    }
+
+    ublas::matrix<double> setup_pmatrix( double t ) {
+
+    	ublas::diagonal_matrix<double> evals_diag(2);
+		ublas::matrix<double> prob_matrix(2,2);
+		ublas::matrix<double> temp_matrix(2,2);
+
 
         for( int i = 0; i < 2; i++ ) {
-            m_evals_diag(i,i) = exp( t * m_evals(i));
+            evals_diag(i,i) = exp( t * m_evals(i));
         }
 
-//         m_prob_matrix = ublas::prod( m_evecs, m_evals_diag );
-//         m_prob_matrix = ublas::prod( m_prob_matrix, m_evecs_inv );
-        m_prob_matrix = ublas::prod( ublas::prod( m_evecs, m_evals_diag, m_temp_matrix ), m_evecs_inv );
-
+        prob_matrix = ublas::prod( ublas::prod( m_evecs, evals_diag, temp_matrix ), m_evecs_inv );
+        //m_prob_matrix = ublas::prod( ublas::prod( m_evecs, m_evals_diag ), m_evecs_inv );
 
 //         std::cout << "pmatrix: " << m_prob_matrix << "\n";
 
@@ -259,7 +268,7 @@ public:
 
 //         throw std::runtime_error( "xxx" );
 
-        return m_prob_matrix;
+        return prob_matrix;
     }
 
 
@@ -277,8 +286,17 @@ class pvec_pgap {
 public:
     static ivy_mike::stupid_ptr<probgap_model> pgap_model;
 
+    inline const std::vector<parsimony_state> &get_v() {
+        return v;
+    }
+
+    inline const ublas::matrix<double> &get_gap_prob() {
+        return gap_prob;
+    }
+
+
     void init( const std::vector<uint8_t> &seq ) {
-        assert( v.size() == 0 );
+        //assert( v.size() == 0 );
         v.resize(seq.size());
 
         std::transform( seq.begin(), seq.end(), v.begin(), dna_parsimony_mapping::d2p );
