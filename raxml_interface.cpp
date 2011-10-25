@@ -469,3 +469,121 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	assert( ret_node->back->back != 0 );
 	return ret_node;
 }
+
+lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<boost::array<std::vector<double>, 4> > *pvecs ) {
+	ivy_mike::perf_timer perf_timer(!true);
+
+
+
+	perf_timer.add_int();
+
+
+	perf_timer.add_int();
+	Poco::Process::Args args;
+
+	args.push_back( "-f" );
+	args.push_back( "A" );
+	args.push_back( "-m" );
+
+	args.push_back( "GTRGAMMA" );
+
+	args.push_back( "-n" );
+	args.push_back( "Tzzz" );
+	args.push_back( "-s" );
+	args.push_back( ali_name );
+	args.push_back( "-t" );
+	args.push_back( tree_name );
+
+	std::string raxml( "/home/sim/src_exelixis/papara-RAxML/raxmlHPC-PTHREADS-SSE3" );
+
+
+	// remove old raxml output
+	Poco::File f( "RAxML_info.Tyyy" );
+
+	if( f.exists() ) {
+		assert( f.exists() && f.canWrite() && f.isFile() && "file not readable" );
+		f.remove();
+	}
+
+
+#if 1
+	Poco::Pipe raxout_pipe;
+
+	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, &raxout_pipe, 0 );
+
+
+//	std::vector<char> raxbuf;
+//	pipe_into_vector( raxout_pipe, raxbuf );
+	std::deque<char> raxbuf;
+	pipe_into_deque( raxout_pipe, raxbuf );
+
+	std::cout << "raxml wrote " << raxbuf.size() << "\n";
+#else
+	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, 0, 0 );
+#endif
+
+	int ret = proc.wait();
+
+	perf_timer.add_int();
+	std::cout << "wait for raxml: " << ret << "\n";
+
+	assert( ret == 42 );
+
+
+	const char *raxml_tree = "RAxML_nodeLabelledRootedTree.Tzzz";
+	ivy_mike::tree_parser_ms::parser p( raxml_tree, pool );
+
+	ivy_mike::tree_parser_ms::lnode *rax_tree = p.parse();
+
+	std::ifstream pis( "RAxML_marginalAncestralProbabilities.Tzzz" );
+	assert( pis.good() );
+
+
+	std::vector<boost::array<std::vector<double>, 4> > res;
+	boost::array<std::vector<double>, 4> *cur = 0;
+
+	size_t size = size_t(-1);
+
+	while( !pis.eof() ) {
+		std::string line;
+		std::getline( pis, line );
+
+
+		  std::stringstream strstr(line);
+
+		  std::istream_iterator<std::string> it(strstr);
+		  std::istream_iterator<std::string> end;
+
+		  std::vector<std::string> token(it, end);
+
+		  if( token.size() == 1 ) {
+			  if( size == size_t(-1) && cur != 0 ) {
+				  size = (*cur)[0].size();
+			  }
+
+			  res.resize(res.size() + 1 );
+			  cur = &res.back();
+
+			  if( size != size_t(-1) ) {
+				  (*cur)[0].reserve(size);
+				  (*cur)[1].reserve(size);
+				  (*cur)[2].reserve(size);
+				  (*cur)[3].reserve(size);
+			  }
+
+		  } else if( token.size() == 4 ) {
+			  assert( cur != 0 );
+			  (*cur)[0].push_back( atof(token[0].c_str() ));
+			  (*cur)[1].push_back( atof(token[1].c_str() ));
+			  (*cur)[2].push_back( atof(token[2].c_str() ));
+			  (*cur)[3].push_back( atof(token[3].c_str() ));
+		  } else {
+			  throw std::runtime_error( "bad line in RAxML_marginalAncestralProbabilities.Tzzz");
+		  }
+
+
+	}
+
+	return res;
+
+}
