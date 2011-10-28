@@ -102,7 +102,7 @@ void get_all_splits( lnode *t, std::vector< std::pair< lnode*, lnode* > > &edges
 
     
     std::deque<rooted_bifurcation<lnode> > trav_order;
-    rooted_traveral_order(t, t->back, trav_order, false );
+    rooted_traversal_order(t, t->back, trav_order, false );
     
     std::tr1::unordered_map<int, boost::dynamic_bitset<> > res;
     

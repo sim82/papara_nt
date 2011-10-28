@@ -386,7 +386,7 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 
     //std::cout << "traversal for branch: " << *(n1->m_data) << " " << *(n2->m_data) << "\n";
 
-    rooted_traveral_order( n1, n2, trav_order, incremental );
+    rooted_traversal_order( n1, n2, trav_order, incremental );
 //     std::cout << "traversal: " << trav_order.size() << "\n";
 
     for( std::deque< rooted_bifurcation< ivy_mike::tree_parser_ms::lnode > >::iterator it = trav_order.begin(); it != trav_order.end(); ++it ) {

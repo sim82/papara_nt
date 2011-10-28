@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <deque>
 #include <vector>
+#include <cassert>
 
 #include "ivymike/time.h"
 
@@ -14,6 +15,8 @@
 #include <boost/dynamic_bitset.hpp>
 #include <boost/tr1/unordered_map.hpp>
 #include <boost/tr1/array.hpp>
+#include <boost/numeric/ublas/matrix.hpp>
+#include <boost/lexical_cast.hpp>
 #include "raxml_interface.h"
 #include "tree_utils.h"
 #include "tree_similarity.h"
@@ -470,7 +473,9 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	return ret_node;
 }
 
-lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<boost::array<std::vector<double>, 4> > *pvecs ) {
+namespace ublas = boost::numeric::ublas;
+
+lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<ublas::matrix<double> > *pvecs ) {
 	ivy_mike::perf_timer perf_timer(!true);
 
 
@@ -488,17 +493,17 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	args.push_back( "GTRGAMMA" );
 
 	args.push_back( "-n" );
-	args.push_back( "Tzzz" );
+	args.push_back( "X1" );
 	args.push_back( "-s" );
 	args.push_back( ali_name );
 	args.push_back( "-t" );
 	args.push_back( tree_name );
 
-	std::string raxml( "/home/sim/src_exelixis/papara-RAxML/raxmlHPC-PTHREADS-SSE3" );
+	std::string raxml( "/home/sim/src_exelixis/hacked_as_raxml/raxmlHPC" );
 
 
 	// remove old raxml output
-	Poco::File f( "RAxML_info.Tyyy" );
+	Poco::File f( "RAxML_info.X1" );
 
 	if( f.exists() ) {
 		assert( f.exists() && f.canWrite() && f.isFile() && "file not readable" );
@@ -506,6 +511,7 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	}
 
 
+#if 0
 #if 1
 	Poco::Pipe raxout_pipe;
 
@@ -523,6 +529,9 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 #endif
 
 	int ret = proc.wait();
+#else
+	int ret = 42;
+#endif
 
 	perf_timer.add_int();
 	std::cout << "wait for raxml: " << ret << "\n";
@@ -530,60 +539,87 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	assert( ret == 42 );
 
 
-	const char *raxml_tree = "RAxML_nodeLabelledRootedTree.Tzzz";
+	const char *raxml_tree = "RAxML_nodeLabelledRootedTree.X1";
 	ivy_mike::tree_parser_ms::parser p( raxml_tree, pool );
 
 	ivy_mike::tree_parser_ms::lnode *rax_tree = p.parse();
 
-	std::ifstream pis( "RAxML_marginalAncestralProbabilities.Tzzz" );
+	std::ifstream pis( "RAxML_marginalAncestralProbabilities.X1" );
 	assert( pis.good() );
 
 
-	std::vector<boost::array<std::vector<double>, 4> > res;
-	boost::array<std::vector<double>, 4> *cur = 0;
+	pvecs->clear();
 
-	size_t size = size_t(-1);
+	// while this loop is a bit ugly, it seems to be the fastest way to
+	// read the state prob. text files. It still only parses about 20 Mb/s, because
+	// string->double conversion is incredibly slow...
+
+	// keeping the allocation of this stuff outside the loop helps a lot.
+	std::vector<double> tmp;
+	std::string line;
+	std::vector<double> token;
+	std::stringstream strstr;
 
 	while( !pis.eof() ) {
-		std::string line;
+		// read line and tokenize into doubles
+
+		line.clear();
 		std::getline( pis, line );
 
+//		std::stringstream strstr(line);
+		strstr.clear();
+		strstr.str(line);
 
-		  std::stringstream strstr(line);
+		std::istream_iterator<double> it(strstr);
+		const static std::istream_iterator<double> end;
 
-		  std::istream_iterator<std::string> it(strstr);
-		  std::istream_iterator<std::string> end;
+		token.assign(it, end);
 
-		  std::vector<std::string> token(it, end);
+		// depending on the number of token it is either a header/data/end-line
+		if( token.size() == 1 ) {
+			assert( pvecs->size() == size_t(token[0]) );
+			tmp.clear();
+		} else if( token.size() == 4 ) {
+			std::copy( token.begin(), token.end(), std::back_inserter(tmp) );
+		} else {
+			assert( tmp.size() % 4 == 0 );
+			const size_t nlines = tmp.size() / 4;
 
-		  if( token.size() == 1 ) {
-			  if( size == size_t(-1) && cur != 0 ) {
-				  size = (*cur)[0].size();
-			  }
+			pvecs->push_back( ublas::matrix<double>() );
 
-			  res.resize(res.size() + 1 );
-			  cur = &res.back();
+			ublas::matrix<double> &mat = pvecs->back();
+			mat.resize( nlines, 4 );
 
-			  if( size != size_t(-1) ) {
-				  (*cur)[0].reserve(size);
-				  (*cur)[1].reserve(size);
-				  (*cur)[2].reserve(size);
-				  (*cur)[3].reserve(size);
-			  }
+			// Using the copy should also work, as mat is a (nlines x 4) row-major matrix.
+			// TODO: look if ublas makes any guarantees about the layout of matrix::data().
+			//std::copy( tmp.begin(), tmp.end(), mat.data().begin() );
 
-		  } else if( token.size() == 4 ) {
-			  assert( cur != 0 );
-			  (*cur)[0].push_back( atof(token[0].c_str() ));
-			  (*cur)[1].push_back( atof(token[1].c_str() ));
-			  (*cur)[2].push_back( atof(token[2].c_str() ));
-			  (*cur)[3].push_back( atof(token[3].c_str() ));
-		  } else {
-			  throw std::runtime_error( "bad line in RAxML_marginalAncestralProbabilities.Tzzz");
-		  }
+			std::vector<double>::iterator tit = tmp.begin();
+			ublas::matrix<double>::iterator1 mit1 = mat.begin1();
 
+			// fold the linear (row-major) tmp vector into the ublas::matrix.
+			// FIXME: isn't there some way to wrap a std::vector in a ublas::matrix_expression?
+			for( size_t i = 0; i < nlines; ++i, tit+=4, ++mit1 ) {
+				assert( tit <= tmp.end() - 4 );
+				assert( mit1 < mat.end1() );
+				std::copy( tit, tit + 4, mit1.begin() );
+			}
+		}
+	}
+
+	size_t s = -1;
+	for( size_t i = 0; i < pvecs->size(); ++i ) {
+		if( s == size_t(-1) ) {
+			s = (*pvecs)[i].size2();
+		}
+
+		if( (*pvecs)[i].size2() != s ) {
+			throw std::runtime_error( "inconsistent ancestral pvec lengths");
+		}
 
 	}
 
-	return res;
+
+	return rax_tree;
 
 }

@@ -42,9 +42,14 @@ struct rooted_bifurcation {
 };
 
 
+template<typename lnode>
+inline bool operator==( const rooted_bifurcation<lnode> &n1, const rooted_bifurcation<lnode> &n2 ) {
+	return n1.parent == n2.parent && n1.child1 == n2.child1 && n1.child2 == n2.child2 && n1.tc == n2.tc;
+}
+
 template<class lnode>
 inline std::ostream &operator<<( std::ostream &os, const rooted_bifurcation<lnode> &rb ) {
-    const char *tc;
+    const char *tc = "W.T.F.";
     
     switch( rb.tc ) {
     case TIP_TIP:
@@ -55,7 +60,7 @@ inline std::ostream &operator<<( std::ostream &os, const rooted_bifurcation<lnod
         tc = "TIP_INNER";
         break;
         
-        case INNER_INNER:
+	case INNER_INNER:
         tc = "INNER_INNER";
         break;
     }
@@ -108,19 +113,107 @@ void rooted_traveral_order_rec( lnode *n, container &cont, bool incremental = fa
     }
 }
 
+//template <class lnode, class container>
+//void rooted_traveral_order( lnode *n1, lnode *n2, container &cont, bool incremental ) {
+//
+//    if( !n1->m_data->isTip ) {
+//        rooted_traveral_order_rec<lnode, container>( n1, cont, incremental );
+//    }
+//    if( !n2->m_data->isTip ) {
+//        rooted_traveral_order_rec<lnode, container>( n2, cont, incremental );
+//    }
+//
+//
+//    //std::reverse( cont.begin(), cont.end());
+//}
+
+
+
+
 template <class lnode, class container>
-void rooted_traveral_order( lnode *n1, lnode *n2, container &cont, bool incremental ) {
-    
+void rooted_traversal_order( lnode *n1, lnode *n2, lnode *n3, container &cont, bool incremental ) {
+
     if( !n1->m_data->isTip ) {
         rooted_traveral_order_rec<lnode, container>( n1, cont, incremental );
     }
     if( !n2->m_data->isTip ) {
         rooted_traveral_order_rec<lnode, container>( n2, cont, incremental );
     }
-    
-    
+    if( n3 != 0 ) {
+    	if( !n3->m_data->isTip ) {
+    		rooted_traveral_order_rec<lnode, container>( n3, cont, incremental );
+    	}
+    }
+
+
     //std::reverse( cont.begin(), cont.end());
 }
+
+
+template <class lnode, class container>
+void rooted_traversal_order( lnode *n1, lnode *n2, container &cont, bool incremental ) {
+	rooted_traversal_order<lnode,container>( n1, n2, 0, cont, incremental );
+
+}
+
+
+template <class lnode, typename oiter>
+void rooted_preorder_traversal( lnode *n, oiter start, bool incremental = false ) {
+
+
+
+	if( n == 0 ) {
+		return;
+	}
+
+	if( n->m_data->isTip ) {
+		return;
+	}
+
+    lnode *n1 = n->next->back;
+    lnode *n2 = n->next->next->back;
+
+
+
+    assert( n->m_data->isTip || n1 != 0 );
+    assert( n->m_data->isTip || n2 != 0 );
+
+    n->towards_root = true;
+    n->next->towards_root = false;
+    n->next->next->towards_root = false;
+
+
+
+    if( n1->m_data->isTip && n2->m_data->isTip ) {
+        *(start++) = rooted_bifurcation<lnode>( n, n1, n2, TIP_TIP );
+    } else if( n1->m_data->isTip && !n2->m_data->isTip ) {
+    	*(start++) = rooted_bifurcation<lnode>( n, n1, n2, TIP_INNER );
+
+        if( !incremental || !n2->towards_root ) {
+            rooted_preorder_traversal( n2, start );
+        }
+    } else if( !n1->m_data->isTip && n2->m_data->isTip ) {
+    	*(start++) = rooted_bifurcation<lnode>( n, n2, n1, TIP_INNER );
+
+        if( !incremental || !n1->towards_root ) {
+            rooted_preorder_traversal( n1, start );
+        }
+
+    } else {
+    	*(start++) = rooted_bifurcation<lnode>( n, n1, n2, INNER_INNER );
+
+        if( !incremental || !n1->towards_root ) {
+            rooted_preorder_traversal( n1, start );
+        }
+        if( !incremental || !n2->towards_root ) {
+            rooted_preorder_traversal( n2, start );
+        }
+    }
+}
+
+
+
+
 
 template <class lnode>
 lnode *towards_tree( lnode *n ) {
@@ -140,6 +233,9 @@ lnode *towards_tree( lnode *n ) {
     return n;
     
 }
+
+
+
 
 template <class visitor>
 void visit_lnode( typename visitor::lnode *n, visitor &v, bool go_back = true ) {
@@ -184,13 +280,14 @@ struct tip_collector {
   
     container m_nodes;
     
-public:
+
     void operator()( lnode *n ) {
         if( n->m_data->isTip ) {
             m_nodes.push_back(n->get_smart_ptr().lock());
         }
     }
 };
+
 
 template <class LNODE>
 struct tip_collector_dumb {
@@ -201,7 +298,7 @@ struct tip_collector_dumb {
   
     std::vector<lnode *> m_nodes;
     
-public:
+
     void operator()( lnode *n ) {
         if( n->m_data->isTip ) {
             m_nodes.push_back(n);
@@ -209,8 +306,23 @@ public:
     }
 };
 
+//template <class LNODE>
+//struct node_collector_dumb {
+//    typedef LNODE lnode;
+//    typedef std::vector<lnode *> container;
+//    container m_nodes;
+//
+//
+//    void operator()( lnode *n ) {
+//        if( n->m_data->isTip ) {
+//            m_nodes.push_back(n);
+//        }
+//    }
+//};
 
-template <class visitor>
+
+
+template <typename visitor>
 void visit_edges( typename visitor::lnode *n, visitor &v, bool at_root = true ) {
     assert( n->back != 0 );
     
@@ -235,17 +347,18 @@ void visit_edges( typename visitor::lnode *n, visitor &v, bool at_root = true ) 
 
 template <class LNODE>
 struct edge_collector {
-    typedef LNODE lnode;
-    
-    typedef std::pair<LNODE *, LNODE *> edge;
-    std::vector<edge> m_edges;
-    
 public:
+	typedef LNODE lnode;
+    typedef std::pair<LNODE *, LNODE *> edge;
+    typedef std::vector<edge> container;
+
     void operator()( lnode *n1, lnode *n2 ) {
 //         std::cout << "edge: " << n1 << " " << n2 << "\n";
         m_edges.push_back( edge( n1, n2 ) );
         
     }
+
+    container m_edges;
 };
 
 
@@ -339,6 +452,74 @@ public:
 
     }
 };
+
+
+//////////////////////////////////////////////////////////////////////////
+// STL inspired replacements to the 'visitor' stuff above.
+// (Which actually has nothing to do with the stupid java hack that is
+// commonly called visitor pattern)
+
+// STL compatible function to iterate over the lnodes (kind of like a std::copy)
+template <typename lnode, typename oiter>
+void iterate_lnode( lnode *n, oiter start, bool go_back = true ) {
+    *(start++) = n;
+    //outer++;
+
+    if( go_back && n->back != 0 ) {
+        iterate_lnode( n->back, start, false );
+    }
+    if( n->next->back != 0 ) {
+    	iterate_lnode( n->next->back, start, false );
+    }
+
+    if( n->next->next->back != 0 ) {
+    	iterate_lnode( n->next->next->back, start, false );
+    }
+};
+
+
+// UNTESTED: back_insert_iterator that only only inserts if predicate is true (TDD is for pussies)
+// combined with is_tip and iterate_lnodes it replaces most of the stupid hard-coded collectors from above.
+
+template <class Container, typename Pred>
+class back_insert_if_iterator :
+    public std::iterator<std::output_iterator_tag,void,void,void,void>
+{
+protected:
+	Container* container_;
+	Pred p_;
+public:
+	typedef Container container_type;
+	explicit back_insert_if_iterator (Container& x, Pred p ) : container_(&x), p_(p) {}
+	back_insert_if_iterator<Container, Pred>& operator= (typename Container::const_reference value) {
+
+
+		if( p_( value ) ) {
+			container_->push_back(value);
+		}
+		return *this;
+	}
+	back_insert_if_iterator<Container,Pred>& operator* () {
+		return *this;
+	}
+	back_insert_if_iterator<Container,Pred>& operator++ () {
+		return *this;
+	}
+	back_insert_if_iterator<Container,Pred> operator++ (int) {
+		return *this;
+	}
+};
+template <class Container, typename Pred>
+back_insert_if_iterator<Container, Pred> back_insert_ifer(Container &cont, Pred p ) {
+	return back_insert_if_iterator<Container, Pred>(cont, p);
+}
+
+inline bool is_tip( ivy_mike::tree_parser_ms::lnode * l ) {
+	assert( l != 0 );
+	assert( l->m_data != 0 );
+	return l->m_data->isTip;
+}
+
 
 
 

@@ -22,6 +22,10 @@ extern "C" {
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
+
+namespace {
+
+
 class pvec_cgap {
     //     aligned_buffer<parsimony_state> v;
     std::vector<parsimony_state> v;
@@ -178,12 +182,11 @@ public:
     
 };
 
-using namespace boost::numeric;
-
 class probgap_model {
-    ublas::matrix<double> m_evecs;
-    ublas::vector<double> m_evals;
-    ublas::matrix<double> m_evecs_inv;
+
+    boost::numeric::ublas::matrix<double> m_evecs;
+    boost::numeric::ublas::vector<double> m_evals;
+    boost::numeric::ublas::matrix<double> m_evecs_inv;
 
 //    ublas::diagonal_matrix<double> m_evals_diag; // used temporarily.
 //    ublas::matrix<double> m_prob_matrix;
@@ -219,6 +222,8 @@ public:
     	reset( calc_gap_freq( seqs ) );
     }
     void reset( double gap_freq ) {
+    	namespace ublas = boost::numeric::ublas;
+
     	m_gap_freq = gap_freq;
 		double f[2] = {1-m_gap_freq, m_gap_freq};
 
@@ -248,7 +253,8 @@ public:
 		m_valid = true;
     }
 
-    ublas::matrix<double> setup_pmatrix( double t ) {
+    boost::numeric::ublas::matrix<double> setup_pmatrix( double t ) {
+    	namespace ublas = boost::numeric::ublas;
 
     	ublas::diagonal_matrix<double> evals_diag(2);
 		ublas::matrix<double> prob_matrix(2,2);
@@ -279,7 +285,7 @@ public:
 class pvec_pgap {
     //     aligned_buffer<parsimony_state> v;
     std::vector<parsimony_state> v;
-    ublas::matrix<double> gap_prob;
+    boost::numeric::ublas::matrix<double> gap_prob;
 
     
     
@@ -290,7 +296,7 @@ public:
         return v;
     }
 
-    inline const ublas::matrix<double> &get_gap_prob() {
+    inline const boost::numeric::ublas::matrix<double> &get_gap_prob() {
         return gap_prob;
     }
 
@@ -321,10 +327,15 @@ public:
     }
 
 
+    void newview( const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    	newview( *this, c1, c2, z1, z2, tc );
 
+    	//std::cout << "newview: " << gap_prob.size1() << "\n";
+    }
 
-    static void newview( pvec_pgap &p, pvec_pgap &c1, pvec_pgap &c2, double z1, double z2, tip_case tc ) {
-        assert( c1.v.size() == c2.v.size() );
+    static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    	namespace ublas = boost::numeric::ublas;
+    	assert( c1.v.size() == c2.v.size() );
 
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
@@ -458,7 +469,7 @@ public:
 
     inline void to_gap_post_vec( std::vector<double> &outv ) {
 
-    	const ublas::matrix<double> &t = get_pgap();
+    	const boost::numeric::ublas::matrix<double> &t = get_pgap();
 
     	outv.clear();
     	outv.resize(v.size());
@@ -495,6 +506,7 @@ public:
 
 //         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
 
+        namespace ublas = boost::numeric::ublas;
 
 
         ublas::matrix<double> t = get_pgap();
@@ -599,11 +611,12 @@ public:
 //         ivy_mike::binary_twizzle( t.begin2(), t.end2(), (t.begin1() + 1).begin(), strided_inserter<oiter_,STRIDE>(out), std::less<double>() );
 //     }
     
-    const ublas::matrix<double> get_pgap() {
+    const boost::numeric::ublas::matrix<double> &get_pgap() {
         return gap_prob;
     }
 
 
 };
 ivy_mike::stupid_ptr<probgap_model> pvec_pgap::pgap_model;
+}
 #endif

@@ -22,6 +22,7 @@ ENDIF()
 
 
 add_executable(papara_nt main.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp )
+add_executable(propara propara.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
 add_executable(smith_waterman smith_waterman.cpp )
 add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp )
 add_executable(stepwise_addition_gapp stepwise_addition_gapp.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp )
@@ -36,6 +37,7 @@ add_executable(test_bitset test_bitset.cpp)
 
 
 target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
+target_link_libraries(propara ivymike ${SYSDEP_LIBS} PocoFoundation ublas_jama )
 #target_link_libraries(stepwise_addition ivymike)
 target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 target_link_libraries(stepwise_addition_gapp ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
