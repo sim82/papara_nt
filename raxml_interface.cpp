@@ -493,6 +493,141 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	args.push_back( "GTRGAMMA" );
 
 	args.push_back( "-n" );
+	args.push_back( "Y1" );
+	args.push_back( "-s" );
+	args.push_back( ali_name );
+	args.push_back( "-t" );
+	args.push_back( tree_name );
+
+	std::string raxml( "/home/sim/src_exelixis/hacked_as_raxml/raxmlHPC" );
+
+
+	// remove old raxml output
+	Poco::File f( "RAxML_info.Y1" );
+
+	if( f.exists() ) {
+		assert( f.exists() && f.canWrite() && f.isFile() && "file not readable" );
+		f.remove();
+	}
+
+
+#if 0
+#if 1
+	Poco::Pipe raxout_pipe;
+
+	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, &raxout_pipe, 0 );
+
+
+//	std::vector<char> raxbuf;
+//	pipe_into_vector( raxout_pipe, raxbuf );
+	std::deque<char> raxbuf;
+	pipe_into_deque( raxout_pipe, raxbuf );
+
+	std::cout << "raxml wrote " << raxbuf.size() << "\n";
+#else
+	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, 0, 0 );
+#endif
+
+	int ret = proc.wait();
+#else
+	int ret = 42;
+#endif
+
+	perf_timer.add_int();
+	std::cout << "wait for raxml: " << ret << "\n";
+
+	assert( ret == 42 );
+
+
+	const char *raxml_tree = "RAxML_nodeLabelledRootedTree.Y1";
+	ivy_mike::tree_parser_ms::parser p( raxml_tree, pool );
+
+	ivy_mike::tree_parser_ms::lnode *rax_tree = p.parse();
+
+	std::ifstream pis( "RAxML_marginalAncestralProbabilities.Y1", std::ios::binary );
+	assert( pis.good() );
+
+
+	// read the binary ancestral probability file.
+	// this is a huge improvement over the text file stuff (below) and now reads at 1200Mb/s
+	// from warm disk-cache instead of 20 Mb/s...
+
+	pvecs->clear();
+	ivy_mike::timer t1;
+
+	std::vector<double> tmp;
+	std::string line;
+	std::vector<double> token;
+	std::stringstream strstr;
+
+	while( !pis.eof() ) {
+		int32_t counter;
+		pis.read((char*)&counter, 4 );
+
+
+
+		if( counter == -1 ) {
+			break;
+		}
+
+		assert( size_t(counter) == pvecs->size() );
+
+		int32_t width;
+		pis.read((char*)&width, 4 );
+
+//		std::cout << "width: " << width << "\n";
+		assert( width > 0 );
+
+
+
+		pvecs->push_back(ublas::matrix<double>(width, 4));
+		ublas::matrix<double> &mat = pvecs->back();
+
+		// the underlying unbounded_array seems to be guaranteed to have a sensible memory layout. read straight into it.
+		// TODO: get fancy and directly back the boost::matrix with the mmaped binary file ;-)
+		pis.read((char*)mat.data().begin(), width * 4 * 8 );
+	}
+
+	size_t s = -1;
+	for( size_t i = 0; i < pvecs->size(); ++i ) {
+		if( s == size_t(-1) ) {
+			s = (*pvecs)[i].size1();
+		}
+
+		if( (*pvecs)[i].size1() != s ) {
+			throw std::runtime_error( "inconsistent ancestral pvec lengths");
+		}
+
+	}
+
+	std::cout << "read anc probs: " << t1.elapsed() << "\n";
+
+	return rax_tree;
+
+}
+
+
+#if 0
+
+// text file version. slow as hell
+lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<ublas::matrix<double> > *pvecs ) {
+	ivy_mike::perf_timer perf_timer(!true);
+
+
+
+	perf_timer.add_int();
+
+
+	perf_timer.add_int();
+	Poco::Process::Args args;
+
+	args.push_back( "-f" );
+	args.push_back( "A" );
+	args.push_back( "-m" );
+
+	args.push_back( "GTRGAMMA" );
+
+	args.push_back( "-n" );
 	args.push_back( "X1" );
 	args.push_back( "-s" );
 	args.push_back( ali_name );
@@ -623,3 +758,4 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	return rax_tree;
 
 }
+#endif
