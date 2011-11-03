@@ -37,7 +37,7 @@ add_executable(test_bitset test_bitset.cpp)
 
 
 target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
-target_link_libraries(propara ivymike ${SYSDEP_LIBS} PocoFoundation ublas_jama )
+target_link_libraries(propara ivymike ${SYSDEP_LIBS} PocoFoundation ublas_jama ${BOOST_LIBS})
 #target_link_libraries(stepwise_addition ivymike)
 target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 target_link_libraries(stepwise_addition_gapp ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
