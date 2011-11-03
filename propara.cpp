@@ -112,17 +112,19 @@ namespace {
 
 class log_odds_aligner {
 	typedef ublas::matrix<double> dmat;
-
+	typedef std::vector<double> dsvec;
 public:
-	log_odds_aligner( const dmat &state, const dmat &gap, boost::array<double,4> state_freq )
+	log_odds_aligner( const dmat &state, const dsvec &gap, boost::array<double,4> state_freq )
 	  : ref_state_prob_(state), ref_gap_prob_(gap), ref_len_(state.size1()),
 	    state_freq_(state_freq),
-	    neg_inf_( -std::numeric_limits<double>::infinity() )
+	    neg_inf_( -std::numeric_limits<double>::infinity() ),
+	    delta_log_(log(0.1)),
+	    epsilon_log_(log(0.5))
 	{
 	}
 
 	void setup( size_t qlen ) {
-		assert( ref_gap_prob_.size1() == ref_len_ );
+		assert( ref_gap_prob_.size() == ref_len_ );
 
 		m_.resize( qlen + 1, ref_len_ + 1 );
 		d_.resize( qlen + 1, ref_len_ + 1 );
@@ -139,10 +141,49 @@ public:
 		std::fill( m_.begin2().begin(), m_.begin2().end(), 0.0 );
 		std::fill( d_.begin2().begin(), d_.begin2().end(), neg_inf_ );
 		std::fill( i_.begin2().begin(), i_.begin2().end(), 0.0 );
+
+		precalc_log_odds();
+	}
+
+	class log_odds {
+	public:
+
+		log_odds( double bg_prob ) : bg_prob_(bg_prob) {}
+
+		inline double operator()( double p ) {
+			return log( p / bg_prob_ );
+		}
+
+	private:
+		const double bg_prob_;
+	};
+
+	void precalc_log_odds() {
+		ref_state_lo_.resize( ref_state_prob_.size2(), ref_state_prob_.size1() );
+
+		for( size_t i = 0; i < 4; ++i ) {
+			const ublas::matrix_column<dmat> pcol( ref_state_prob_, i );
+			ublas::matrix_row<dmat> lorow( ref_state_lo_, i );
+			std::transform( pcol.begin(), pcol.end(), lorow.begin(), log_odds(state_freq_[i]));
+		}
+
+		const double gap_freq = 0.83;
+
+		{
+			log_odds lo_ngap( 1 - gap_freq );
+			log_odds lo_gap( gap_freq );
+
+			ref_ngap_lo_.resize(ref_gap_prob_.size());
+			ref_gap_lo_.resize(ref_gap_prob_.size());
+			for( size_t i = 0; i < ref_gap_prob_.size(); ++i ) {
+				ref_ngap_lo_[i] = lo_ngap(1 - ref_gap_prob_[i]);
+				ref_gap_lo_[i] = lo_gap( ref_gap_prob_[i] );
+			}
+		}
 	}
 
 	template<typename T>
-	static bool max3( const T &a, const T &b, const T &c ) {
+	static T max3( const T &a, const T &b, const T &c ) {
 		return std::max( a, std::max( b, c ));
 	}
 
@@ -153,8 +194,7 @@ public:
 
 		//dmat ref_state_trans = trans(ref_state_prob_);
 
-		const double delta_log = log(0.1);
-		const double epsilon_log = log(0.5);
+
 
 		for( size_t i = 1; i < qlen + 1; ++i ) {
 			const int b = qs[i-1];
@@ -162,39 +202,62 @@ public:
 
 			const double b_freq = state_freq_.at(b);
 			const ublas::matrix_column<dmat> b_state( ref_state_prob_, b );
+			const ublas::matrix_row<dmat> b_state_lo( ref_state_lo_, b );
 
+//			const ublas::matrix_row<dmat> m0( m_, i );
+//			const ublas::matrix_row<dmat> m1( m_, i - 1 );
+//			const ublas::matrix_row<dmat> i0( i_, i );
+//			const ublas::matrix_row<dmat> i1( i_, i - 1 );
+//			const ublas::matrix_row<dmat> d0( d_, i );
+
+//			const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
+//			const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
 
 			for( size_t j = 1; j < ref_len_ + 1; ++j ) {
 				//ublas::matrix_row<dmat> a_state(ref_state_prob_, j-1 );
-				ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
+				//ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
 
-				double match_log_odds = log( b_state[j-1] / b_freq );
+				//double match_log_odds = log( b_state[j-1] / b_freq );
+				double match_log_odds = b_state_lo[j-1];
+
 
 				if( match_log_odds < -100 ) {
 				//	std::cout << "odd: " << match_log_odds << b_state[j-1] << " " << b_freq << " " << b << "\n";
 					match_log_odds = -100;
 				}
 
+
+#if 0
+				const double gap_freq = 0.83;
+				double ngap_log_odds = log( (1 - ref_gap_prob_[j-1]) / (1-gap_freq) );
+				double gap_log_odds = log( ref_gap_prob_[j-1] / gap_freq );
+				gap_log_odds = std::max(-100.0, gap_log_odds);
+				ngap_log_odds = std::max(-100.0, ngap_log_odds);
+#else
+				double gap_log_odds = ref_gap_lo_[j-1];
+				double ngap_log_odds = ref_ngap_lo_[j-1];
+#endif
 				double m_max = max3(
-						m_(i-1, j-1),
-						d_(i-1, j-1),
-						i_(i-1, j-1)
+						m_(i-1, j-1) + ngap_log_odds,
+						d_(i-1, j-1) + gap_log_odds,
+						i_(i-1, j-1) + gap_log_odds
 				);
 
 				m_(i,j) = m_max + match_log_odds;
 
-				std::cout << i << " " << j << " " << m_(i,j) << " - " << m_(i-1, j-1)
-						<< " " << d_(i-1, j-1) << " " << i_(i-1, j-1) << match_log_odds << "\n";
-
+#if 0
+				std::cout << i << " " << j << " " << m_(i,j) << " : " << m_(i-1, j-1) + ngap_log_odds
+						<< " " << d_(i-1, j-1) + gap_log_odds << " " << i_(i-1, j-1) + gap_log_odds << " " << match_log_odds << " " << gap_log_odds << " " << ngap_log_odds << " max: " << m_max << "\n";
+#endif
 				double i_max = std::max(
-						m_(i-1,j) + delta_log,
-						i_(i-1,j) + epsilon_log
+						m_(i-1,j) + delta_log_,
+						i_(i-1,j) + epsilon_log_
 				);
 				i_(i,j) = i_max;
 
 				double d_max = std::max(
-						m_(i,j-1) + delta_log,
-						d_(i,j-1) + epsilon_log
+						m_(i,j-1) + delta_log_,
+						d_(i,j-1) + epsilon_log_
 				);
 
 				d_(i,j) = d_max;
@@ -203,15 +266,98 @@ public:
 		}
 		{
 			ublas::matrix_row<dmat> m_last(m_, qlen);
+			ublas::matrix_row<dmat>::iterator max_it;
 
-			double max = *std::max_element( m_last.begin(), m_last.end() );
-			return max;
+			max_it = std::max_element( m_last.begin() + qlen, m_last.end() );
+			max_col_ = std::distance(m_last.begin(), max_it);
+			max_score_ = *max_it;
+
+
+
+			return max_score_;
 		}
+	}
+
+
+	void traceback( std::vector<uint8_t> *tb ) {
+		assert( tb != 0 );
+
+		//const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
+		//const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
+
+		std::cout << "tb: max_col: " << max_col_ << "\n";
+
+		size_t i = m_.size1() - 1;
+		size_t j = m_.size2() - 1;
+
+		while( j > max_col_ ) {
+			tb->push_back(1);
+			--j;
+		}
+
+		bool in_d = false;
+		bool in_i = false;
+		while( j > 0 && i > 0 ) {
+
+			if( in_d ) {
+				assert( !in_i );
+				tb->push_back(1);
+				--j;
+				in_d = m_(i,j) + delta_log_ < d_(i,j) + epsilon_log_;
+			} else if( in_i ) {
+				assert( !in_d );
+
+				tb->push_back(2);
+
+				--i;
+				in_i = m_(i,j) + delta_log_ < i_(i,j) + epsilon_log_;
+			} else {
+
+				// the j - 1 corrects for the +1 offset, it does not mean 'last column'!
+				const double gap_freq = 0.83;
+				double ngap_log_odds = log( (1-ref_gap_prob_[j-1]) / (1-gap_freq) );
+				double gap_log_odds = log( ref_gap_prob_[j-1] / gap_freq );
+				gap_log_odds = std::max(-100.0, gap_log_odds);
+				ngap_log_odds = std::max(-100.0, ngap_log_odds);
+
+
+				tb->push_back(0);
+
+				--i;
+				--j;
+
+				double vm = m_(i,j) + ngap_log_odds;
+				double vi = i_(i,j) + gap_log_odds;
+				in_i = vm < vi;
+
+				if( in_i ) {
+					in_d = vi < d_(i,j) + gap_log_odds;
+					in_i = !in_d; // choose between d and i
+				} else {
+					in_d = vm < d_(i,j) + gap_log_odds;
+				}
+			}
+
+		}
+
+		while( j > 0 ) {
+			tb->push_back(1);
+			--j;
+		}
+		while( i > 0 ) {
+			tb->push_back(2);
+			--i;
+		}
+
 	}
 
 private:
 	dmat ref_state_prob_;
-	dmat ref_gap_prob_;
+	dsvec ref_gap_prob_;
+
+	dmat ref_state_lo_;
+	dsvec ref_gap_lo_;
+	dsvec ref_ngap_lo_;
 
 	const size_t ref_len_;
 	const boost::array<double,4> state_freq_;
@@ -221,6 +367,12 @@ private:
 	dmat m_;
 	dmat d_;
 	dmat i_;
+
+	const double delta_log_;// = log(0.1);
+	const double epsilon_log_;// = log(0.5);
+
+	size_t max_col_;
+	double max_score_;
 };
 
 class my_adata : public ivy_mike::tree_parser_ms::adata {
@@ -237,7 +389,7 @@ public:
 	void init_gap_vec(const std::vector< uint8_t >& seq) {
     	gap_vec_.init(seq);
 
-    	cache_transposed_gap_probs();
+    	update_ancestral_gap_prob();
     }
 
     void init_anc_prob_vecs( const apvecs &apv ) {
@@ -253,8 +405,13 @@ public:
 		return &gap_vec_;
 	}
 
-    void cache_transposed_gap_probs() { // aahrg, this is stupid
-    	anc_gap_probs_ = trans( gap_vec_.get_pgap() );
+    void update_ancestral_gap_prob() { // aahrg, this is stupid
+
+    	anc_gap_prob_.resize(gap_vec_.size() );
+    	gap_vec_.to_ancestral_gap_prob(anc_gap_prob_.begin());
+
+
+//    	anc_gap_probs_ = trans( gap_vec_.get_pgap() );
     	anc_gap_probs_valid_ = true;
     }
 
@@ -263,7 +420,7 @@ public:
 
     	const size_t len = anc_state_probs_.size1();
 
-    	assert( len == anc_gap_probs_.size1() );
+    	assert( len == anc_gap_prob_.size() );
 
 
     	for( size_t i = 0; i < len; ++i ) {
@@ -271,7 +428,7 @@ public:
     		for( size_t j = 0; j < 4; ++j ) {
     			os << anc_state_probs_(i,j) << " ";
     		}
-    		os << ") " << anc_gap_probs_( i, 0 ) << "\n";
+    		os << ") " << anc_gap_prob_[i] << "\n";
     	}
     }
 
@@ -279,15 +436,17 @@ public:
     	return anc_state_probs_;
     }
 
-    const apvecs &gap_probs() {
+    const std::vector<double> &gap_probs() {
     	assert( anc_gap_probs_valid_ && "extra anal check because of the stupid cached transposed gap state vector." );
-    	return anc_gap_probs_;
+    	return anc_gap_prob_;
     }
 
 private:
     apvecs anc_state_probs_;
-    apvecs anc_gap_probs_; // this is actually a transposed version of gap_vec_.get_pgap()
+    //apvecs anc_gap_probs_; // this is actually a transposed version of gap_vec_.get_pgap()
     pvec_pgap gap_vec_;
+    std::vector<double> anc_gap_prob_;
+
     bool anc_gap_probs_valid_;
 };
 
@@ -386,7 +545,6 @@ private:
 		{}
 		}
 		return std::numeric_limits<uint8_t>::max();
-
 	}
 
 	std::vector<std::string> names_;
@@ -445,6 +603,16 @@ public:
 			}
 		}
 
+
+		//
+		// inject the probgap model ...
+		//
+
+		probgap_model pm( ref_seqs_ );
+		std::cout << "p: " << pm.setup_pmatrix(0.1) << "\n";
+		ivy_mike::stupid_ptr_guard<probgap_model> spg( pvec_pgap::pgap_model, &pm );
+
+
 		//
 		// initialize node/tip data
 		//
@@ -500,13 +668,6 @@ public:
 			assert( std::equal( trav_order_.begin(), trav_order_.end(), trav_order_old.begin()) );
 		}
 
-		//
-		// inject the probgap model ...
-		//
-
-		probgap_model pm( ref_seqs_ );
-		std::cout << "p: " << pm.setup_pmatrix(0.1) << "\n";
-		ivy_mike::stupid_ptr_guard<probgap_model> spg( pvec_pgap::pgap_model, &pm );
 
 		//
 		// do a whole-tree newview to calculate the gap probabilities
@@ -522,7 +683,8 @@ public:
 //			std::cout << "tip case: " << (*it) << "\n";
 			p->get_gap_vec_ptr()->newview( c1->get_gap_vec(), c2->get_gap_vec(), it->child1->backLen, it->child2->backLen, it->tc);
 
-			p->cache_transposed_gap_probs();
+			p->update_ancestral_gap_prob();
+			//p->cache_transposed_gap_probs();
 			//p->print_vecs(std::cout);
 
 		}
@@ -621,6 +783,34 @@ bool file_exists(const char *filename)
 }
 
 
+uint8_t decode_dna( int s ) {
+	assert( s >= 0 && s < 4 );
+	const static uint8_t map[4] = {'A','C','G','T'};
+
+	return map[size_t(s)];
+}
+
+void realize_trace( const std::vector<uint8_t> seq, const std::vector<uint8_t> &tb, std::vector<uint8_t> *out ) {
+	assert( out != 0 );
+
+	std::vector<uint8_t>::const_reverse_iterator tb_it;
+	std::vector<uint8_t>::const_iterator seq_it;
+	for( tb_it = tb.rbegin(), seq_it = seq.begin(); tb_it != tb.rend(); ++tb_it ) {
+		if( *tb_it == 0  ) {
+			assert( seq_it != seq.end() );
+
+			out->push_back(decode_dna(*seq_it));
+			++seq_it;
+
+		} else if( *tb_it == 2 ) {
+			assert( seq_it != seq.end() );
+			++seq_it;
+		} else {
+			out->push_back('-');
+		}
+	}
+}
+
 int main( int argc, char *argv[] ) {
     namespace igo = ivy_mike::getopt;
     ivy_mike::getopt::parser igp;
@@ -679,7 +869,7 @@ int main( int argc, char *argv[] ) {
 
 
     	for( size_t i = 0; i < refs.node_size(); ++i ) {
-			lnode *a = refs.get_node(0);
+			lnode *a = refs.get_node(i);
 			assert( a->towards_root );
 			assert( a->m_data != 0 );
 
@@ -691,7 +881,22 @@ int main( int argc, char *argv[] ) {
 			double score = ali.align(b);
 
 			std::cout << "score: " << score << "\n";
-			break;
+
+#if 0
+			std::vector<uint8_t> tb;
+
+			ali.traceback(&tb);
+
+			std::copy( tb.begin(), tb.end(), std::ostream_iterator<int>(std::cout));
+			std::cout << "\n";
+
+			std::vector<uint8_t> rtb;
+			realize_trace( b, tb, &rtb );
+
+			std::copy( rtb.begin(), rtb.end(), std::ostream_iterator<char>(std::cout));
+			std::cout << "\n";
+#endif
+	//		break;
     	}
     }
 

@@ -452,6 +452,7 @@ public:
     	//return v1 / (v1 + v2);
 
     	v1 *= 1 - pgap_model->gap_freq();
+    	throw std::runtime_error( "i think there is an error in this function. why v1 in the next line?");
     	v1 *= pgap_model->gap_freq();
 
     	float v = v1 / (v1 + v2);
@@ -464,6 +465,17 @@ public:
 
     	return v;
     }
+
+    static inline double gap_ancestral_probability( double v1, double v2 ) {
+		assert( pgap_model.is_valid_ptr() );
+		//return v1 / (v1 + v2);
+
+		const double freq_ngap = 1 - pgap_model->gap_freq();
+		const double freq_gap = pgap_model->gap_freq();
+
+
+		return v2 * freq_gap / (v1 * freq_ngap + v2 * freq_gap);
+	}
 
 
 
@@ -478,7 +490,11 @@ public:
 
     }
    
-
+    template<typename oiter>
+    inline void to_ancestral_gap_prob( oiter it ) {
+    	const boost::numeric::ublas::matrix<double> &t = get_pgap();
+    	std::transform(t.begin2(), t.end2(), (t.begin1() + 1).begin(), it, gap_ancestral_probability );
+    }
 
 
     template<typename vt>
