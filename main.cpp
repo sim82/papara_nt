@@ -18,6 +18,7 @@
 
 #include "parsimony.h"
 #include "pvec.h"
+#include "align_utils.h"
 
 #include "pars_align_seq.h"
 #include "pars_align_gapp_seq.h"
@@ -485,7 +486,7 @@ class papara_nt : public papara_nt_i {
     typedef my_adata_gen<pvec_t> my_adata;
 
 
-    const static size_t VW = 4;
+    const static size_t VW = 8;
 
     struct block_t {
         block_t() {
@@ -561,7 +562,7 @@ class papara_nt : public papara_nt_i {
                         last_tstatus = tstatus.elapsed();
                     }
                 }
-#if 0
+#if 1
                 assert( VW == 8 );
                 const align_pvec_score<short,8> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
                 for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
@@ -795,23 +796,23 @@ class papara_nt : public papara_nt_i {
     }
     
     void gapstream_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > &map) { 
-        
-        int seq_ptr = 0;
-        
-        for ( std::vector<uint8_t>::const_reverse_iterator git = gaps.rbegin(); git != gaps.rend(); ++git ) {
-
-            if ( *git == 1) {
-                ++seq_ptr;
-            } else if ( *git == 0 ) {
-
-                map.push_back(seq_ptr);
-                
-                ++seq_ptr;
-            } else {
-                map.push_back(seq_ptr);
-                
-            }
-        }        
+        align_utils::trace_to_position_map( gaps, &map );
+//        int seq_ptr = 0;
+//
+//        for ( std::vector<uint8_t>::const_reverse_iterator git = gaps.rbegin(); git != gaps.rend(); ++git ) {
+//
+//            if ( *git == 1) {
+//                ++seq_ptr;
+//            } else if ( *git == 0 ) {
+//
+//                map.push_back(seq_ptr);
+//
+//                ++seq_ptr;
+//            } else {
+//                map.push_back(seq_ptr);
+//
+//            }
+//        }
     }
     
     void write_qs_pvecs( const char * name ) {
@@ -1187,7 +1188,7 @@ public:
             int res = -1;
             std::vector<uint8_t> tbv;
 
-            if( false ) {
+            if( true ) {
 				const int *seqptr = m_ref_pvecs[best_edge].data();
 				const unsigned int *auxptr = m_ref_aux[best_edge].data();
 
@@ -1256,6 +1257,7 @@ public:
                 seq_to_position_map( m_qs_seqs[i], map_ref );
                 gapstream_to_position_map( tbv, map_aligned );
                 
+
                 if( map_ref.size() != map_aligned.size() ) {
                     throw std::runtime_error( "alignment quirk: map_ref.size() != map_aligned.size()" );
                 }

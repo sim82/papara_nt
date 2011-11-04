@@ -536,7 +536,7 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	perf_timer.add_int();
 	std::cout << "wait for raxml: " << ret << "\n";
 
-	assert( ret == 42 );
+	//assert( ret == 42 );
 
 
 	const char *raxml_tree = "RAxML_nodeLabelledRootedTree.Y1";

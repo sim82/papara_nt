@@ -452,8 +452,8 @@ public:
     	//return v1 / (v1 + v2);
 
     	v1 *= 1 - pgap_model->gap_freq();
-    	throw std::runtime_error( "i think there is an error in this function. why v1 in the next line?");
-    	v1 *= pgap_model->gap_freq();
+    //	throw std::runtime_error( "i think there is an error in this function. why v1 in the next line?");
+    	v2 *= pgap_model->gap_freq();
 
     	float v = v1 / (v1 + v2);
 

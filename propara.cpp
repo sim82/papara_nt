@@ -28,16 +28,15 @@
 #include "parsimony.h"
 #include "pvec.h"
 
-#include "pars_align_seq.h"
-#include "pars_align_gapp_seq.h"
+#include "align_utils.h"
+
+
 #include "fasta.h"
-#include "vec_unit.h"
-#include "align_pvec_vec.h"
+
 
 #include "ivymike/tree_parser.h"
 #include "ivymike/time.h"
 #include "ivymike/getopt.h"
-#include "ivymike/thread.h"
 #include "ivymike/demangle.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
@@ -111,8 +110,27 @@ namespace {
 //
 //};
 
-const static double g_delta = 0.1;
-const static double g_epsilon = 0.5;
+namespace {
+
+const double g_delta = 0.1;
+const double g_epsilon = 0.8;
+const double g_gap_freq = 0.715;
+
+
+}
+
+class log_odds {
+public:
+
+	log_odds( double bg_prob ) : bg_prob_(bg_prob) {}
+
+	inline double operator()( double p ) {
+		return std::max( -100.0, log( p / bg_prob_ ));
+	}
+
+private:
+	const double bg_prob_;
+};
 
 
 class log_odds_aligner_score_only {
@@ -161,18 +179,6 @@ public:
 
 	}
 
-	class log_odds {
-	public:
-
-		log_odds( double bg_prob ) : bg_prob_(bg_prob) {}
-
-		inline double operator()( double p ) {
-			return std::max( -100.0, log( p / bg_prob_ ));
-		}
-
-	private:
-		const double bg_prob_;
-	};
 
 	void precalc_log_odds() {
 		ref_state_lo_.resize( ref_state_prob_.size2(), ref_state_prob_.size1() );
@@ -183,11 +189,11 @@ public:
 			std::transform( pcol.begin(), pcol.end(), lorow.begin(), log_odds(state_freq_[i]));
 		}
 
-		const double gap_freq = 0.83;
+
 
 		{
-			log_odds lo_ngap( 1 - gap_freq );
-			log_odds lo_gap( gap_freq );
+			log_odds lo_ngap( 1 - g_gap_freq );
+			log_odds lo_gap( g_gap_freq );
 
 			ref_ngap_lo_.resize(ref_gap_prob_.size());
 			ref_gap_lo_.resize(ref_gap_prob_.size());
@@ -340,6 +346,21 @@ public:
 
 };
 
+template<bool NP>
+class bin_log_odds {
+public:
+	inline double operator()( double v1, double v2 ) {
+		double lo;
+
+		if( !NP ) {
+			lo = log( v1 / v2 );
+		} else {
+			lo = log( (1-v1) / (1-v2));
+		}
+
+		return std::max(-100.0, lo);
+	}
+};
 
 class log_odds_aligner {
 	typedef ublas::matrix<double> dmat;
@@ -354,9 +375,10 @@ class log_odds_aligner {
 	typedef std::vector<lof_t> losvec;
 
 public:
-	log_odds_aligner( const dmat &state, const dsvec &gap, boost::array<double,4> state_freq )
+	log_odds_aligner( const dmat &state, const dsvec &gap, boost::array<double,4> state_freq, const dsvec &pc_gap_freq )
 	  : ref_state_prob_(state), ref_gap_prob_(gap), ref_len_(state.size1()),
 	    state_freq_(state_freq),
+	    pc_gap_freq_( pc_gap_freq ),
 	    neg_inf_( -std::numeric_limits<lof_t>::infinity() ),
 	    max_matrix_height_(0),
 	    delta_log_(log(g_delta)),
@@ -390,19 +412,6 @@ public:
 
 	}
 
-	class log_odds {
-	public:
-
-		log_odds( double bg_prob ) : bg_prob_(bg_prob) {}
-
-		inline double operator()( double p ) {
-			return log( p / bg_prob_ );
-		}
-
-	private:
-		const double bg_prob_;
-	};
-
 	void precalc_log_odds() {
 		ref_state_lo_.resize( ref_state_prob_.size2(), ref_state_prob_.size1() );
 
@@ -412,11 +421,13 @@ public:
 			std::transform( pcol.begin(), pcol.end(), lorow.begin(), log_odds(state_freq_[i]));
 		}
 
-		const double gap_freq = 0.83;
+		//const double gap_freq = 0.83;
 
+
+#if 0
 		{
-			log_odds lo_ngap( 1 - gap_freq );
-			log_odds lo_gap( gap_freq );
+			log_odds lo_ngap( 1 - g_gap_freq );
+			log_odds lo_gap( g_gap_freq );
 
 			ref_ngap_lo_.resize(ref_gap_prob_.size());
 			ref_gap_lo_.resize(ref_gap_prob_.size());
@@ -425,6 +436,29 @@ public:
 				ref_gap_lo_[i] = lo_gap( ref_gap_prob_[i] );
 			}
 		}
+#endif
+		ref_ngap_lo_.resize(ref_gap_prob_.size());
+		ref_gap_lo_.resize(ref_gap_prob_.size());
+
+		std::transform( ref_gap_prob_.begin(), ref_gap_prob_.end(), pc_gap_freq_.begin(), ref_ngap_lo_.begin(), bin_log_odds<true>());
+		std::transform( ref_gap_prob_.begin(), ref_gap_prob_.end(), pc_gap_freq_.begin(), ref_gap_lo_.begin(), bin_log_odds<false>());
+
+#if 0
+//		std::copy( ref_gap_lo_.begin(), ref_gap_lo_.end(), std::ostream_iterator<double>(std::cout, "\t"));
+//		std::cout << "\n";
+//		std::copy( ref_ngap_lo_.begin(), ref_ngap_lo_.end(), std::ostream_iterator<double>(std::cout, "\t"));
+//		std::cout << "\n";
+//		std::copy( ref_gap_prob_.begin(), ref_gap_prob_.end(), std::ostream_iterator<double>(std::cout, "\t"));
+//		std::cout << "\n";
+//		std::copy( pc_gap_freq_.begin(), pc_gap_freq_.end(), std::ostream_iterator<double>(std::cout, "\t"));
+//		std::cout << "\n";
+
+		for( size_t i = 0; i < ref_gap_lo_.size(); ++i ) {
+			std::cout << ref_gap_lo_[i] << "\t" << ref_ngap_lo_[i] << "\t" << ref_gap_prob_[i] << "\t" << pc_gap_freq_[i] << "\n";
+		}
+		std::cout << "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n";
+//		throw std::runtime_error("");
+#endif
 	}
 
 	template<typename T>
@@ -515,7 +549,7 @@ public:
 		//const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
 		//const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
 
-		std::cout << "tb: max_col: " << max_col_ << "\n";
+//		std::cout << "tb: max_col: " << max_col_ << "\n";
 
 		size_t i = max_row_;
 		size_t j = m_.size2() - 1;
@@ -591,7 +625,7 @@ private:
 
 	const size_t ref_len_;
 	const boost::array<double,4> state_freq_;
-
+	const dsvec pc_gap_freq_;
 	const float neg_inf_;
 
 	lomat m_;
@@ -606,6 +640,8 @@ private:
 	size_t max_col_;
 	size_t max_row_;
 	double max_score_;
+
+
 };
 
 class my_adata : public ivy_mike::tree_parser_ms::adata {
@@ -615,7 +651,7 @@ public:
 	typedef boost::numeric::ublas::matrix<double> apvecs;
 
 
-	my_adata() : anc_gap_probs_valid_(false)
+	my_adata() : anc_gap_probs_valid_(false), max_depth_(0)
 	{
 	}
 
@@ -674,6 +710,14 @@ public:
     	return anc_gap_prob_;
     }
 
+    size_t max_depth() const {
+    	return max_depth_;
+    }
+
+    void max_depth( size_t max_depth ) {
+    	max_depth_ = max_depth;
+    }
+
 private:
     apvecs anc_state_probs_;
     //apvecs anc_gap_probs_; // this is actually a transposed version of gap_vec_.get_pgap()
@@ -681,6 +725,7 @@ private:
     std::vector<double> anc_gap_prob_;
 
     bool anc_gap_probs_valid_;
+    size_t max_depth_;
 };
 
 
@@ -750,7 +795,15 @@ public:
 		return m;
 	}
 
-private:
+	static void seq_to_position_map( const std::vector<uint8_t> &seq, std::vector<int> *map ) {
+		for( size_t i = 0; i < seq.size(); ++i ) {
+			if( is_dna(seq[i]) ) {
+				map->push_back(int(i));
+			}
+		}
+	}
+
+
 	static bool is_dna( uint8_t c ) {
 		switch( c ) {
 		case 'a':
@@ -761,6 +814,8 @@ private:
 		case 'C':
 		case 'G':
 		case 'T':
+		case 'U':
+		case 'u':
 			return true;
 		default:
 		{}
@@ -784,6 +839,8 @@ private:
 
 		case 't':
 		case 'T':
+		case 'u':
+		case 'U':
 			return 3;
 
 		default:
@@ -791,7 +848,7 @@ private:
 		}
 		return std::numeric_limits<uint8_t>::max();
 	}
-
+private:
 	std::vector<std::string> names_;
 	std::vector<std::vector<uint8_t> > raw_seqs_; // seqs in the source alphabet (e.g. ACGT)
 
@@ -881,7 +938,7 @@ public:
 
 			if( mad->isTip ) {
 				size_t idx = std::find(ref_names_.begin(), ref_names_.end(), mad->tipName ) - ref_names_.begin();
-				std::cout << "tip name: " << mad->tipName << " " << idx << "\n";
+//				std::cout << "tip name: " << mad->tipName << " " << idx << "\n";
 				//size_t idx = mp->second;
 				mad->init_gap_vec( ref_seqs_.at(idx));
 			}
@@ -929,12 +986,20 @@ public:
 			p->get_gap_vec_ptr()->newview( c1->get_gap_vec(), c2->get_gap_vec(), it->child1->backLen, it->child2->backLen, it->tc);
 
 			p->update_ancestral_gap_prob();
+			p->max_depth( 1 + std::max( c1->max_depth(), c2->max_depth() ));
 			//p->cache_transposed_gap_probs();
 			//p->print_vecs(std::cout);
 
 		}
 
 
+
+		calc_per_column_gap_freq();
+
+		std::ofstream node_depth("node_depth.txt");
+		for( size_t i = 0; i < node_size(); ++i ) {
+			node_depth << i << " " << (get_node(i)->m_data->get_as<my_adata>()->max_depth()) << "\n";
+		}
 
 	}
 
@@ -947,6 +1012,18 @@ public:
 
 	const boost::array<double,4> &base_freqs() const {
 		return base_freqs_;
+	}
+
+	const std::vector<std::string> &ref_names() const {
+		return ref_names_;
+	}
+
+	const std::vector<std::vector<uint8_t> > &ref_seqs() const {
+		return ref_seqs_;
+	}
+
+	const std::vector<double> &per_column_gap_freq() const {
+		return per_column_gap_freq_;
 	}
 
 private:
@@ -977,6 +1054,8 @@ private:
 
 				case 't':
 				case 'T':
+				case 'u':
+				case 'U':
 					++counts[3];
 					break;
 
@@ -996,6 +1075,35 @@ private:
 		return counts;
 	}
 
+
+	void calc_per_column_gap_freq() {
+		assert( !ref_seqs_.empty() );
+
+		per_column_gap_freq_.assign(ref_seqs_.front().size(), g_gap_freq );
+		return;
+
+		std::vector<int> gap_counts( ref_seqs_.front().size(), 1 );
+
+		for( std::vector<std::vector<uint8_t> >::iterator it = ref_seqs_.begin(); it != ref_seqs_.end(); ++it ) {
+			assert( it->size() == gap_counts.size() );
+
+			for( size_t i = 0; i < gap_counts.size(); ++i ) {
+				if( !queries::is_dna((*it)[i]) ) {
+					gap_counts[i]++;
+				}
+			}
+		}
+
+		per_column_gap_freq_.resize(gap_counts.size() );
+		const double nseq = ref_seqs_.size();
+
+		std::transform( gap_counts.begin(), gap_counts.end(), per_column_gap_freq_.begin(), std::bind2nd(std::divides<double>(),nseq + 2 ));
+
+//		std::copy( per_column_gap_freq_.begin(), per_column_gap_freq_.end(), std::ostream_iterator<double>( std::cout, " " ));
+//		std::cout << "\n";
+
+	}
+
 	sptr::shared_ptr<ln_pool> pool_;
 
 	const std::string tree_name_;
@@ -1011,6 +1119,8 @@ private:
 	boost::array<double,4> base_freqs_;
 
 	std::deque<rooted_bifurcation<lnode> > trav_order_;
+
+	std::vector<double> per_column_gap_freq_;
 };
 
 std::string filename( const std::string &run_name, const char *type ) {
@@ -1028,33 +1138,7 @@ bool file_exists(const char *filename)
 }
 
 
-uint8_t decode_dna( int s ) {
-	assert( s >= 0 && s < 4 );
-	const static uint8_t map[4] = {'A','C','G','T'};
 
-	return map[size_t(s)];
-}
-
-void realize_trace( const std::vector<uint8_t> seq, const std::vector<uint8_t> &tb, std::vector<uint8_t> *out ) {
-	assert( out != 0 );
-
-	std::vector<uint8_t>::const_reverse_iterator tb_it;
-	std::vector<uint8_t>::const_iterator seq_it;
-	for( tb_it = tb.rbegin(), seq_it = seq.begin(); tb_it != tb.rend(); ++tb_it ) {
-		if( *tb_it == 0  ) {
-			assert( seq_it != seq.end() );
-
-			out->push_back(decode_dna(*seq_it));
-			++seq_it;
-
-		} else if( *tb_it == 2 ) {
-			assert( seq_it != seq.end() );
-			++seq_it;
-		} else {
-			out->push_back('-');
-		}
-	}
-}
 
 
 struct scoring_results {
@@ -1063,7 +1147,8 @@ struct scoring_results {
 	scoring_results( size_t num_qs )
 	: best_score_(num_qs, -std::numeric_limits<double>::infinity()),
 	  best_ref_(num_qs, size_t(-1)),
-	  best_tb_(num_qs)
+	  best_tb_(num_qs),
+	  os_("scores.txt")
 	{}
 
 
@@ -1078,7 +1163,7 @@ struct scoring_results {
 	bool offer( size_t qs, size_t ref, double score ) {
 		boost::lock_guard<boost::mutex> lock(mtx_);
 
-
+		os_ << qs << " " << ref << " " << score << "\n";
 
 		if( best_score_.at(qs) < score || (delta_equal(best_score_.at(qs), score) && ref < best_ref_.at(qs))) {
 			best_score_[qs] = score;
@@ -1103,6 +1188,8 @@ struct scoring_results {
     std::vector<double> best_score_;
     std::vector<size_t> best_ref_;
     std::vector<std::vector<uint8_t> > best_tb_;
+
+    std::ofstream os_;
 
     boost::mutex mtx_;
 
@@ -1137,8 +1224,8 @@ public:
 			const my_adata *ma = dynamic_cast<const my_adata *>(a->m_data.get());
 
 
-			//log_odds_aligner ali( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
-			log_odds_aligner_score_only ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
+			log_odds_aligner ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs(), refs_.per_column_gap_freq() );
+			//log_odds_aligner_score_only ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
 
 			//std::cout << "ref: " << i << "\n";
 
@@ -1157,7 +1244,7 @@ public:
 
 				//std::cout << "score: " << score << " " << score2 << "\n";
 				//assert( score == score2 );
-
+				//std::cout << "score: " << j << " " << i << " " << score << "\n";
 				if( res_->offer(j, i, score) ) {
 					//tb_tmp.clear();
 				//	ali.traceback(&tb_tmp);
@@ -1185,6 +1272,27 @@ private:
 	size_t rank_;
 	size_t num_workers_;
 };
+
+
+size_t write_ref_seqs( std::ostream &os, const references &refs, size_t num_qs, size_t max_qs_name_len ) {
+	os << refs.ref_seqs().size() + num_qs << " " << refs.ref_seqs().front().size() << "\n";
+
+
+	size_t max_name_len = max_qs_name_len;
+	for( size_t i = 0; i < refs.ref_names().size(); ++i ) {
+		max_name_len = std::max( max_name_len, refs.ref_names()[i].size() );
+	}
+
+
+	for( size_t i = 0; i < refs.ref_names().size(); ++i ) {
+		os << std::setw(max_name_len+1) << std::left << refs.ref_names()[i];
+
+		std::copy( refs.ref_seqs()[i].begin(), refs.ref_seqs()[i].end(), std::ostream_iterator<char>(os));
+		os << "\n";
+	}
+
+	return max_name_len;
+}
 
 int main( int argc, char *argv[] ) {
     namespace igo = ivy_mike::getopt;
@@ -1271,7 +1379,18 @@ int main( int argc, char *argv[] ) {
 	std::vector<uint8_t> rtb;
 	std::string out_name(filename( opt_run_name, "aligned_qs" ));
 	std::ofstream os( out_name.c_str());
-	const size_t max_name_len = qs.max_name_length();
+
+	std::string qual_name(filename( opt_run_name, "quality" ));
+	std::ofstream os_qual( qual_name.c_str());
+
+
+
+	const size_t max_name_len = write_ref_seqs( os, refs, qs.size(), qs.max_name_length() );
+
+
+	double qual = 0.0;
+	int num_qual = 0;
+
 	for( size_t i = 0; i < refs.node_size(); ++i )
 	{
 
@@ -1285,7 +1404,7 @@ int main( int argc, char *argv[] ) {
 		const my_adata *ma = dynamic_cast<const my_adata *>(a->m_data.get());
 
 		assert( res.best_ref_.size() == qs.size() );
-		log_odds_aligner ali( ma->state_probs(), ma->gap_probs(), refs.base_freqs() );
+		log_odds_aligner ali( ma->state_probs(), ma->gap_probs(), refs.base_freqs(), refs.per_column_gap_freq() );
 
 		for( size_t j = 0; j < qs.size(); ++j ) {
 
@@ -1302,18 +1421,53 @@ int main( int argc, char *argv[] ) {
 			tb.clear();
 			ali.traceback(&tb);
 
+
+
 			rtb.clear();
-			realize_trace( b, tb, &rtb );
+			align_utils::realize_trace( b, tb, &rtb );
 
 			os << std::setw(max_name_len+1) << std::left << qs.get_name(j);
 			std::copy( rtb.begin(), rtb.end(), std::ostream_iterator<char>(os));
 			os << "\n";
+
+
+
+			{
+				std::vector<int> map_ref;
+				std::vector<int> map_aligned;
+				queries::seq_to_position_map( qs.get_raw(j), &map_ref );
+				align_utils::trace_to_position_map( tb, &map_aligned );
+
+				if( map_ref.size() != map_aligned.size() ) {
+					throw std::runtime_error( "alignment quirk: map_ref.size() != map_aligned.size()" );
+				}
+
+				size_t num_equal = ivy_mike::count_equal( map_ref.begin(), map_ref.end(), map_aligned.begin() );
+
+				//std::cout << "size: " << map_ref.size() << " " << map_aligned.size() << " " << m_qs_seqs[i].size() << "\n";
+				//std::cout << num_equal << " equal of " << map_ref.size() << "\n";
+
+				double qscore = num_equal / double(map_ref.size());
+				//std::cout << "score: " << qscore << "\n";
+				qual += qscore;
+				++num_qual;
+
+
+				os_qual << qs.get_name(j) << " " << qscore << " " << score << "\n";
+			}
+
+
+
+
 		}
 	}
 
 
     std::cout << t.elapsed() << std::endl;
     lout << "SUCCESS " << t.elapsed() << std::endl;
+
+    std::cout << "mean quality: " << qual / num_qual << "\n";
+
     return 0;
 }
 
