@@ -1,6 +1,8 @@
 #include <Poco/Process.h>
 #include <Poco/File.h>
 #include <Poco/Pipe.h>
+#include <Poco/MD5Engine.h>
+
 
 #include <iostream>
 #include <iomanip>
@@ -10,6 +12,9 @@
 #include <cassert>
 
 #include "ivymike/time.h"
+
+#include <boost/interprocess/file_mapping.hpp>
+#include <boost/interprocess/mapped_region.hpp>
 
 #include <boost/shared_ptr.hpp>
 #include <boost/dynamic_bitset.hpp>
@@ -473,7 +478,130 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	return ret_node;
 }
 
+//size_t file_size( const char *name ) {
+//	std::ifstream is(name);
+//
+//	if( !is.good() ) {
+//		return -1;
+//	} else {
+//
+//		is.seekg( 0, std::ios_base::end );
+//
+//		return is.tellg();
+//	}
+//}
+
+std::string digest_files( const std::vector<std::string> &files ) {
+
+	const size_t buf_size = 1024 * 64;
+	boost::array<char,buf_size> buf;
+
+	Poco::MD5Engine md5;
+
+	for( std::vector<std::string>::const_iterator it = files.begin(); it != files.end(); ++it ) {
+//		using namespace boost::interprocess;
+//		file_mapping fm( it->c_str(), read_only );
+//
+//
+//		mapped_region mr( fm, read_only );
+//		madvise(mr.get_address(), mr.get_size(), MADV_SEQUENTIAL ); // maybe put a portable version of this into ivy_mike...
+//		md5.update( (char *)mr.get_address(), mr.get_size() );
+
+		std::ifstream is( it->c_str() );
+		if( !is.good() ) {
+			std::cerr << "filename: " << *it << "\n";
+			throw std::runtime_error( "cannot open file for digest" );
+		}
+		do {
+			is.read(buf.data(), buf.size() );
+			//std::cout << "gcount: " << is.gcount() << "\n";
+			md5.update(buf.data(), is.gcount() );
+		} while( !is.eof() );
+	}
+
+	return md5.digestToHex(md5.digest());
+}
+
+
 namespace ublas = boost::numeric::ublas;
+
+void launch_or_not( const std::string &raxml, Poco::Process::Args args, const std::string &digest, std::vector<std::string> *out_files ) {
+	std::string temp_name = "/tmp/";
+	temp_name += "propara_";
+	temp_name += digest;
+
+	Poco::File tmp_dir( temp_name );
+
+
+	// test if all requested output files exist in temp_dir
+	std::vector<std::string> new_outfiles = *out_files;
+	bool have_files = true;
+	for( std::vector<std::string>::iterator it = new_outfiles.begin(); it != new_outfiles.end(); ++it ) {
+		std::string fn = temp_name + "/" + *it;
+		Poco::File f( fn );
+
+
+		bool have_this_file = f.exists();
+		if( have_this_file ) {
+			have_this_file = have_this_file && f.isFile();
+		}
+
+		have_files = have_files && have_this_file;
+
+		*it = fn;
+	}
+
+	if( tmp_dir.exists() && tmp_dir.canWrite() ) {
+		// make sure that temp_dir is actually a directory
+
+		if( !tmp_dir.isDirectory()) {
+			std::cerr << "tmp name: " << temp_name << "\n";
+			throw std::runtime_error( "cache file-name exists but is not a directory" );
+		}
+
+		// if temp_dir exists but does not contain all output files, delete them
+
+		if( !have_files ) {
+			// for now: jsut throw an error because this case shoudl not happen in a controlled environment
+			std::cerr << "temp_dir: " << temp_name << "\n";
+			throw std::runtime_error( "temp_dir exists but does not contain all output files");
+
+			for( std::vector<std::string>::iterator it = new_outfiles.begin(); it != new_outfiles.end(); ++it ) {
+				Poco::File f( *it );
+
+				std::cout << "removing: " << *it << "\n";
+				f.remove();
+			}
+		}
+	} else {
+		assert( !have_files ); // unless something is really weird. maybe reiserfs4 would be capable of doing this?
+
+		tmp_dir.createDirectories();
+	}
+
+
+	if( !have_files ) {
+		Poco::Pipe raxout_pipe;
+
+		args.push_back("-w");
+		args.push_back(temp_name);
+
+		Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, &raxout_pipe, 0 );
+
+
+	//	std::vector<char> raxbuf;
+	//	pipe_into_vector( raxout_pipe, raxbuf );
+		std::deque<char> raxbuf;
+		pipe_into_deque( raxout_pipe, raxbuf );
+
+		std::cout << "raxml wrote " << raxbuf.size() << "\n";
+
+		int ret = proc.wait();
+	}
+
+	out_files->swap(new_outfiles);
+
+}
 
 lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<ublas::matrix<double> > *pvecs ) {
 	ivy_mike::perf_timer perf_timer(!true);
@@ -502,49 +630,38 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	std::string raxml( "/home/sim/src_exelixis/hacked_as_raxml/raxmlHPC" );
 
 
-	// remove old raxml output
-	Poco::File f( "RAxML_info.Y1" );
+	std::vector<std::string> in_files;
+	in_files.push_back( raxml );
+	in_files.push_back( ali_name );
+	in_files.push_back( tree_name );
 
-	if( f.exists() ) {
-		assert( f.exists() && f.canWrite() && f.isFile() && "file not readable" );
-		f.remove();
-	}
+	std::string digest = digest_files(in_files);
+	std::cout << "input files md5sum: " << digest << "\n";
+
+	// check if there are cached output files for the current run
+
+	std::vector<std::string> out_files;
+	out_files.push_back("RAxML_info.Y1");
+	out_files.push_back("RAxML_nodeLabelledRootedTree.Y1" );
+	out_files.push_back("RAxML_marginalAncestralProbabilities.Y1" );
 
 
-#if 0
-#if 1
-	Poco::Pipe raxout_pipe;
 
-	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, &raxout_pipe, 0 );
+	launch_or_not( raxml, args, digest, &out_files );
 
-
-//	std::vector<char> raxbuf;
-//	pipe_into_vector( raxout_pipe, raxbuf );
-	std::deque<char> raxbuf;
-	pipe_into_deque( raxout_pipe, raxbuf );
-
-	std::cout << "raxml wrote " << raxbuf.size() << "\n";
-#else
-	Poco::ProcessHandle proc = Poco::Process::launch( raxml, args, 0, 0, 0 );
-#endif
-
-	int ret = proc.wait();
-#else
-	int ret = 42;
-#endif
 
 	perf_timer.add_int();
-	std::cout << "wait for raxml: " << ret << "\n";
+
 
 	//assert( ret == 42 );
 
 
-	const char *raxml_tree = "RAxML_nodeLabelledRootedTree.Y1";
-	ivy_mike::tree_parser_ms::parser p( raxml_tree, pool );
+	//const char *raxml_tree = "RAxML_nodeLabelledRootedTree.Y1";
+	ivy_mike::tree_parser_ms::parser p( out_files.at(1).c_str(), pool );
 
 	ivy_mike::tree_parser_ms::lnode *rax_tree = p.parse();
 
-	std::ifstream pis( "RAxML_marginalAncestralProbabilities.Y1", std::ios::binary );
+	std::ifstream pis( out_files.at(2).c_str(), std::ios::binary );
 	assert( pis.good() );
 
 
