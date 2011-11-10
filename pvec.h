@@ -1,7 +1,7 @@
 
 #ifndef __pvec_h
 #define __pvec_h
-// #define BOOST_UBLAS_NDEBUG
+#define BOOST_UBLAS_NDEBUG
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/banded.hpp>
 #include <boost/numeric/ublas/io.hpp>
@@ -22,7 +22,7 @@ extern "C" {
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
-
+#include "sequence_model.h"
 namespace {
 
 
@@ -41,6 +41,7 @@ public:
         std::transform( seq.begin(), seq.end(), v.begin(), dna_parsimony_mapping::d2p );
         std::transform( seq.begin(), seq.end(), auxv.begin(), dna_parsimony_mapping::d2aux );
     }
+
 
     inline const std::vector<parsimony_state> &get_v() {
         return v;
@@ -323,6 +324,34 @@ public:
                 gap_prob( 1, i ) = 0.0;
             }
         }
+
+    }
+
+    template<typename seq_model>
+    void init2( const std::vector<uint8_t> &seq, seq_model sm ) {
+        //assert( v.size() == 0 );
+        v.resize(seq.size());
+
+        std::transform( seq.begin(), seq.end(), v.begin(), seq_model::s2p );
+        //std::transform( seq.begin(), seq.end(), auxv.begin(), dna_parsimony_mapping::d2aux );
+
+        gap_prob.resize(2, seq.size());
+
+        for( size_t i = 0; i < seq.size(); i++ ) {
+            // ( 0 )
+            // ( 1 ) means gap
+
+
+            if( seq_model::is_gap(v[i]) ) {
+                gap_prob( 0, i ) = 0.0;
+                gap_prob( 1, i ) = 1.0;
+            } else {
+                gap_prob( 0, i ) = 1.0;
+                gap_prob( 1, i ) = 0.0;
+            }
+        }
+
+
 
     }
 

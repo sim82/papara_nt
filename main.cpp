@@ -481,7 +481,13 @@ class papara_nt : public papara_nt_i {
     const static int score_gap_extend = 1;
     const static int score_mismatch = 1;
     const static int score_match_cgap = 3;
-    
+
+
+//    const static int score_gap_open = 1;
+//    const static int score_gap_extend = 1;
+//    const static int score_mismatch = 3;
+//    const static int score_match_cgap = 10;
+
     //typedef pvec_pgap pvec_t;
     typedef my_adata_gen<pvec_t> my_adata;
 

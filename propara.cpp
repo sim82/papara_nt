@@ -32,6 +32,8 @@
 #include "fasta.h"
 #include "raxml_interface.h"
 
+#include "math_approx.h"
+
 #include "ivymike/multiple_alignment.h"
 
 #include "ivymike/tree_parser.h"
@@ -133,6 +135,8 @@ public:
 private:
     const double bg_prob_;
 };
+
+
 
 
 class log_odds_aligner_score_only {
@@ -347,6 +351,248 @@ public:
     double max_score_;
 
 };
+
+
+class odds {
+public:
+
+    odds( double bg_prob ) : bg_prob_(bg_prob) {}
+
+    inline double operator()( double p ) {
+        return p / bg_prob_;
+    }
+
+private:
+    const double bg_prob_;
+};
+
+
+class log_odds_viterbi {
+    typedef ublas::matrix<double> dmat;
+    typedef std::vector<double> dsvec;
+
+
+    // lof_t: log-odds-float = float type good enough to hold/calculate log-odds scores.
+    // 32bit float should be enough
+    typedef float lof_t;
+    typedef ublas::matrix<lof_t> lomat;
+
+    typedef std::vector<lof_t> losvec;
+
+public:
+    log_odds_viterbi( const dmat &state, const dsvec &gap, boost::array<double,4> state_freq )
+    : ref_state_prob_(state), ref_gap_prob_(gap), ref_len_(state.size1()),
+      state_freq_(state_freq),
+      neg_inf_( -std::numeric_limits<lof_t>::infinity() ),
+      m_(state.size1() + 1),
+      d_(state.size1() + 1),
+      i_(state.size1() + 1),
+      max_matrix_height_(0),
+      delta_(g_delta),
+      epsilon_(g_epsilon)
+    {
+        precalc_log_odds();
+    }
+
+    void setup( size_t qlen ) {
+        assert( ref_gap_prob_.size() == ref_len_ );
+
+
+
+        // init first rows
+        std::fill( m_.begin(), m_.end(), 0.0 );
+        std::fill( d_.begin(), d_.end(), 0.0 );
+        std::fill( i_.begin(), i_.end(), 0.0 /*neg_inf_*/ );
+
+        // init first columns
+        m_[0] = 0.0;
+        d_[0] = 0.0; /*neg_inf_*/
+        i_[0] = 0.0;
+
+
+
+    }
+
+
+    void precalc_log_odds() {
+        ref_state_lo_.resize( ref_state_prob_.size2(), ref_state_prob_.size1() );
+
+        for( size_t i = 0; i < 4; ++i ) {
+            const ublas::matrix_column<dmat> pcol( ref_state_prob_, i );
+            ublas::matrix_row<lomat> lorow( ref_state_lo_, i );
+            std::transform( pcol.begin(), pcol.end(), lorow.begin(), log_odds(state_freq_[i]));
+        }
+
+
+
+        {
+            odds odds_ngap( 1 - g_gap_freq );
+            odds odds_gap( g_gap_freq );
+
+            ref_ngap_odds_.resize(ref_gap_prob_.size());
+            ref_gap_odds_.resize(ref_gap_prob_.size());
+            for( size_t i = 0; i < ref_gap_prob_.size(); ++i ) {
+                ref_ngap_odds_[i] = odds_ngap(1 - ref_gap_prob_[i]);
+                ref_gap_odds_[i] = odds_gap( ref_gap_prob_[i] );
+            }
+        }
+    }
+
+    template<typename T>
+    static inline T max3( const T &a, const T &b, const T &c ) {
+        return std::max( a, std::max( b, c ));
+    }
+
+
+    double align( const std::vector<uint8_t> &qs ) {
+        const size_t qlen = qs.size();
+
+        setup( qlen );
+
+        //dmat ref_state_trans = trans(ref_state_prob_);
+
+
+        assert( m_.size() == ref_len_ + 1 );
+
+
+
+
+        for( size_t i = 1; i < qlen + 1; ++i ) {
+            const int b = qs[i-1];
+            //          std::cout << "b: " << b << "\n";
+
+            //const double b_freq = state_freq_.at(b);
+            //const ublas::matrix_column<dmat> b_state( ref_state_prob_, b );
+            const ublas::matrix_row<lomat> b_state_lo( ref_state_lo_, b );
+
+            //          const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
+            //          const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
+
+            lof_t diag_m = m_[0];
+            lof_t diag_d = d_[0];
+            lof_t diag_i = i_[0];
+
+            losvec::iterator m0 = m_.begin() + 1;
+            losvec::iterator d0 = d_.begin() + 1;
+            losvec::iterator i0 = i_.begin() + 1;
+
+            losvec::iterator m1 = m_.begin();
+            losvec::iterator d1 = d_.begin();
+            losvec::iterator i1 = i_.begin();
+            ublas::matrix_row<lomat>::const_iterator bsl = b_state_lo.begin();
+            losvec::iterator rg = ref_gap_odds_.begin();
+            losvec::iterator rng = ref_ngap_odds_.begin();
+
+            const losvec::iterator m_end = m_.end();
+
+            for( ; m0 != m_end; m1 = m0++, d1 = d0++, i1 = i0++, ++rg, ++rng, ++bsl ) {
+                //ublas::matrix_row<dmat> a_state(ref_state_prob_, j-1 );
+                //ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
+
+                //double match_log_odds = log( b_state[j-1] / b_freq );
+                //lof_t match_log_odds = b_state_lo[j-1];
+                const lof_t match_log_odds = *bsl;
+
+
+
+                //lof_t gap_log_odds = ref_gap_lo_[j-1];
+                //lof_t ngap_log_odds = ref_ngap_lo_[j-1];
+                const lof_t gap_odds = *rg;
+                const lof_t ngap_odds = *rng;
+
+#if 0
+                lof_t m_log_sum = log(
+                           exp(diag_m) * ngap_odds
+                         + exp(diag_d) * gap_odds
+                         + exp(diag_i) * gap_odds
+                );
+#else
+                lof_t m_log_sum = diag_m + math_approx::log(
+                           ngap_odds
+                         + math_approx::exp(diag_d-diag_m) * gap_odds
+                         + math_approx::exp(diag_i-diag_m) * gap_odds
+                );
+#endif
+
+                diag_m = *m0;
+                *m0 = m_log_sum + match_log_odds;
+
+#if 0
+                std::cout << i << " " << j << " " << m_(i,j) << " : " << m_(i-1, j-1) + ngap_log_odds
+                        << " " << d_(i-1, j-1) + gap_log_odds << " " << i_(i-1, j-1) + gap_log_odds << " " << match_log_odds << " " << gap_log_odds << " " << ngap_log_odds << " max: " << m_max << "\n";
+#endif
+
+                diag_i = *i0;
+
+                // the two 'diags' have already been updated, so they're both actually containing the current 'aboves',
+                // which is exactly what we need to calculate the new i
+#if 0
+                lof_t i_log_sum = log(
+                          exp(diag_m) * delta_
+                        + exp(diag_i) * epsilon_
+                );
+#else
+                lof_t i_log_sum = diag_m + math_approx::log(
+                        delta_
+                      + math_approx::exp(diag_i-diag_m) * epsilon_
+                );
+#endif
+                *i0 = i_log_sum;
+
+#if 0
+                lof_t d_log_sum = log(
+                          exp(*m1) * delta_
+                        + exp(*d1) * epsilon_
+                );
+#else
+                lof_t d_log_sum = *m1 + math_approx::log(
+                        delta_
+                      + math_approx::exp(*d1 - *m1) * epsilon_
+                );
+#endif
+                diag_d = *d0;
+                *d0 = d_log_sum;
+
+
+                //lof_t old_m = m_[j];
+
+            }
+        }
+
+        return m_.back();
+    }
+
+    dmat ref_state_prob_;
+    dsvec ref_gap_prob_;
+
+    lomat ref_state_lo_;
+    losvec ref_gap_odds_;
+    losvec ref_ngap_odds_;
+
+    const size_t ref_len_;
+    const boost::array<double,4> state_freq_;
+
+    const float neg_inf_;
+
+    losvec m_;
+    losvec d_;
+    losvec i_;
+
+    size_t max_matrix_height_;
+
+    const lof_t delta_;// = log(0.1);
+    const lof_t epsilon_;// = log(0.5);
+
+    size_t max_col_;
+    size_t max_row_;
+    double max_score_;
+
+
+
+
+
+};
+
 
 template<bool NP>
 class bin_log_odds {
@@ -1161,11 +1407,13 @@ struct scoring_results {
     // the offer and set_trace methods are separate, so the lock can be release during traceback creation
 
     // if offer return true, this means that the qs/ref pair is currently best-scoring
-    // the thread can crate the traceback and sat it later with 'set_trace'
-    bool offer( size_t qs, size_t ref, double score ) {
+    // the thread can crate the traceback and set it later with 'set_trace'
+    bool offer( size_t qs, size_t ref, double score_ali, double score_vit ) {
         boost::lock_guard<boost::mutex> lock(mtx_);
 
-        os_ << qs << " " << ref << " " << score << "\n";
+        os_ << qs << " " << ref << " " << score_ali << " " << score_vit << "\n";
+
+        const double score = score_vit;
 
         if( best_score_.at(qs) < score || (delta_equal(best_score_.at(qs), score) && ref < best_ref_.at(qs))) {
             best_score_[qs] = score;
@@ -1225,7 +1473,7 @@ public:
 
             const my_adata *ma = dynamic_cast<const my_adata *>(a->m_data.get());
 
-
+            log_odds_viterbi vit( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
             log_odds_aligner ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs(), refs_.per_column_gap_freq() );
             //log_odds_aligner_score_only ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
 
@@ -1244,10 +1492,12 @@ public:
                 //double score2 = ali.align(b);
                 double score = ali_score.align(b);
 
+                double score_vit = vit.align(b);
+
                 //std::cout << "score: " << score << " " << score2 << "\n";
                 //assert( score == score2 );
                 //std::cout << "score: " << j << " " << i << " " << score << "\n";
-                if( res_->offer(j, i, score) ) {
+                if( res_->offer(j, i, score, score_vit ) ) {
                     //tb_tmp.clear();
                     //	ali.traceback(&tb_tmp);
 
@@ -1418,7 +1668,7 @@ int main( int argc, char *argv[] ) {
 
             double score = ali.align(b);
 
-            assert( score == res.best_score_.at(j) );
+            //assert( score == res.best_score_.at(j) );
 
             tb.clear();
             ali.traceback(&tb);

@@ -1,4 +1,4 @@
-#include "ivymike/multiple_alignment.h"
+
 #include <stdexcept>
 #include <iostream>
 #include <iomanip>
@@ -15,7 +15,7 @@
 
 
 
-
+#include "sequence_model.h"
 #include "parsimony.h"
 #include "pvec.h"
 #include "align_utils.h"
@@ -35,12 +35,35 @@
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
 #include "ivymike/smart_ptr.h"
+#include "ivymike/multiple_alignment.h"
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
 
 using namespace boost::numeric;
 
+using sequence_model::tag_aa;
+using sequence_model::tag_dna;
+using sequence_model::model;
+
+template<typename seq_model>
+class vu_config {
+};
+
+
+template<>
+class vu_config<tag_dna> {
+public:
+    const static size_t width = 8;
+    typedef short scalar;
+};
+
+template<>
+class vu_config<tag_aa> {
+public:
+    const static size_t width = 4;
+    typedef int scalar;
+};
 
 namespace {
 
@@ -50,15 +73,20 @@ const int score_mismatch = 1;
 const int score_match_cgap = 3;
 
 
-uint8_t normalize_dna( uint8_t c ) {
-    c = std::toupper(c);
+//typedef sequence_model::model<sequence_model::tag_dna> seq_model;
 
-    if( c == 'U' ) {
-        c = 'T';
-    }
 
-    return c;
-}
+//uint8_t normalize_dna( uint8_t c ) {
+////    c = std::toupper(c);
+////
+////    if( c == 'U' ) {
+////        c = 'T';
+////    }
+////
+////    return c;
+//
+//    return seq_model::normalize(c);
+//}
 
 char num_to_ascii( int n ) {
     if( n >= 0 && n <= 9 ) {
@@ -111,11 +139,13 @@ static bool g_dump_aux = false;
 
 
 
-template<class pvec_t>
+template<class pvec_t,typename seq_tag>
 class my_adata_gen : public ivy_mike::tree_parser_ms::adata {
 //     static int ct;
     //std::vector<parsimony_state> m_pvec;
     pvec_t m_pvec;
+
+    //typedef seq_model seq_model_t;
 
 public:
 //     int m_ct;
@@ -137,7 +167,7 @@ public:
     void init_pvec(const std::vector< uint8_t >& seq) {
 
 
-        m_pvec.init( seq );
+        m_pvec.init2( seq, model<seq_tag>() );
 //         std::cout << "init_pvec: " << m_pvec.size() << "\n";
 //                 m_pvec.reserve(seq.size());
 //         for( std::vector< uint8_t >::const_iterator it = seq.begin(); it != seq.end(); ++it ) {
@@ -205,9 +235,9 @@ uint8_t to_hex( double v ) {
 }
 
 
-template<class pvec_t>
+template<class pvec_t, typename seq_tag>
 void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
-    typedef my_adata_gen<pvec_t> my_adata;
+    typedef my_adata_gen<pvec_t, seq_tag > my_adata;
 
     std::deque<rooted_bifurcation<lnode> > trav_order;
 
@@ -219,10 +249,12 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
     for( std::deque< rooted_bifurcation< ivy_mike::tree_parser_ms::lnode > >::iterator it = trav_order.begin(); it != trav_order.end(); ++it ) {
 //         std::cout << *it << "\n";
 
-        my_adata *p = dynamic_cast<my_adata *>( it->parent->m_data.get());
-        my_adata *c1 = dynamic_cast<my_adata *>( it->child1->m_data.get());
-        my_adata *c2 = dynamic_cast<my_adata *>( it->child2->m_data.get());
+        my_adata *p = it->parent->m_data->get_as<my_adata>();
+        my_adata *c1 = it->child1->m_data->get_as<my_adata>();
+        my_adata *c2 = it->child2->m_data->get_as<my_adata>();
 //         rooted_bifurcation<ivy_mike::tree_parser_ms::lnode>::tip_case tc = it->tc;
+
+
 
 //         std::cout << "tip case: " << (*it) << "\n";
         pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
@@ -234,8 +266,8 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 
 
     {
-        my_adata *c1 = dynamic_cast<my_adata *>( n1->m_data.get());
-        my_adata *c2 = dynamic_cast<my_adata *>( n2->m_data.get());
+        my_adata *c1 = n1->m_data->get_as<my_adata>();
+        my_adata *c2 = n2->m_data->get_as<my_adata>();
 
 //         tip_case tc;
 
@@ -267,25 +299,27 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 }
 
 
-static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t> &pvec ) {
-    pvec.resize( 0 );
-
-    for( unsigned int i = 0; i < seq.size(); i++ ) {
-        uint8_t ps = dna_parsimony_mapping::d2p(seq[i]);
-
-        if( ps == 0x1 || ps == 0x2 || ps == 0x4 || ps == 0x8 ) {
-            pvec.push_back(ps);
-        }
-
-    }
-
-}
+//static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t> &pvec ) {
+//    pvec.resize( 0 );
+//
+//    for( unsigned int i = 0; i < seq.size(); i++ ) {
+//        seq_model::pars_state_t ps = seq_model::s2p(seq[i]);
+//
+//        if( seq_model::is_single(ps)) {
+//            pvec.push_back(ps);
+//        }
+//
+//    }
+//
+//}
 
 void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq );
 
 
-
+template<typename seq_tag>
 class queries {
+    typedef model<seq_tag> seq_model;
+
 public:
 
     queries( const char *opt_qs_name ) {
@@ -346,7 +380,28 @@ public:
         m_qs_pvecs.resize(m_qs_seqs.size());
 
         for( size_t i = 0; i < m_qs_seqs.size(); i++ ) {
-            seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
+//            seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
+  //          static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t> &pvec ) {
+
+            // the following line means: transform sequence to pvec using seq_model::s2p as mapping
+            // function and only append the mapped character into pvec, if it corresponds to a single (=non gap)
+            // character.
+
+            std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
+                    back_insert_ifer(m_qs_pvecs[i], seq_model::is_single),
+                    seq_model::s2p );
+
+//            for( unsigned int i = 0; i < seq.size(); i++ ) {
+//                seq_model::pars_state_t ps = seq_model::s2p(seq[i]);
+//
+//                if( seq_model::is_single(ps)) {
+//                    pvec.push_back(ps);
+//                }
+//
+//            }
+
+
+
         }
 
 //        if( write_testbench ) {
@@ -407,13 +462,15 @@ private:
 };
 
 
-template<typename pvec_t>
+template<typename pvec_t, typename seq_tag>
 class references {
 public:
-    typedef my_adata_gen<pvec_t> my_adata;
+
+    typedef model<seq_tag> seq_model;
+    typedef my_adata_gen<pvec_t,seq_tag> my_adata;
 
 
-    references( const char* opt_tree_name, const char *opt_alignment_name, queries *qs )
+    references( const char* opt_tree_name, const char *opt_alignment_name, queries<seq_tag> *qs )
       : m_ln_pool(new ln_pool( std::auto_ptr<node_data_factory>(new my_fact<my_adata>) )), spg_(pvec_pgap::pgap_model, &pm_)
     {
 
@@ -528,7 +585,7 @@ public:
                 g_dump_aux = true;
             }
 
-            do_newview( root_pvec, m_ec.m_edges[i].first, m_ec.m_edges[i].second, true );
+            do_newview<pvec_t,seq_tag>( root_pvec, m_ec.m_edges[i].first, m_ec.m_edges[i].second, true );
 
             g_dump_aux = false;
             // TODO: try something fancy with rvalue refs...
@@ -602,7 +659,7 @@ public:
     void write_seqs( std::ostream &os, size_t pad ) {
         for( size_t i = 0; i < m_ref_seqs.size(); i++ ) {
             os << std::setw(pad) << std::left << m_ref_names[i];
-            std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), normalize_dna );
+            std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), seq_model::normalize );
             os << "\n";
         }
     }
@@ -622,8 +679,10 @@ private:
 };
 
 
-template<size_t VW>
+template<typename seq_tag>
 class block_queue {
+    const static size_t VW = vu_config<seq_tag>::width;
+
 public:
     struct block_t {
         block_t() {
@@ -739,22 +798,26 @@ private:
 };
 
 
-
+template<typename seq_tag>
 class worker {
-    const static size_t VW = 8;
-
-    typedef block_queue<VW>::block_t block_t;
 
 
 
-    block_queue<VW> &block_queue_;
+    const static size_t VW = vu_config<seq_tag>::width;
+    typedef typename vu_config<seq_tag>::scalar vu_scalar_t;
+    typedef typename block_queue<seq_tag>::block_t block_t;
+
+
+
+
+    block_queue<seq_tag> &block_queue_;
     scoring_results &results_;
 
-    const queries &qs_;
+    const queries<seq_tag> &qs_;
 
     size_t m_rank;
 public:
-    worker( block_queue<VW> *bq, scoring_results *res, const queries &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), m_rank(rank) {}
+    worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), m_rank(rank) {}
     void operator()() {
 
         pars_align_seq::arrays seq_arrays(true);
@@ -771,13 +834,13 @@ public:
                 break;
             }
 #if 1
-            assert( VW == 8 );
-            const align_pvec_score<short,8> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
+       //     assert( VW == 8 );
+            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
             for( unsigned int i = 0; i < qs_.size(); i++ ) {
 
 
                 aligner.align(qs_.pvec_at(i));
-                const short *score_vec = aligner.get_scores();
+                const vu_scalar_t *score_vec = aligner.get_scores();
 
                 ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
 
@@ -842,13 +905,15 @@ public:
 };
 
 
-template<typename pvec_t, size_t VW>
-void build_block_queue( const references<pvec_t> &refs, block_queue<VW> *bq ) {
+template<typename pvec_t,typename seq_tag>
+void build_block_queue( const references<pvec_t,seq_tag> &refs, block_queue<seq_tag> *bq ) {
     // creates the list of ref-block to be consumed by the worker threads.  A ref-block onsists of N ancestral state sequences, where N='width of the vector unit'.
     // The vectorized alignment implementation will align a QS against a whole ref-block at a time, rather than a single ancestral state sequence as in the
     // sequencial algorithm.
 
-    typedef typename block_queue<VW>::block_t block_t;
+    const static size_t VW = vu_config<seq_tag>::width;
+
+    typedef typename block_queue<seq_tag>::block_t block_t;
 
 
     size_t n_groups = (refs.num_pvecs() / VW);
@@ -914,11 +979,13 @@ void build_block_queue( const references<pvec_t> &refs, block_queue<VW> *bq ) {
     }
 }
 
-void seq_to_position_map(const std::vector< uint8_t >& seq, std::vector< int > &map) {
-    for( size_t i = 0; i < seq.size(); ++i ) {
-        uint8_t ps = dna_parsimony_mapping::d2p(seq[i]);
 
-        if( ps == 0x1 || ps == 0x2 || ps == 0x4 || ps == 0x8 ) {
+template<typename seq_tag>
+void seq_to_position_map(const std::vector< uint8_t >& seq, std::vector< int > &map) {
+    typedef model<seq_tag> seq_model;
+
+    for( size_t i = 0; i < seq.size(); ++i ) {
+        if( seq_model::is_single(seq_model::s2p(seq[i]))) {
             map.push_back(int(i));
         }
     }
@@ -926,114 +993,21 @@ void seq_to_position_map(const std::vector< uint8_t >& seq, std::vector< int > &
 
 void gapstream_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > &map) {
     align_utils::trace_to_position_map( gaps, &map );
-//        int seq_ptr = 0;
-//
-//        for ( std::vector<uint8_t>::const_reverse_iterator git = gaps.rbegin(); git != gaps.rend(); ++git ) {
-//
-//            if ( *git == 1) {
-//                ++seq_ptr;
-//            } else if ( *git == 0 ) {
-//
-//                map.push_back(seq_ptr);
-//
-//                ++seq_ptr;
-//            } else {
-//                map.push_back(seq_ptr);
-//
-//            }
-//        }
+
 }
 
 
 
 
-
-//    ivy_mike::mutex m_score_mtx;
-//
-//    struct tb_thread_entry {
-//    	papara_nt *pnt;
-//    	size_t rank;
-//    	size_t num;
-//
-//    	tb_thread_entry (papara_nt *pnt_, size_t rank_, size_t num_ ) : pnt(pnt_), rank(rank_), num(num_) {}
-//
-//    	void operator()() {
-//    		pnt->calc_scores_testbench(rank, num);
-//    	}
-//    };
-
-
-
-
-//void calc_scores_testbench( size_t rank = 0, size_t num_threads = 0 ) {
-//
-//
-//    pars_align_gapp_seq::arrays arrays;
-//
-//
-//    std::vector<scoring_result>results;
-//
-//    const size_t num_edges = m_ref_pvecs.size();
-//
-//    for( size_t j = 0; j < num_edges; ++j ) {
-//
-//        if( num_threads != 0 && (j % num_threads) != rank ) {
-//            continue;
-//        }
-//
-////    		std::cout << "thread " << rank << " " << j << "\n";
-//
-//        int *seqptr = m_ref_pvecs[j].data();
-//        double *gappptr = m_ref_gapp[j].data();
-//
-//        assert( !m_ref_gapp[j].empty());
-//
-//
-//        size_t ref_len = m_ref_pvecs[j].size();
-//
-//        for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
-//
-//
-//
-//            size_t stride = 1;
-//            size_t aux_stride = 1;
-//
-//
-//            pars_align_gapp_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, gappptr, aux_stride, arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
-//            int res = pas.alignFreeshift(INT_MAX);
-//            results.push_back(scoring_result(j, i, res));
-//
-//        }
-//    }
-//
-//    {
-//        ivy_mike::lock_guard<ivy_mike::mutex> lock(m_score_mtx);
-//
-//        for( std::vector<scoring_result>::iterator it = results.begin(); it != results.end(); ++it ) {
-//            if( it->res < m_qs_bestscore[it->qs] || (it->res == m_qs_bestscore[it->qs] && int(it->edge) < m_qs_bestedge[it->qs] )) {
-//
-//                m_qs_bestscore[it->qs] = it->res;
-//                m_qs_bestedge[it->qs] = it->edge;
-//            }
-//
-//        }
-//
-//
-//
-//    }
-//
-//
-//}
-
-template<typename pvec_t, size_t VW>
-void calc_scores( size_t n_threads, const references<pvec_t> &refs, const queries &qs, scoring_results *res ) {
+template<typename pvec_t, typename seq_tag>
+void calc_scores( size_t n_threads, const references<pvec_t, seq_tag> &refs, const queries<seq_tag> &qs, scoring_results *res ) {
 
     //
     // build the alignment blocks
     //
 
 
-    block_queue<VW> bq;
+    block_queue<seq_tag> bq;
     build_block_queue(refs, &bq);
 
     //
@@ -1043,11 +1017,13 @@ void calc_scores( size_t n_threads, const references<pvec_t> &refs, const querie
     ivy_mike::thread_group tg;
     lout << "start scoring, using " << n_threads <<  " threads" << std::endl;
 
+    typedef worker<seq_tag> worker_t;
+
     for( size_t i = 1; i < n_threads; ++i ) {
-        tg.create_thread(worker(&bq, res, qs, i));
+        tg.create_thread(worker_t(&bq, res, qs, i));
     }
 
-    worker w0(&bq, res, qs, 0 );
+    worker_t w0(&bq, res, qs, 0 );
     w0();
 
     tg.join_all();
@@ -1055,8 +1031,8 @@ void calc_scores( size_t n_threads, const references<pvec_t> &refs, const querie
     lout << "scoring finished: " << t1.elapsed() << std::endl;
 
 }
-
-void print_best_scores( std::ostream &os, const queries &qs, const scoring_results &res ) {
+template<typename seq_tag>
+void print_best_scores( std::ostream &os, const queries<seq_tag> &qs, const scoring_results &res ) {
     boost::io::ios_all_saver ioss(os);
     os << std::setfill ('0');
     for( unsigned int i = 0; i < qs.size(); i++ ) {
@@ -1087,8 +1063,8 @@ void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector
 
 
 
-template<typename pvec_t>
-void align_best_scores( std::ostream &os, std::ostream &os_quality, const queries &qs, const references<pvec_t> &refs, const scoring_results &res ) {
+template<typename pvec_t, typename seq_tag>
+void align_best_scores( std::ostream &os, std::ostream &os_quality, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res ) {
     // create the actual alignments for the best scoring insertion position (=do the traceback)
 
     lout << "generating best scoring alignments\n";
@@ -1169,7 +1145,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
             std::vector<int> map_ref;
             std::vector<int> map_aligned;
-            seq_to_position_map( qs.seq_at(i), map_ref );
+            seq_to_position_map<seq_tag>( qs.seq_at(i), map_ref );
             align_utils::trace_to_position_map( tbv, &map_aligned );
 
 
@@ -1258,11 +1234,11 @@ bool file_exists(const char *filename)
   return is;
 }
 
-template<typename pvec_t>
+template<typename pvec_t, typename seq_tag>
 void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name ) {
 
-    queries qs(qs_name.c_str());
-    references<pvec_t> refs( tree_name.c_str(), alignment_name.c_str(), &qs );
+    queries<seq_tag> qs(qs_name.c_str());
+    references<pvec_t,seq_tag> refs( tree_name.c_str(), alignment_name.c_str(), &qs );
 
     qs.preprocess();
     refs.build_ref_vecs();
@@ -1272,7 +1248,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     const size_t VW = 8;
 
-    calc_scores<pvec_t, VW>(num_threads, refs, qs, &res );
+    calc_scores<pvec_t, seq_tag>(num_threads, refs, qs, &res );
 
     std::string score_file(filename(run_name, "alignments"));
     std::string quality_file(filename(run_name, "quality"));
@@ -1355,9 +1331,9 @@ int main( int argc, char *argv[] ) {
 
     if( opt_use_cgap ) {
 
-        run_papara<pvec_cgap>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        run_papara<pvec_pgap, tag_aa>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
     } else {
-        run_papara<pvec_pgap>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
     }
 
     
