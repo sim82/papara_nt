@@ -350,7 +350,7 @@ class step_add : boost::noncopyable {
     scoring_matrix m_pw_scoring_matrix;
     boost::dynamic_bitset<> m_used_seqs;
     lnode *m_tree_root;
-    pars_align_seq::arrays m_seq_arrays;
+    pars_align_seq<>::arrays m_seq_arrays;
 
     vector<lnode *> m_leafs;
     align_arrays_traceback<int> m_align_arrays_traceback;

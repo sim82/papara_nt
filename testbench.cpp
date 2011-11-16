@@ -438,7 +438,7 @@ public:
 	//             std::cerr << "ref: " << i << "\n";
 				for( size_t j = 0; j < m_qs_pvecs.size(); ++j ) {
 
-					aligner.align( m_qs_pvecs[j] );
+					aligner.align( m_qs_pvecs[j].begin(), m_qs_pvecs[i].end() );
 					const score_t *scores = aligner.get_scores();
 
 					for( size_t k = 0; k < num_valid; ++k ) {

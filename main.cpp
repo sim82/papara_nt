@@ -545,7 +545,7 @@ class papara_nt : public papara_nt_i {
         worker( papara_nt & pnt, size_t rank ) : m_pnt(pnt), m_rank(rank) {}
         void operator()() {
 
-            pars_align_seq::arrays seq_arrays(true);
+            pars_align_seq<>::arrays seq_arrays(true);
             pars_align_gapp_seq::arrays seq_arrays_gapp(true);
             
             ivy_mike::timer tstatus;
@@ -593,7 +593,7 @@ class papara_nt : public papara_nt_i {
                                     const int *seqptr = block.seqptrs[k];
                                     const unsigned int *auxptr = block.auxptrs[k];
 
-                                    pars_align_seq pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+                                    pars_align_seq<> pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
                                     int res = pas.alignFreeshift(INT_MAX);
 
                                     if( res != score_vec[k] ) {
@@ -1180,7 +1180,7 @@ public:
         
         lout << "generating best scoring alignments\n";
         ivy_mike::timer t1;
-        pars_align_seq::arrays seq_arrays(true);
+        pars_align_seq<>::arrays seq_arrays(true);
         pars_align_gapp_seq::arrays seq_arrays_gapp(true);
 
         double mean_quality = 0.0;
@@ -1202,7 +1202,7 @@ public:
 
 				const size_t stride = 1;
 				const size_t aux_stride = 1;
-				pars_align_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+				pars_align_seq<> pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
 				res = pas.alignFreeshift(INT_MAX);
 				pas.tracebackCompressed(tbv);
             } else {

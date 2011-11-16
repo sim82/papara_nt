@@ -901,7 +901,7 @@ class step_add {
     scoring_matrix m_pw_scoring_matrix;
     boost::dynamic_bitset<> m_used_seqs;
     lnode *m_tree_root;
-    pars_align_seq::arrays m_seq_arrays;
+    pars_align_seq<>::arrays m_seq_arrays;
 
     vector<lnode *> m_leafs;
     align_arrays_traceback<int> m_align_arrays_traceback;
@@ -2257,7 +2257,7 @@ int main3( int argc, char **argv ) {
 	std::map<std::string, std::vector<uint8_t> >out_msa1;
 	sptr::shared_ptr<ln_pool> pool(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
 
-	lnode *last_tree;
+	//lnode *last_tree;
 	{
 		step_add sa(pool, opt_num_ali_threads, opt_num_nv_threads);
 		sa.load_qs(filename);
@@ -2281,7 +2281,7 @@ int main3( int argc, char **argv ) {
 		}
 
 		sa.move_raw_seq_data_to_map(out_msa1);
-		last_tree = sa.get_tree();
+		//last_tree = sa.get_tree();
 		std::cout << "time: " << t1.elapsed() << "\n";
 	}
 	return 0;

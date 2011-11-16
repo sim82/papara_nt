@@ -1,4 +1,4 @@
-
+#define BOOST_UBLAS_NDEBUG 1
 #include <stdexcept>
 #include <iostream>
 #include <iomanip>
@@ -320,7 +320,11 @@ template<typename seq_tag>
 class queries {
     typedef model<seq_tag> seq_model;
 
+
+
 public:
+
+    typedef typename seq_model::pars_state_t pars_state_t;
 
     queries( const char *opt_qs_name ) {
 
@@ -387,6 +391,7 @@ public:
             // function and only append the mapped character into pvec, if it corresponds to a single (=non gap)
             // character.
 
+
             std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
                     back_insert_ifer(m_qs_pvecs[i], seq_model::is_single),
                     seq_model::s2p );
@@ -421,7 +426,7 @@ public:
         return m_qs_names.at(i);
     }
 
-    const std::vector<uint8_t> &pvec_at( size_t i ) const {
+    const std::vector<pars_state_t> &pvec_at( size_t i ) const {
         assert( m_qs_pvecs.size() == m_qs_seqs.size() );
 
         return m_qs_pvecs.at(i);
@@ -457,7 +462,7 @@ private:
     std::vector <std::string> m_qs_names;
     std::vector <std::vector<uint8_t> > m_qs_seqs;
 
-    std::vector<std::vector <uint8_t> > m_qs_pvecs;
+    std::vector<std::vector <pars_state_t> > m_qs_pvecs;
 
 };
 
@@ -468,6 +473,7 @@ public:
 
     typedef model<seq_tag> seq_model;
     typedef my_adata_gen<pvec_t,seq_tag> my_adata;
+
 
 
     references( const char* opt_tree_name, const char *opt_alignment_name, queries<seq_tag> *qs )
@@ -820,11 +826,9 @@ public:
     worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), m_rank(rank) {}
     void operator()() {
 
-        pars_align_seq::arrays seq_arrays(true);
-        pars_align_gapp_seq::arrays seq_arrays_gapp(true);
 
         ivy_mike::timer tstatus;
-        double last_tstatus = 0.0;
+
 
         uint64_t ncup = 0;
         while( true ) {
@@ -839,7 +843,7 @@ public:
             for( unsigned int i = 0; i < qs_.size(); i++ ) {
 
 
-                aligner.align(qs_.pvec_at(i));
+                aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
                 const vu_scalar_t *score_vec = aligner.get_scores();
 
                 ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
@@ -1040,10 +1044,10 @@ void print_best_scores( std::ostream &os, const queries<seq_tag> &qs, const scor
     }
 }
 
+template<typename state_t>
+void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<state_t> &raw, std::vector<state_t> *out, state_t gap_char ) {
 
-void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<uint8_t> &raw, std::vector<uint8_t> *out, uint8_t gap_char ) {
-
-    std::vector<uint8_t>::const_reverse_iterator rit = raw.rbegin();
+    typename std::vector<state_t>::const_reverse_iterator rit = raw.rbegin();
 
     for ( std::vector<uint8_t>::const_iterator git = gaps.begin(); git != gaps.end(); ++git ) {
 
@@ -1067,15 +1071,19 @@ template<typename pvec_t, typename seq_tag>
 void align_best_scores( std::ostream &os, std::ostream &os_quality, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res ) {
     // create the actual alignments for the best scoring insertion position (=do the traceback)
 
+    typedef typename queries<seq_tag>::pars_state_t pars_state_t;
+    typedef model<seq_tag> seq_model;
+
+
     lout << "generating best scoring alignments\n";
     ivy_mike::timer t1;
-    pars_align_seq::arrays seq_arrays(true);
+    typename pars_align_seq<pars_state_t>::arrays seq_arrays(true);
     pars_align_gapp_seq::arrays seq_arrays_gapp(true);
 
     double mean_quality = 0.0;
     double n_quality = 0.0;
 
-    std::vector<uint8_t> out_qs;
+    std::vector<pars_state_t> out_qs_ps;
 
     for( size_t i = 0; i < qs.size(); i++ ) {
         int best_edge = res.bestedge_at(i);
@@ -1087,7 +1095,10 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
 //        if( true ) {
 
-        const std::vector<uint8_t> &qp = qs.pvec_at(i);
+
+
+
+        const std::vector<pars_state_t> &qp = qs.pvec_at(i);
         const int *seqptr = refs.pvec_at(best_edge).data();
         const unsigned int *auxptr = refs.aux_at(best_edge).data();
 
@@ -1095,7 +1106,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
         const size_t stride = 1;
         const size_t aux_stride = 1;
-        pars_align_seq pas( seqptr, qp.data(), ref_len, qp.size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+        pars_align_seq<pars_state_t> pas( seqptr, qp.data(), ref_len, qp.size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
         score = pas.alignFreeshift(INT_MAX);
         pas.tracebackCompressed(tbv);
 //        } else {
@@ -1120,19 +1131,14 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
 
 
-        out_qs.clear();
+        out_qs_ps.clear();
 
-        gapstream_to_alignment(tbv, qp, &out_qs, 0xf);
+        gapstream_to_alignment(tbv, qp, &out_qs_ps, seq_model::gap_state());
 
-        //
-        // in place transform out_qs from pstate to dna form. WATCH OUT!
-        //
-
-        std::transform( out_qs.begin(), out_qs.end(), out_qs.begin(), dna_parsimony_mapping::p2d );
 
         os << qs.name_at(i) << "\t";
-        std::copy( out_qs.begin(), out_qs.end(), std::ostream_iterator<char>(os));
-        os << "\n";
+        std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os), seq_model::p2s );
+        os << std::endl;
 
 
 
@@ -1140,7 +1146,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
             std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
         }
 
-        if( os_quality.good() && out_qs.size() == qs.seq_at(i).size() ) {
+        if( os_quality.good() && qs.seq_at(i).size() == refs.pvec_size()) {
 
 
             std::vector<int> map_ref;
@@ -1246,7 +1252,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     scoring_results res( qs.size() );
 
 
-    const size_t VW = 8;
+
 
     calc_scores<pvec_t, seq_tag>(num_threads, refs, qs, &res );
 
@@ -1285,16 +1291,21 @@ int main( int argc, char *argv[] ) {
     int opt_num_threads;
     std::string opt_run_name;
     bool opt_write_testbench;
-
+    bool opt_force_overwrite;
+    bool opt_aa;
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
     igp.add_opt( 'q', igo::value<std::string>(opt_qs_name) );
     igp.add_opt( 'c', igo::value<bool>(opt_use_cgap, true).set_default(false) );
+    igp.add_opt( 'a', igo::value<bool>(opt_aa, true).set_default(false) );
     igp.add_opt( 'j', igo::value<int>(opt_num_threads).set_default(1) );
     igp.add_opt( 'n', igo::value<std::string>(opt_run_name).set_default("default") );
     igp.add_opt( 'b', igo::value<bool>(opt_write_testbench, true).set_default(false) );
+    igp.add_opt( 'f', igo::value<bool>(opt_force_overwrite, true).set_default(false) );
     
+
+
     igp.parse(argc,argv);
 
     if( igp.opt_count('t') != 1 || igp.opt_count('s') != 1  ) {
@@ -1310,7 +1321,7 @@ int main( int argc, char *argv[] ) {
     
     std::string log_filename = filename( opt_run_name, "log" );
 
-    if( opt_run_name != "default" && file_exists(log_filename.c_str()) ) {
+    if( opt_run_name != "default" && !opt_force_overwrite && file_exists(log_filename.c_str()) ) {
         std::cout << "log file already exists for run '" << opt_run_name << "'\n";
         return 0;
     }
@@ -1331,9 +1342,17 @@ int main( int argc, char *argv[] ) {
 
     if( opt_use_cgap ) {
 
-        run_papara<pvec_pgap, tag_aa>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        if( opt_aa ) {
+            run_papara<pvec_cgap, tag_aa>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        } else {
+            run_papara<pvec_cgap, tag_dna>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        }
     } else {
-        run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        if( opt_aa ) {
+            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        } else {
+            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+        }
     }
 
     

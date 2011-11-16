@@ -1,7 +1,7 @@
 
 #ifndef __pvec_h
 #define __pvec_h
-#define BOOST_UBLAS_NDEBUG
+//#define BOOST_UBLAS_NDEBUG
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/banded.hpp>
 #include <boost/numeric/ublas/io.hpp>
@@ -10,6 +10,7 @@
 #include <EigenvalueDecomposition.hpp>
 #include <cassert>
 #include <algorithm>
+#include <iostream>
 
 //#define USE_CBLAS
 #ifdef USE_CBLAS
@@ -31,9 +32,22 @@ class pvec_cgap {
     std::vector<parsimony_state> v;
     std::vector<int> auxv;
 
-    
-    
+    template<typename seq_model>
+    class seq2aux {
+    public:
+        int operator()( parsimony_state c ) {
+
+            if( seq_model::is_gap(c) ) {
+                return AUX_CGAP;
+            } else {
+                return 0;
+            }
+        }
+    };
+
 public:
+    
+    
     void init( const std::vector<uint8_t> &seq ) {
 //         assert( v.size() == 0 );
         v.resize(seq.size());
@@ -42,6 +56,18 @@ public:
         std::transform( seq.begin(), seq.end(), auxv.begin(), dna_parsimony_mapping::d2aux );
     }
 
+
+
+
+    template<typename seq_model>
+    void init2( const std::vector<uint8_t> &seq, const seq_model &sm ) {
+        v.resize(seq.size());
+        auxv.resize(seq.size());
+        std::transform( seq.begin(), seq.end(), v.begin(), seq_model::s2p );
+        std::transform( v.begin(), v.end(), auxv.begin(), seq2aux<seq_model>() );
+
+        std::cerr << ">>>>>>>>>>>>>>>> WARNING: untested strange code!!!\n";
+    }
 
     inline const std::vector<parsimony_state> &get_v() {
         return v;
