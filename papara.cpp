@@ -24,7 +24,9 @@
 #include "pars_align_gapp_seq.h"
 #include "fasta.h"
 #include "vec_unit.h"
-#include "align_pvec_vec.h"
+//#include "align_pvec_vec.h"
+#include "stepwise_align.h"
+
 #include "align_utils.h"
 
 #include "ivymike/tree_parser.h"
@@ -56,6 +58,7 @@ class vu_config<tag_dna> {
 public:
     const static size_t width = 8;
     typedef short scalar;
+    const static scalar full_mask = scalar(-1);
 };
 
 template<>
@@ -63,14 +66,15 @@ class vu_config<tag_aa> {
 public:
     const static size_t width = 4;
     typedef int scalar;
+    const static scalar full_mask = scalar(-1);
 };
 
 namespace {
 
-const int score_gap_open = 3;
-const int score_gap_extend = 1;
-const int score_mismatch = 1;
-const int score_match_cgap = 3;
+const int score_gap_open = -3;
+const int score_gap_extend = -1;
+const int score_match = 1;
+const int score_match_cgap = -3;
 
 
 //typedef sequence_model::model<sequence_model::tag_dna> seq_model;
@@ -482,7 +486,7 @@ public:
 
             //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
         lout << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
-        lout << "scores: " << score_gap_open << " " << score_gap_extend << " " << score_mismatch << " " << score_match_cgap << "\n";
+        lout << "scores: " << score_gap_open << " " << score_gap_extend << " " << score_match << " " << score_match_cgap << "\n";
 
 
 
@@ -623,6 +627,18 @@ public:
     }
 
 
+    const std::string &name_at( size_t i ) const {
+        return m_ref_names.at(i);
+    }
+
+    const std::vector<uint8_t> & seq_at( size_t i ) const {
+        return m_ref_seqs.at(i);
+    }
+
+    size_t num_seqs() const {
+        return m_ref_seqs.size();
+    }
+
     const std::vector<int> &pvec_at( size_t i ) const {
         return m_ref_pvecs.at(i);
     }
@@ -662,13 +678,13 @@ public:
     }
 
 
-    void write_seqs( std::ostream &os, size_t pad ) {
-        for( size_t i = 0; i < m_ref_seqs.size(); i++ ) {
-            os << std::setw(pad) << std::left << m_ref_names[i];
-            std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), seq_model::normalize );
-            os << "\n";
-        }
-    }
+//    void write_seqs( std::ostream &os, size_t pad ) {
+//        for( size_t i = 0; i < m_ref_seqs.size(); i++ ) {
+//            os << std::setw(pad) << std::left << m_ref_names[i];
+//            std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), seq_model::normalize );
+//            os << "\n";
+//        }
+//    }
 private:
     std::vector <std::string > m_ref_names;
     std::vector <std::vector<uint8_t> > m_ref_seqs;
@@ -748,7 +764,7 @@ class scoring_results {
 
 public:
     scoring_results( size_t num_qs )
-    : best_score_(num_qs, std::numeric_limits<int>::max() ),
+    : best_score_(num_qs, std::numeric_limits<int>::min() ),
       best_ref_(num_qs, size_t(-1))
     {}
 
@@ -757,7 +773,7 @@ public:
     bool offer( size_t qs, size_t ref, int score ) {
         ivy_mike::lock_guard<ivy_mike::mutex> lock(mtx_);
 
-        if( best_score_.at(qs) > score || (best_score_.at(qs) == score && ref < best_ref_.at(qs))) {
+        if( best_score_.at(qs) < score || (best_score_.at(qs) == score && ref < best_ref_.at(qs))) {
             best_score_[qs] = score;
             best_ref_.at(qs) = ref;
             return true;
@@ -774,7 +790,7 @@ public:
 
 
         while( ref_start != ref_end ) {
-            if( best_score_.at(qs) > *score_start || (best_score_.at(qs) == *score_start && *ref_start < best_ref_.at(qs))) {
+            if( best_score_.at(qs) < *score_start || (best_score_.at(qs) == *score_start && *ref_start < best_ref_.at(qs))) {
                 best_score_[qs] = *score_start;
                 best_ref_.at(qs) = *ref_start;
             }
@@ -812,7 +828,7 @@ class worker {
     const static size_t VW = vu_config<seq_tag>::width;
     typedef typename vu_config<seq_tag>::scalar vu_scalar_t;
     typedef typename block_queue<seq_tag>::block_t block_t;
-
+    typedef model<seq_tag> seq_model;
 
 
 
@@ -822,6 +838,38 @@ class worker {
     const queries<seq_tag> &qs_;
 
     size_t m_rank;
+
+
+    static void copy_to_profile( const block_t &block, aligned_buffer<vu_scalar_t> *prof, aligned_buffer<vu_scalar_t> *aux_prof ) {
+        size_t reflen = block.ref_len;
+
+
+        assert( reflen * VW == prof->size() );
+        assert( reflen * VW == aux_prof->size() );
+
+        typename aligned_buffer<vu_scalar_t>::iterator it = prof->begin();
+        typename aligned_buffer<vu_scalar_t>::iterator ait = aux_prof->begin();
+    //         std::cout << "reflen: " << reflen << " " << size_t(&(*it)) << "\n";
+
+        for( size_t i = 0; i < reflen; ++i ) {
+            for( size_t j = 0; j < VW; ++j ) {
+    //                 std::cout << "ij: " << i << " " << j << " " << pvecs[j].size() <<  "\n";
+
+
+                *it = vu_scalar_t(block.seqptrs[j][i]);
+                *ait = (block.auxptrs[j][i] == AUX_CGAP) ? vu_scalar_t(-1) : 0;
+
+                ++it;
+                ++ait;
+            }
+        }
+
+
+        assert( it == prof->end());
+        assert( ait == aux_prof->end());
+
+    }
+
 public:
     worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), m_rank(rank) {}
     void operator()() {
@@ -831,6 +879,12 @@ public:
 
 
         uint64_t ncup = 0;
+
+        aligned_buffer<vu_scalar_t> pvec_prof;
+        aligned_buffer<vu_scalar_t> aux_prof;
+        align_vec_arrays<vu_scalar_t> arrays;
+        aligned_buffer<vu_scalar_t> out_scores(VW);
+
         while( true ) {
             block_t block;
 
@@ -839,16 +893,24 @@ public:
             }
 #if 1
        //     assert( VW == 8 );
-            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
+
+            pvec_prof.resize( VW * block.ref_len );
+            aux_prof.resize( VW * block.ref_len );
+
+            copy_to_profile(block, &pvec_prof, &aux_prof );
+
+//            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
             for( unsigned int i = 0; i < qs_.size(); i++ ) {
 
+                align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
+                //aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
+                //const vu_scalar_t *score_vec = aligner.get_scores();
 
-                aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
-                const vu_scalar_t *score_vec = aligner.get_scores();
+
 
                 ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
 
-                results_.offer( i, block.edges, block.edges + block.num_valid, score_vec );
+                results_.offer( i, block.edges, block.edges + block.num_valid, out_scores.begin() );
 
             }
         }
@@ -1044,31 +1106,149 @@ void print_best_scores( std::ostream &os, const queries<seq_tag> &qs, const scor
     }
 }
 
+
+class ref_gap_collector {
+public:
+
+    ref_gap_collector( size_t ref_len ) : ref_gaps_(ref_len + 1) {}
+
+    void add_trace( const std::vector<uint8_t> &gaps ) {
+
+        size_t ptr  = ref_gaps_.size() - 1;
+
+        std::vector<size_t> ref_gaps( ref_gaps_.size() );
+
+        // count how many gaps are inserted before each ref character (the last entry refers to the position after the last ref character)
+        for ( std::vector<uint8_t>::const_iterator git = gaps.begin(); git != gaps.end(); ++git ) {
+
+
+            if( *git == 0 || *git == 1 ) {
+                // consume one ref character without inserting gap
+                --ptr;
+            } else {
+
+                assert( ptr >= 0 );
+
+                // count all gaps inserted at current ref position
+                ++ref_gaps[ptr];
+            }
+        }
+
+        // update the _global_ maximum 'gaps-per-ref-position' map
+        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+    }
+
+    // TODO: shouldn't it be possible to infer the state_type from oiter?
+    template<typename iiter, typename oiter, typename state_type>
+    void transform( iiter istart, iiter iend, oiter ostart, state_type gap ) const {
+
+        size_t s = std::distance(istart, iend);
+        assert( s == ref_gaps_.size() - 1 );
+
+
+        size_t i = 0;
+        while( istart != iend ) {
+
+
+            for( size_t j = 0; j < ref_gaps_[i]; ++j ) {
+                *(ostart++) = gap;
+            }
+            *(ostart++) = *(istart++);
+            ++i;
+
+        }
+        for( size_t j = 0; j < ref_gaps_.back(); ++j ) {
+            *(ostart++) = gap;
+        }
+
+    }
+
+
+    size_t gaps_before( size_t i ) const {
+        return ref_gaps_.at(i);
+    }
+
+    size_t ref_len() const {
+        return ref_gaps_.size() - 1;
+    }
+
+private:
+
+    std::vector<size_t> ref_gaps_;
+
+};
+
 template<typename state_t>
-void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<state_t> &raw, std::vector<state_t> *out, state_t gap_char ) {
+void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<state_t> &raw, std::vector<state_t> *out, state_t gap_char, const ref_gap_collector &rgc ) {
 
     typename std::vector<state_t>::const_reverse_iterator rit = raw.rbegin();
 
+
+    size_t ref_ptr = rgc.ref_len();
+    size_t gaps_left = rgc.gaps_before(ref_ptr);
+
+
+    // this is kind of a hack: the 'inserted characters' are collected in insert, such that the additional
+    // gaps can be put after the insert (remember, the trace is backward...). So the common inserts
+    // are filled from left to right.
+    // Except for the gap in the end (or more precisely in the beginning), where the gaps are put before the
+    // insert, to make it appear as if the insert in the beginning is filled form right to left which looks
+    // better.
+
+    // the 'clean' solution would be to do 'de-novo' multiple alignment of the QS characters inside the common gaps...
+    // TODO: do this and sell papara as a fragment assembler ;-)
+
+    std::vector<state_t> insert;
+
     for ( std::vector<uint8_t>::const_iterator git = gaps.begin(); git != gaps.end(); ++git ) {
+
+        if( *git == 1 || *git == 0 ) {
+            // if a ref character is consumed, put in the collected inserts plus additional gaps if necessary.
+
+            for( size_t i = 0; i < gaps_left; ++i ) {
+                out->push_back(gap_char);
+            }
+            std::copy(insert.begin(), insert.end(), back_inserter(*out) );
+            insert.clear();
+
+
+            --ref_ptr;
+            gaps_left = rgc.gaps_before(ref_ptr);
+        }
 
         if ( *git == 1) {
             out->push_back(gap_char);
+
         } else if ( *git == 0 ) {
             assert( rit < raw.rend() );
             out->push_back(*rit);
             ++rit;
+
         } else {
-            ++rit; // just consume one QS character
+            assert( rit < raw.rend() );
+            //out->push_back(*rit);
+
+            insert.push_back( *rit);
+            ++rit;
+
+            assert( gaps_left > 0 );
+            --gaps_left;
         }
     }
 
-    std::reverse(out->begin(), out->end());
+    // NOTE: the insert comes before the gaps in this case
+    std::copy(insert.begin(), insert.end(), back_inserter(*out) );
+    for( size_t i = 0; i < gaps_left; ++i ) {
+        out->push_back(gap_char);
+    }
+
+    std::reverse( out->begin(), out->end() );
 }
 
 
 
 template<typename pvec_t, typename seq_tag>
-void align_best_scores( std::ostream &os, std::ostream &os_quality, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res ) {
+void align_best_scores( std::ostream &os, std::ostream &os_quality, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad ) {
     // create the actual alignments for the best scoring insertion position (=do the traceback)
 
     typedef typename queries<seq_tag>::pars_state_t pars_state_t;
@@ -1084,6 +1264,15 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
     double n_quality = 0.0;
 
     std::vector<pars_state_t> out_qs_ps;
+    align_arrays_traceback<int> arrays;
+
+
+
+    ref_gap_collector rgc( refs.pvec_size() );
+
+    // store the best alignment traces per qs
+
+    std::vector<std::vector<uint8_t> > qs_traces( qs.size() );
 
     for( size_t i = 0; i < qs.size(); i++ ) {
         int best_edge = res.bestedge_at(i);
@@ -1091,60 +1280,56 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
         assert( best_edge >= 0 && size_t(best_edge) < refs.num_pvecs() );
 
         int score = -1;
-        std::vector<uint8_t> tbv;
-
-//        if( true ) {
-
 
 
 
         const std::vector<pars_state_t> &qp = qs.pvec_at(i);
-        const int *seqptr = refs.pvec_at(best_edge).data();
-        const unsigned int *auxptr = refs.aux_at(best_edge).data();
 
-        const size_t ref_len = refs.pvec_size();
-
-        const size_t stride = 1;
-        const size_t aux_stride = 1;
-        pars_align_seq<pars_state_t> pas( seqptr, qp.data(), ref_len, qp.size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
-        score = pas.alignFreeshift(INT_MAX);
-        pas.tracebackCompressed(tbv);
-//        } else {
-//            const int *seqptr = m_ref_pvecs[best_edge].data();
-//
-//            assert( !m_ref_gapp[best_edge].empty() );
-//
-//            const double *gappptr = m_ref_gapp[best_edge].data();
-//
-//            const size_t ref_len = m_ref_pvecs[best_edge].size();
-//
-//            const size_t stride = 1;
-//            const size_t aux_stride = 1;
-//            pars_align_gapp_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, gappptr, aux_stride, seq_arrays_gapp, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
-//            res = pas.alignFreeshift(INT_MAX);
-//            pas.tracebackCompressed(tbv);
-//        }
-//            std::copy( tbv.begin(), tbv.end(), std::ostream_iterator<int>(std::cout, " " ));
-//            std::cout << "\n";
-
-
-
-
-
-        out_qs_ps.clear();
-
-        gapstream_to_alignment(tbv, qp, &out_qs_ps, seq_model::gap_state());
-
-
-        os << qs.name_at(i) << "\t";
-        std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os), seq_model::p2s );
-        os << std::endl;
-
+        score = align_freeshift_pvec<int>(
+                refs.pvec_at(best_edge).begin(), refs.pvec_at(best_edge).end(),
+                refs.aux_at(best_edge).begin(),
+                qp.begin(), qp.end(),
+                score_match, score_match_cgap, score_gap_open, score_gap_extend, qs_traces.at(i), arrays
+        );
 
 
         if( score != res.bestscore_at(i) ) {
             std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
         }
+
+        rgc.add_trace(qs_traces[i]);
+    }
+
+    // write refs (and apply the ref gaps)
+
+    for( size_t i = 0; i < refs.num_seqs(); i++ ) {
+        os << std::setw(pad) << std::left << refs.name_at(i);
+
+        rgc.transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::ostream_iterator<char>(os), '-' );
+        //std::transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::ostream_iterator<char>(os), seq_model::normalize);
+
+        //std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), seq_model::normalize );
+        os << "\n";
+    }
+
+
+
+    for( size_t i = 0; i < qs.size(); i++ ) {
+
+        const std::vector<pars_state_t> &qp = qs.pvec_at(i);
+
+        out_qs_ps.clear();
+
+        gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state(), rgc);
+
+
+        os << std::setw(pad) << std::left << qs.name_at(i);
+        std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os), seq_model::p2s );
+        os << std::endl;
+
+
+
+
 
         if( os_quality.good() && qs.seq_at(i).size() == refs.pvec_size()) {
 
@@ -1152,7 +1337,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
             std::vector<int> map_ref;
             std::vector<int> map_aligned;
             seq_to_position_map<seq_tag>( qs.seq_at(i), map_ref );
-            align_utils::trace_to_position_map( tbv, &map_aligned );
+            align_utils::trace_to_position_map( qs_traces[i], &map_aligned );
 
 
             if( map_ref.size() != map_aligned.size() ) {
@@ -1268,8 +1453,8 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     std::ofstream os_qual( quality_file.c_str() );
     assert( os_qual.good() );
 
-    refs.write_seqs(os, pad);
-    align_best_scores( os, os_qual, qs, refs, res );
+    //refs.write_seqs(os, pad);
+    align_best_scores( os, os_qual, qs, refs, res, pad );
 
 }
 

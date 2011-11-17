@@ -161,8 +161,8 @@ struct align_vec_arrays {
     aligned_buffer<score_t> si;
 };
 
-template<typename score_t, size_t W, bool global>
-void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const std::vector<uint8_t> &b, const score_t match_score, const score_t match_cgap, const score_t gap_open, const score_t gap_extend, aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
+template<typename score_t, size_t W, bool global, typename bstate_t>
+void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const std::vector<bstate_t> &b, const score_t match_score, const score_t match_cgap, const score_t gap_open, const score_t gap_extend, aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
     
     
     typedef vector_unit<score_t,W> vu;
@@ -240,6 +240,7 @@ void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score
             const vec_t non_match = vu::cmp_eq( vu::bit_and( ac, bc ), vu::setzero() );
             
             vec_t match_score_vec = vu::bit_andnot( non_match, vu::set1(match_score));
+            //vec_t match_score_vec = vu::bit_and( non_match, vu::set1(match_score));
             const vec_t match_cgap_score = vu::bit_and( cgap, vu::set1(match_cgap));
             match_score_vec = vu::add( match_score_vec, match_cgap_score );
             
@@ -306,8 +307,8 @@ struct align_arrays_traceback {
     std::vector<uint8_t> tb;
 };
 
-template<typename score_t>
-score_t align_freeshift_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux, std::vector<uint8_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
+template<typename score_t, typename state_t>
+score_t align_freeshift_pvec( std::vector<state_t> &a, std::vector<state_t> &a_aux, std::vector<state_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
   
     const uint8_t b_sl_stay = 0x1;
     const uint8_t b_su_stay = 0x2;
@@ -502,6 +503,215 @@ score_t align_freeshift_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_a
         --ia;
     }
     
+    while( ib >= 0 ) {
+        tb_out.push_back(2);
+        --ib;
+    }
+    return max_score;
+}
+
+
+
+template<typename score_t, typename aiter, typename auxiter, typename biter>
+score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter bstart, biter bend, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
+
+    const uint8_t b_sl_stay = 0x1;
+    const uint8_t b_su_stay = 0x2;
+    const uint8_t b_s_l = 0x4;
+    const uint8_t b_s_u = 0x8;
+
+
+    const size_t asize = std::distance(astart, aend);
+    const size_t bsize = std::distance(bstart, bend);
+
+    if( arr.s.size() < asize  ) {
+        arr.s.resize( asize );
+        arr.si.resize( asize );
+    }
+
+    std::fill( arr.s.begin(), arr.s.end(), 0 );
+    std::fill( arr.si.begin(), arr.si.end(), 0 );
+    const score_t SMALL = -32000;
+
+    score_t max_score = SMALL;
+    int max_a = 0;
+    int max_b = 0;
+
+    arr.tb.resize( asize * bsize );
+
+
+    struct index_calc {
+        const size_t as, bs;
+        index_calc( size_t as_, size_t bs_ ) : as(as_), bs(bs_) {}
+
+        size_t operator()(size_t ia, size_t ib ) {
+            assert( ia < as );
+            assert( ib < bs );
+
+            //return ia * bs + ib;
+            return ib * as + ia;
+        }
+
+    };
+
+    index_calc ic( asize, bsize );
+
+
+    for( size_t ib = 0; ib < bsize; ib++ ) {
+        int bc = *(bstart + ib);
+
+        score_t last_sl = SMALL;
+        score_t last_sc = 0.0;
+        score_t last_sdiag = 0.0;
+
+        score_t * __restrict s_iter = arr.s.base();
+        score_t * __restrict si_iter = arr.si.base();
+        score_t * __restrict s_end = s_iter + asize;
+        bool lastrow = ib == (bsize - 1);
+
+        //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
+
+        for( size_t ia = 0; ia < asize; ++ia, ++s_iter, ++si_iter ) {
+            //score_t match = sm.get_score( a[ia], bc );
+            uint8_t tb_val = 0;
+            int ac = *(astart + ia);
+            const bool cgap = *(auxstart + ia)  == AUX_CGAP;
+
+                // determine match or mis-match according to parsimony bits coming from the tree.
+            score_t match = ( ac & bc ) != 0 ? match_score : 0;
+
+
+
+            score_t sm = last_sdiag + match;
+
+            last_sdiag = *s_iter;
+
+            score_t last_sc_OPEN;
+            score_t sl_score_stay;
+
+            if( cgap ) {
+                last_sc_OPEN = last_sc;
+                sl_score_stay = last_sl;
+                sm += match_cgap;
+            } else {
+                last_sc_OPEN = last_sc + gap_open;
+                sl_score_stay = last_sl + gap_extend;
+            }
+
+            score_t sl;
+            if( sl_score_stay > last_sc_OPEN ) {
+                sl = sl_score_stay;
+                //arr.sl_stay[ic(ia,ib)] = true;
+                tb_val |= b_sl_stay;
+            } else {
+                sl = last_sc_OPEN;
+            }
+
+            last_sl = sl;
+
+
+            score_t su_gap_open = last_sdiag + gap_open;
+            score_t su_GAP_EXTEND = *si_iter + gap_extend;
+
+            score_t su;// = max( su_GAP_EXTEND,  );
+            if( su_GAP_EXTEND > su_gap_open ) {
+                su = su_GAP_EXTEND;
+                //arr.su_stay[ic(ia,ib)] = true;
+                tb_val |= b_su_stay;
+            } else {
+                su = su_gap_open;
+            }
+
+
+            *si_iter = su;
+
+            score_t sc;
+            if( (su > sl) && su > sm ) {
+                sc = su;
+                //arr.s_u[ic(ia,ib)] = true;
+                tb_val |= b_s_u;
+            } else if( ( sl >= su ) && sl > sm ) {
+                sc = sl;
+                //arr.s_l[ic(ia,ib)] = true;
+                tb_val |= b_s_l;
+            } else { // implicit: sm_zero > sl && sm_zero > su
+                sc = sm;
+            }
+
+
+            last_sc = sc;
+            *s_iter = sc;
+            arr.tb[ic(ia,ib)] = tb_val;
+
+            if( s_iter == s_end - 1 || lastrow ) {
+                if( sc > max_score ) {
+                    max_a = int(ia);
+                    max_b = int(ib);
+                    max_score = sc;
+                }
+
+
+            }
+        }
+
+    }
+
+//    std::cout << "max score: " << max_score << "\n";
+//    std::cout << "max " << max_a << " " << max_b << "\n";
+
+    int ia = asize - 1;
+    int ib = bsize - 1;
+
+    assert( ia == max_a || ib == max_b );
+
+    bool in_l = false;
+    bool in_u = false;
+
+    while( ia > max_a ) {
+        tb_out.push_back(1);
+        --ia;
+    }
+
+    while( ib > max_b ) {
+        tb_out.push_back(2);
+        --ib;
+    }
+
+    while( ia >= 0 && ib >= 0 ) {
+        size_t c = ic( ia, ib );
+
+        if( !in_l && !in_u ) {
+            in_l = (arr.tb[c] & b_s_l) != 0;
+            in_u = (arr.tb[c] & b_s_u) != 0;
+
+            if( !in_l && !in_u ) {
+                tb_out.push_back(0);
+                --ia;
+                --ib;
+            }
+
+        }
+
+        if( in_u ) {
+            tb_out.push_back(2);
+            --ib;
+
+            in_u = (arr.tb[c] & b_su_stay) != 0;
+        } else if( in_l ) {
+            tb_out.push_back(1);
+            --ia;
+
+            in_l = (arr.tb[c] & b_sl_stay) != 0;
+        }
+
+
+    }
+
+    while( ia >= 0 ) {
+        tb_out.push_back(1);
+        --ia;
+    }
+
     while( ib >= 0 ) {
         tb_out.push_back(2);
         --ib;
