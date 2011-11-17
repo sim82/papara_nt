@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cassert>
 #include <iostream>
+#include <stdexcept>
+
 #include "ivymike/algorithm.h"
 
 namespace sequence_model {
@@ -33,6 +35,8 @@ public:
 
     typedef uint8_t pars_state_t;
 
+    const static std::vector<char> inverse_meaning;
+
 
     static uint8_t normalize( uint8_t c ) {
         c = std::toupper(c);
@@ -47,63 +51,35 @@ public:
 
 
     static pars_state_t s2p( uint8_t c ) {
+        c = normalize(c);
+        ptrdiff_t idx = std::distance(inverse_meaning.begin(),
+                                   std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
 
-        switch( c ) {
-        case 'A':
-        case 'a':
-            return 0x1;
+        assert( idx >= 0 );
 
-        case 'C':
-        case 'c':
-            return 0x2;
+        if( size_t(idx) >= inverse_meaning.size() ) {
+            std::cerr << "illegal character: " << int(c) << "\n";
+            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+        }
 
-        case 'G':
-        case 'g':
-            return 0x4;
-
-        case 'U':
-        case 'u':
-        case 'T':
-        case 't':
-            return 0x8;
-
-        default:
-            break;
-        };
-        return 0xf;
+        return pars_state_t(idx);
     }
 
     static uint8_t p2s( pars_state_t c ) {
-        switch( c ) {
-        case 0x1:
-            return 'A';
-        case 0x2:
-            return 'C';
-        case 0x4:
-            return 'G';
-        case 0x8:
-            return 'T';
-        case 0xf:
-            return '-';
-
-        default:
-            break;
-
-        };
-        return 'X';
+        return inverse_meaning.at(c);
     }
 
 
     static inline bool is_single(pars_state_t ps) {
-        return ps == 0x1 || ps == 0x2 || ps == 0x4 || ps == 0x8;
+        return !is_gap(ps) && ps != 0;
     }
 
     static inline bool is_gap(pars_state_t ps) {
-        return ps == 0xf;
+        return ps == gap_state();
     }
 
     static inline pars_state_t gap_state() {
-        return 0xf;
+        return inverse_meaning.size() - 1;
     }
 
 };

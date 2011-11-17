@@ -31,5 +31,5 @@ namespace raxml_dna_meaning {
 const char inverse[16]   = {'_', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', '-'};
 }
 
-
+const std::vector<char> model<tag_dna>::inverse_meaning(raxml_dna_meaning::inverse, raxml_dna_meaning::inverse + ivy_mike::arrlen(raxml_dna_meaning::inverse));
 

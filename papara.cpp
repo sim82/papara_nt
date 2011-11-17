@@ -1256,7 +1256,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     calc_scores<pvec_t, seq_tag>(num_threads, refs, qs, &res );
 
-    std::string score_file(filename(run_name, "alignments"));
+    std::string score_file(filename(run_name, "alignment"));
     std::string quality_file(filename(run_name, "quality"));
 
 

@@ -108,7 +108,7 @@ public:
         
         
         size_t asize = m_a_prof.size() / W;
-        assert( asize > std::distance(bstart, bend) );
+        assert( ptrdiff_t(asize) > std::distance(bstart, bend) );
         
         const size_t band_width = asize - std::distance(bstart, bend);
         std::fill( m_s.begin(), m_s.end(), 0 );

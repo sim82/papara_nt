@@ -77,7 +77,7 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
         score_t * __restrict s_iter = &arr.s[0];
 
         
-        bool lastrow = ib == (b.size() - 1);
+//        bool lastrow = ib == (b.size() - 1);
         
        
         last_sdiag = *s_iter;
@@ -85,7 +85,7 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
         
         for( size_t ia = astart; ia <= ib + band_width; ++ia, ++s_iter ) {  
             score_t ac = a[ia];
-            const bool cgap = a_aux[ia] == aux_cgap;
+            const bool cgap = int(a_aux[ia]) == aux_cgap;
             
             // determine match or mis-match according to parsimony bits coming from the tree.
             bool is_match = ( ac & bc ) != 0;
@@ -171,7 +171,7 @@ class testbench {
         
         m_qs_pvecs.resize( num_qs );
         
-        for( int i = 0; i < m_qs_pvecs.size(); ++i ) {
+        for( size_t i = 0; i < m_qs_pvecs.size(); ++i ) {
             size_t len;
             is >> len;
             while( isspace( is.get() ) && !is.eof() ) {}
@@ -193,7 +193,7 @@ class testbench {
         m_ref_pvecs.resize( num_ref );
         m_ref_aux.resize( num_ref );
         
-        for( int i = 0; i < m_ref_pvecs.size(); ++i ) {
+        for( size_t i = 0; i < m_ref_pvecs.size(); ++i ) {
             size_t len;
             is >> len;
             while( isspace( is.get() ) && !is.eof() ) {}
@@ -299,7 +299,7 @@ public:
             for( size_t j = 0; j < m_qs_pvecs.size(); ++j ) {
                 
 
-                int score2 = 0;
+//                int score2 = 0;
                 int score = align_pvec_score_seq( m_ref_pvecs[i], m_ref_aux[i], m_qs_pvecs[j], score_mismatch, score_match_cgap, score_gap_open, score_gap_extend, arr );
                 //std::cout << "score " << i << " " << j << " = " << score << " " << score2 << "\n";
 //                 if( score != score2 ) {
