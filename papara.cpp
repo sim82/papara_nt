@@ -29,7 +29,7 @@
 #include <boost/bind.hpp>
 
 
-#include "pars_align_seq.h"
+
 #include "sequence_model.h"
 #include "parsimony.h"
 #include "pvec.h"
@@ -1276,7 +1276,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
     lout << "generating best scoring alignments\n";
     ivy_mike::timer t1;
-    typename pars_align_seq<pars_state_t>::arrays seq_arrays(true);
+
 
 
     double mean_quality = 0.0;
