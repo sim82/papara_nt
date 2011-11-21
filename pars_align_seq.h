@@ -1,4 +1,5 @@
-
+#ifndef __pars_align_seq_h
+#define __pars_align_seq_h
 #include <iostream>
 #include <cstdio>
 #include <cstddef>
@@ -292,7 +293,7 @@ public:
 
         bool g_dump = !true;
 
-#define AUX_CGAP ( 0x1 )
+        const static int AUX_CGAP = 0x1;
         score_t best = LARGE_VALUE;
         const size_t band_width = m_na - m_nb;
         score_t * __restrict sp = m_arr.score;
@@ -472,3 +473,4 @@ public:
     }  
     
 };
+#endif

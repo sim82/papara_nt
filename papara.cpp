@@ -29,14 +29,14 @@
 #include <boost/bind.hpp>
 
 
-
+#include "pars_align_seq.h"
 #include "sequence_model.h"
 #include "parsimony.h"
 #include "pvec.h"
 #include "align_utils.h"
 
-#include "pars_align_seq.h"
-#include "pars_align_gapp_seq.h"
+
+
 #include "fasta.h"
 #include "vec_unit.h"
 //#include "align_pvec_vec.h"
@@ -1277,7 +1277,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
     lout << "generating best scoring alignments\n";
     ivy_mike::timer t1;
     typename pars_align_seq<pars_state_t>::arrays seq_arrays(true);
-    pars_align_gapp_seq::arrays seq_arrays_gapp(true);
+
 
     double mean_quality = 0.0;
     double n_quality = 0.0;
