@@ -1,8 +1,15 @@
 /*
- * sequence_model.cpp
+ * Copyright (C) 2011 Simon A. Berger
  *
- *  Created on: 11/11/2011
- *      Author: sim
+ *  This program is free software; you may redistribute it and/or modify its
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but
+ *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
  */
 
 
@@ -28,8 +35,11 @@ const std::vector<unsigned int> model<tag_aa>::bit_vector(raxml_aa_meaning::bitV
 
 
 namespace raxml_dna_meaning {
-const char inverse[16]   = {'_', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', '-'};
+const char inverse[16]   = {'_', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', '-' };
+//const char bitvector[17]   = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 15 };
 }
 
-const std::vector<char> model<tag_dna>::inverse_meaning(raxml_dna_meaning::inverse, raxml_dna_meaning::inverse + ivy_mike::arrlen(raxml_dna_meaning::inverse));
 
+
+const std::vector<char> model<tag_dna>::inverse_meaning(raxml_dna_meaning::inverse, raxml_dna_meaning::inverse + ivy_mike::arrlen(raxml_dna_meaning::inverse));
+//const std::vector<uint8_t> model<tag_dna>::bit_vector(raxml_dna_meaning::bitvector, raxml_dna_meaning::bitvector + ivy_mike::arrlen(raxml_dna_meaning::bitvector));

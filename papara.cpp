@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2011 Simon A. Berger
+ *
+ *  This program is free software; you may redistribute it and/or modify its
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but
+ *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
+ */
+
+
 #define BOOST_UBLAS_NDEBUG 1
 #include <stdexcept>
 #include <iostream>
@@ -1172,6 +1187,10 @@ public:
         return ref_gaps_.size() - 1;
     }
 
+    size_t transformed_ref_len() const {
+        return ref_len() + std::accumulate( ref_gaps_.begin(), ref_gaps_.end(), 0 );
+    }
+
 private:
 
     std::vector<size_t> ref_gaps_;
@@ -1299,6 +1318,8 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
         rgc.add_trace(qs_traces[i]);
     }
+
+    os << refs.num_seqs() + qs.size() << " " << rgc.transformed_ref_len() << "\n";
 
     // write refs (and apply the ref gaps)
 
@@ -1428,11 +1449,24 @@ bool file_exists(const char *filename)
 template<typename pvec_t, typename seq_tag>
 void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name ) {
 
+    ivy_mike::perf_timer t1;
+
     queries<seq_tag> qs(qs_name.c_str());
+
+    t1.add_int();
     references<pvec_t,seq_tag> refs( tree_name.c_str(), alignment_name.c_str(), &qs );
 
+    t1.add_int();
+
     qs.preprocess();
+
+    t1.add_int();
+
     refs.build_ref_vecs();
+
+    t1.add_int();
+
+    t1.print();
 
     scoring_results res( qs.size() );
 
@@ -1452,6 +1486,10 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     std::ofstream os_qual( quality_file.c_str() );
     assert( os_qual.good() );
+
+
+
+
 
     //refs.write_seqs(os, pad);
     align_best_scores( os, os_qual, qs, refs, res, pad );

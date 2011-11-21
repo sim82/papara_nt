@@ -28,6 +28,10 @@
 // general: the freeshift version of this type of aligner differs from the
 // implementation used in papara mainly by allowing free gaps also on the reference side
 //
+// update: the QS-side free-gaps seem to work quite well for normal papara as well, plus
+// the positive/negaitve scoring scheme also works better than the original one from papara.
+// Because of these factors this is bound to become the standard alignment kernel for 'papara 2.0'
+//
 
 template<typename score_t>
 struct align_arrays {
@@ -307,210 +311,6 @@ struct align_arrays_traceback {
     std::vector<uint8_t> tb;
 };
 
-template<typename score_t, typename state_t>
-score_t align_freeshift_pvec( std::vector<state_t> &a, std::vector<state_t> &a_aux, std::vector<state_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
-  
-    const uint8_t b_sl_stay = 0x1;
-    const uint8_t b_su_stay = 0x2;
-    const uint8_t b_s_l = 0x4;
-    const uint8_t b_s_u = 0x8;
-    
-    
-    if( arr.s.size() < a.size()  ) {
-        arr.s.resize( a.size() );
-        arr.si.resize( a.size() );
-    }
-    
-    std::fill( arr.s.begin(), arr.s.end(), 0 );
-    std::fill( arr.si.begin(), arr.si.end(), 0 );
-    const score_t SMALL = -32000;
-
-    score_t max_score = SMALL;
-    int max_a = 0;
-    int max_b = 0;
-    
-    arr.tb.resize( a.size() * b.size() );
-    
-    
-    struct index_calc {
-        const size_t as, bs;
-        index_calc( size_t as_, size_t bs_ ) : as(as_), bs(bs_) {}
-        
-        size_t operator()(size_t ia, size_t ib ) {
-            assert( ia < as );
-            assert( ib < bs );
-            
-            //return ia * bs + ib;
-            return ib * as + ia;
-        }
-        
-    };
-    
-    index_calc ic( a.size(), b.size() );
-    
-    
-    for( size_t ib = 0; ib < b.size(); ib++ ) {
-        int bc = b[ib];
-        
-        score_t last_sl = SMALL;
-        score_t last_sc = 0.0;
-        score_t last_sdiag = 0.0;
-        
-        score_t * __restrict s_iter = arr.s.base();
-        score_t * __restrict si_iter = arr.si.base();
-        score_t * __restrict s_end = s_iter + a.size();
-        bool lastrow = ib == (b.size() - 1);
-        
-        //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
-            
-        for( size_t ia = 0; ia < a.size(); ++ia, ++s_iter, ++si_iter ) {  
-            //score_t match = sm.get_score( a[ia], bc );
-            uint8_t tb_val = 0;
-            int ac = a[ia];
-            const bool cgap = a_aux[ia]  == AUX_CGAP;
-            
-                // determine match or mis-match according to parsimony bits coming from the tree.
-            score_t match = ( ac & bc ) != 0 ? match_score : 0;
-            
-
-            score_t sm = last_sdiag + match;
-            
-            last_sdiag = *s_iter;
-            
-            score_t last_sc_OPEN; 
-            score_t sl_score_stay;
-            
-            if( cgap ) {
-                last_sc_OPEN = last_sc; 
-                sl_score_stay = last_sl;
-                sm += match_cgap;
-            } else {
-                last_sc_OPEN = last_sc + gap_open; 
-                sl_score_stay = last_sl + gap_extend;
-            }
-            
-            score_t sl;
-            if( sl_score_stay > last_sc_OPEN ) {
-                sl = sl_score_stay;
-                //arr.sl_stay[ic(ia,ib)] = true;
-                tb_val |= b_sl_stay;
-            } else {
-                sl = last_sc_OPEN;
-            }
-            
-            last_sl = sl;
-            
-
-            score_t su_gap_open = last_sdiag + gap_open;
-            score_t su_GAP_EXTEND = *si_iter + gap_extend;
-            
-            score_t su;// = max( su_GAP_EXTEND,  );
-            if( su_GAP_EXTEND > su_gap_open ) {
-                su = su_GAP_EXTEND;
-                //arr.su_stay[ic(ia,ib)] = true;
-                tb_val |= b_su_stay;
-            } else {
-                su = su_gap_open;
-            }
-            
-            
-            *si_iter = su;
-            
-            score_t sc;
-            if( (su > sl) && su > sm ) {
-                sc = su;
-                //arr.s_u[ic(ia,ib)] = true;
-                tb_val |= b_s_u;
-            } else if( ( sl >= su ) && sl > sm ) {
-                sc = sl;
-                //arr.s_l[ic(ia,ib)] = true;
-                tb_val |= b_s_l;
-            } else { // implicit: sm_zero > sl && sm_zero > su
-                sc = sm;
-            }
-
-            
-            last_sc = sc;
-            *s_iter = sc;
-            arr.tb[ic(ia,ib)] = tb_val;
-            
-            if( s_iter == s_end - 1 || lastrow ) {
-                if( sc > max_score ) {
-                    max_a = int(ia);
-                    max_b = int(ib);
-                    max_score = sc;
-                }
-                
-                
-            }
-        }
-        
-    }
-    
-//    std::cout << "max score: " << max_score << "\n";
-//    std::cout << "max " << max_a << " " << max_b << "\n";
-    
-    int ia = a.size() - 1;
-    int ib = b.size() - 1;
-    
-    assert( ia == max_a || ib == max_b );
-    
-    bool in_l = false;
-    bool in_u = false;
-    
-    while( ia > max_a ) {
-        tb_out.push_back(1);
-        --ia;
-    }
-    
-    while( ib > max_b ) {
-        tb_out.push_back(2);
-        --ib;
-    }
-    
-    while( ia >= 0 && ib >= 0 ) {
-        size_t c = ic( ia, ib );
-        
-        if( !in_l && !in_u ) {
-            in_l = (arr.tb[c] & b_s_l) != 0;
-            in_u = (arr.tb[c] & b_s_u) != 0;
-            
-            if( !in_l && !in_u ) {
-                tb_out.push_back(0);
-                --ia;
-                --ib;
-            }
-            
-        }
-        
-        if( in_u ) {
-            tb_out.push_back(2);
-            --ib;
-            
-            in_u = (arr.tb[c] & b_su_stay) != 0;
-        } else if( in_l ) {
-            tb_out.push_back(1);
-            --ia;
-            
-            in_l = (arr.tb[c] & b_sl_stay) != 0;
-        }
-        
-        
-    }
-    
-    while( ia >= 0 ) {
-        tb_out.push_back(1);
-        --ia;
-    }
-    
-    while( ib >= 0 ) {
-        tb_out.push_back(2);
-        --ib;
-    }
-    return max_score;
-}
-
-
 
 template<typename score_t, typename aiter, typename auxiter, typename biter>
 score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter bstart, biter bend, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
@@ -718,6 +518,14 @@ score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter 
     }
     return max_score;
 }
+
+// backward compatibility wrapper
+template<typename score_t, typename state_t>
+inline score_t align_freeshift_pvec( std::vector<state_t> &a, std::vector<state_t> &a_aux, std::vector<state_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {
+    return align_freeshift_pvec( a.begin(), a.end(), a_aux.begin(), b.begin(), b.end(), match_score, match_cgap, gap_open, gap_extend, tb_out, arr );
+}
+
+
 
 template<typename score_t>
 score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux, std::vector<uint8_t> &b, score_t match_score, score_t match_cgap, score_t gap_open, score_t gap_extend, std::vector<uint8_t>& tb_out, align_arrays_traceback<score_t> &arr ) {

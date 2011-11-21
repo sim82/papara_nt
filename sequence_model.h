@@ -1,8 +1,15 @@
 /*
- * sequence_model.h
+ * Copyright (C) 2011 Simon A. Berger
  *
- *  Created on: 10/11/2011
- *      Author: sim
+ *  This program is free software; you may redistribute it and/or modify its
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but
+ *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
  */
 
 #ifndef SEQUENCE_MODEL_H_
@@ -36,17 +43,20 @@ public:
     typedef uint8_t pars_state_t;
 
     const static std::vector<char> inverse_meaning;
-
+//    const static std::vector<pars_state_t> bit_vector;
 
     static uint8_t normalize( uint8_t c ) {
         c = std::toupper(c);
 
-        if( c == 'U' ) {
-            c = 'T';
+        switch( c ) {
+        case 'U':
+            return 'T';
+        case 'N':
+            return '-';
+        default:
+            return c;
         }
 
-
-        return c;
     }
 
 
