@@ -356,7 +356,7 @@ public:
             if( opt_qs_name != 0 ) {
                 std::ifstream qsf( opt_qs_name );
 
-                if( qsf.bad() ) {
+                if( !qsf.good() ) {
                     throw std::runtime_error( "cannot open qs file");
                 }
 
