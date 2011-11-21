@@ -596,7 +596,7 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 
 		std::cout << "raxml wrote " << raxbuf.size() << "\n";
 
-		int ret = proc.wait();
+		proc.wait();
 	}
 
 	out_files->swap(new_outfiles);

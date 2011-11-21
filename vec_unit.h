@@ -248,7 +248,7 @@ struct vector_unit<int, 4> {
 
 #ifdef __clang__
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc++0x-static-nonintegral-init"
+#pragma clang diagnostic ignored "-Wgnu"
 #endif
 
 template<>

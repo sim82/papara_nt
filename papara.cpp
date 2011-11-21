@@ -477,6 +477,24 @@ public:
     }
 
 
+
+    size_t calc_cups_per_ref( size_t ref_len ) const {
+       size_t ct = 0;
+
+       typename std::vector<std::vector <pars_state_t> >::const_iterator first = m_qs_pvecs.begin();
+       const typename std::vector<std::vector <pars_state_t> >::const_iterator last = m_qs_pvecs.end();
+
+       for(; first != last; ++first ) {
+           //ct += (ref_len - first->size()) * first->size();
+           ct += ref_len * first->size(); // papara now uses the 'unbanded' aligner
+       }
+
+
+
+       return ct;
+    }
+
+
 private:
     std::vector <std::string> m_qs_names;
     std::vector <std::vector<uint8_t> > m_qs_seqs;
@@ -852,11 +870,12 @@ class worker {
 
     const queries<seq_tag> &qs_;
 
-    size_t m_rank;
+    const size_t rank_;
 
 
     static void copy_to_profile( const block_t &block, aligned_buffer<vu_scalar_t> *prof, aligned_buffer<vu_scalar_t> *aux_prof ) {
         size_t reflen = block.ref_len;
+
 
 
         assert( reflen * VW == prof->size() );
@@ -886,11 +905,14 @@ class worker {
     }
 
 public:
-    worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), m_rank(rank) {}
+    worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), rank_(rank) {}
     void operator()() {
 
 
         ivy_mike::timer tstatus;
+        ivy_mike::timer tprint;
+
+        size_t cups_per_ref = -1;
 
 
         uint64_t ncup = 0;
@@ -906,6 +928,11 @@ public:
             if( !block_queue_.get_block(&block)) {
                 break;
             }
+
+            if( cups_per_ref == -1 ) {
+                cups_per_ref = qs_.calc_cups_per_ref(block.ref_len );
+            }
+
 #if 1
        //     assert( VW == 8 );
 
@@ -923,11 +950,21 @@ public:
 
 
 
-                ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
+                //ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
+
+
 
                 results_.offer( i, block.edges, block.edges + block.num_valid, out_scores.begin() );
 
             }
+
+            ncup += block.num_valid * cups_per_ref;
+
+            if( rank_ == 0 &&  tprint.elapsed() > 10 ) {
+                tprint = ivy_mike::timer();
+                std::cout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
+            }
+
         }
 #else
 
@@ -980,7 +1017,7 @@ public:
 #endif
         {
             ivy_mike::lock_guard<ivy_mike::mutex> lock( *block_queue_.hack_mutex() );
-            std::cout << "thread " << m_rank << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
+            std::cout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
         }
     }
 };

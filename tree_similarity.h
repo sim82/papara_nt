@@ -5,7 +5,7 @@
 
 namespace ivy_mike {
     namespace tree_parser_ms {
-        struct lnode;
+        class lnode;
     }
 } 
    
