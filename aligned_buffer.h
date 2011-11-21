@@ -27,7 +27,7 @@
 namespace ab_internal_ {
 template<typename T>
 class alloc {
-    const static size_t align = 32;
+    const static size_t align = 4096;
     
 #ifndef WIN32
     struct allocator_posix {
