@@ -322,68 +322,81 @@ struct align_vec_arrays {
 };
 
 
-template<typename score_t>
-struct ali_ptr_block_t {
-    score_t * __restrict a_prof_iter;
-    score_t * __restrict a_aux_prof_iter;
+template<typename aiter>
+struct ali_ptr_block2_t {
+    aiter a_prof_iter;
+    aiter a_aux_prof_iter;
     //score_t * __restrict s_iter;
     //score_t * __restrict si_iter;
 };
 
 template<typename vec_t>
 struct ali_score_block_t {
+    vec_t last_sdiag;
     vec_t last_sl;
     vec_t last_sc;
-    vec_t last_sdiag;
 };
 
-template<typename score_t, size_t W, bool global, typename bstate_t>
-void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const std::vector<bstate_t> &b, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
-    
-    assert( !global );
-    
+template<typename score_t, size_t W, typename aiter, typename biter, typename oiter>
+inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start, biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start, align_vec_arrays<score_t> &arr ) {
+
+
     typedef vector_unit<score_t,W> vu;
     typedef typename vu::vec_t vec_t;
-    
-    
-        
-    size_t av_size = a_prof.size();
-    
-//     if( arr.s.size() < av_size  ) {
-    arr.s.resize( av_size );
-    arr.si.resize( av_size );
-//     }
-    
-    
+
+    {
+        // some basic sanity checks for the input arguments
+
+        aiter xxx;
+        assert( sizeof(*xxx) == sizeof(score_t));
+
+        vu::assert_alignment( &(*a_start) );
+        vu::assert_alignment( &(*a_aux_start) );
+        vu::assert_alignment( &(*out_start) );
+    }
+
+
+
+
+    const size_t av_size = std::distance( a_start, a_end );
+    const size_t bsize = std::distance( b_start, b_end );
+
+
+    const size_t block_width = 512;
+    assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
+
+    const size_t av_minsize = std::max(av_size, block_width * W);
+
+
+    arr.s.resize( av_minsize );
+    arr.si.resize( av_minsize );
+
+
+
+
+
     if( arr.s.size() % W != 0 ) {
         throw std::runtime_error( "profile length not multiple of vec-unit width." );
     }
-    
-    
+
+
 
     const score_t SMALL = vu::SMALL_VALUE;
     std::fill( arr.s.begin(), arr.s.end(), 0 );
     std::fill( arr.si.begin(), arr.si.end(), SMALL );
-    
+
 
     vec_t max_score = vu::set1(SMALL);
-    
+
     const vec_t zero = vu::setzero();
     const vec_t gap_extend = vu::set1(gap_extend_sc);
     const vec_t gap_open = vu::set1(gap_open_sc);
     const vec_t match_cgap = vu::set1( match_cgap_sc );
     const vec_t match_score = vu::set1( match_score_sc );
 
-    score_t * const a_end_final = a_prof.base() + av_size;
+
 
     bool done = false;
-
-
-
-
-    const size_t block_width = 512;
-
-    assert( a_prof.size() >= block_width * W );
 
     ali_score_block_t<vec_t> btemp;
 
@@ -391,61 +404,52 @@ void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score
     btemp.last_sc = vu::set1(0);;
     btemp.last_sdiag = vu::set1(0);;
 
-    std::vector<ali_score_block_t<vec_t> > blocks( b.size(), btemp );
+    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
 
 
-    ali_ptr_block_t<score_t> ptr_block_outer;
-    ptr_block_outer.a_prof_iter = a_prof.base();
-    ptr_block_outer.a_aux_prof_iter = a_aux_prof.base();
+    ali_ptr_block2_t<aiter> ptr_block_outer;
+    ptr_block_outer.a_prof_iter = a_start;
+    ptr_block_outer.a_aux_prof_iter = a_aux_start;
     //ptr_block_outer.s_iter = arr.s.base();
     //ptr_block_outer.si_iter = arr.si.base();
 
 
 
     while( !done ) {
-        
 
-        ali_ptr_block_t<score_t> ptr_block = ptr_block_outer;
+
+        ali_ptr_block2_t<aiter> ptr_block = ptr_block_outer;
 
         std::fill( arr.s.begin(), arr.s.begin() + W * block_width, 0 );
         std::fill( arr.si.begin(), arr.si.begin() + W * block_width, SMALL );
 
-        for( size_t ib = 0; ib < b.size(); ++ib ) {
-            vec_t bc = vu::set1(b[ib]);
+        typename std::vector<ali_score_block_t<vec_t> >::iterator it_block = blocks.begin();
+        biter it_b = b_start;
+        for( ; it_b != b_end; ++it_b, ++it_block ) {
+            vec_t bc = vu::set1(*it_b);
 
+            bool lastrow = it_b == (b_end - 1);
 
-
-            
-            
-//            score_t * __restrict a_prof_iter = a_prof.base();
-//            score_t * __restrict a_aux_prof_iter = a_aux_prof.base();
-//            score_t * __restrict s_iter = arr.s.base();
-//            score_t * __restrict si_iter = arr.si.base();
-
-            bool lastrow = ib == (b.size() - 1);
-            
             vec_t row_max_score = vu::set1(SMALL);
 
-            ali_score_block_t<vec_t> block = blocks[ib];
+            ali_score_block_t<vec_t> block = *it_block;
 
             ptr_block = ptr_block_outer;
-            score_t * a_end = ptr_block.a_prof_iter + W * block_width;
+            aiter a_end_this = ptr_block.a_prof_iter + W * block_width;
 
-            if( a_end > a_end_final ) {
-                a_end = a_end_final;
+            if( a_end_this > a_end ) {
+                a_end_this = a_end;
             }
             score_t * __restrict s_iter = arr.s.base();
             score_t * __restrict si_iter = arr.si.base();
-            //ptr_block_outer.si_iter = arr.si.base();
 
-            for(; ptr_block.a_prof_iter != a_end; ptr_block.a_prof_iter += W, ptr_block.a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
-                //break_aloop = s_iter == (s_end - W);
-                const vec_t ac = vu::load( ptr_block.a_prof_iter );
-                const vec_t cgap = vu::load( ptr_block.a_aux_prof_iter );
+
+            for(; ptr_block.a_prof_iter != a_end_this; ptr_block.a_prof_iter += W, ptr_block.a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
+
+                const vec_t ac = vu::load( &(*ptr_block.a_prof_iter) );
+                const vec_t cgap = vu::load( &(*ptr_block.a_aux_prof_iter) );
 
                 const vec_t non_match = vu::cmp_eq( vu::bit_and( ac, bc ), zero );
-
-
 
                 // match increase: sum of match and match_cgap score/penalty
                 const vec_t sm_inc = vu::add( vu::bit_andnot(non_match, match_score), vu::bit_and(cgap, match_cgap) );
@@ -488,12 +492,12 @@ void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score
 
                 vu::store( sc, s_iter );
 
-                if( !global ) {
-                    row_max_score = vu::max( row_max_score, sc );
-                }
+
+                row_max_score = vu::max( row_max_score, sc );
+
             }
 
-            done = ptr_block.a_prof_iter == a_end_final;
+            done = ptr_block.a_prof_iter == a_end;
 
             if( done ) {
                 max_score = vu::max( max_score, block.last_sc );
@@ -502,15 +506,23 @@ void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score
                 max_score = vu::max( max_score, row_max_score );
             }
 
-            blocks[ib] = block;
+            *it_block = block;
 
         }
 
         ptr_block_outer = ptr_block;
     }
-    
-    vu::store( max_score, out.base() );
+
+    vu::store( max_score, &(*out_start) );
 }
+
+template<typename score_t, size_t W, bool global, typename bstate_t>
+inline void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const std::vector<bstate_t> &b, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
+    assert( !global );
+    align_pvec_score_vec<score_t, W>( a_prof.begin(), a_prof.end(), a_aux_prof.begin(), b.begin(), b.end(), match_score_sc, match_cgap_sc, gap_open_sc, gap_extend_sc, out.begin(), arr );
+}
+
+
 #endif
 
 //

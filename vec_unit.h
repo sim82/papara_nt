@@ -17,6 +17,7 @@
 #define __vec_unit_h
 #include <iostream>
 #include <stdexcept>
+#include <cassert>
 #include <immintrin.h>
 
 #ifdef __AVX__
@@ -131,6 +132,10 @@ struct vector_unit<short, 8> {
 //         #error missing SSSSSSSSSE3
         #endif
     }
+
+    static inline void assert_alignment( T * p ) {
+        assert( size_t(p) % 32 == 0 );
+    }
     
 };
 
@@ -243,6 +248,10 @@ struct vector_unit<int, 4> {
         #endif
     }
     
+    static inline void assert_alignment( T * p ) {
+        assert( size_t(p) % 32 == 0 );
+    }
+
 };
 #ifndef WIN32
 

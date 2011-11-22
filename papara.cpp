@@ -944,7 +944,9 @@ public:
 //            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
             for( unsigned int i = 0; i < qs_.size(); i++ ) {
 
-                align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
+                //align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
+                align_pvec_score_vec<vu_scalar_t, VW>( pvec_prof.begin(), pvec_prof.end(), aux_prof.begin(), qs_.pvec_at(i).begin(), qs_.pvec_at(i).end(), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores.begin(), arrays );
+
                 //aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
                 //const vu_scalar_t *score_vec = aligner.get_scores();
 
