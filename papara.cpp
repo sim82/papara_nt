@@ -924,7 +924,7 @@ public:
         ivy_mike::timer tstatus;
         ivy_mike::timer tprint;
 
-        size_t cups_per_ref = -1;
+        uint64_t cups_per_ref = -1;
 
 
         uint64_t ncup = 0;
@@ -988,7 +988,7 @@ public:
 
             if( rank_ == 0 &&  tprint.elapsed() > 10 ) {
                 tprint = ivy_mike::timer();
-                std::cout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
+                std::cout << "thread " << rank_ << " " << ncup << " in " << tstatus.elapsed() << " : " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
             }
 
         }
