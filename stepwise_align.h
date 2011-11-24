@@ -322,13 +322,7 @@ struct align_vec_arrays {
 };
 
 
-template<typename aiter>
-struct ali_ptr_block2_t {
-    aiter a_prof_iter;
-    aiter a_aux_prof_iter;
-    //score_t * __restrict s_iter;
-    //score_t * __restrict si_iter;
-};
+
 
 template<typename vec_t>
 struct ali_score_block_t {
@@ -398,16 +392,29 @@ inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start,
 
     bool done = false;
 
-    ali_score_block_t<vec_t> btemp;
+//    ali_score_block_t<vec_t> btemp;
+//
+//    btemp.last_sl = vu::set1(SMALL);
+//    btemp.last_sc = vu::set1(0);;
+//    btemp.last_sdiag = vu::set1(0);;
+//
+//    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
 
-    btemp.last_sl = vu::set1(SMALL);
-    btemp.last_sc = vu::set1(0);;
-    btemp.last_sdiag = vu::set1(0);;
+    typedef aligned_buffer<score_t,4096> block_vec;
+    block_vec block_sdiag(bsize * W, 0);
+    block_vec block_sl(bsize * W, SMALL);
+    block_vec block_sc(bsize * W, 0);
 
-    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
 
 
-    ali_ptr_block2_t<aiter> ptr_block_outer;
+    struct ali_ptr_block2_t {
+        aiter a_prof_iter;
+        aiter a_aux_prof_iter;
+        //score_t * __restrict s_iter;
+        //score_t * __restrict si_iter;
+    };
+
+    ali_ptr_block2_t ptr_block_outer;
     ptr_block_outer.a_prof_iter = a_start;
     ptr_block_outer.a_aux_prof_iter = a_aux_start;
     //ptr_block_outer.s_iter = arr.s.base();
@@ -418,21 +425,33 @@ inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start,
     while( !done ) {
 
 
-        ali_ptr_block2_t<aiter> ptr_block = ptr_block_outer;
+        ali_ptr_block2_t ptr_block = ptr_block_outer;
 
         std::fill( arr.s.begin(), arr.s.begin() + W * block_width, 0 );
         std::fill( arr.si.begin(), arr.si.begin() + W * block_width, SMALL );
 
-        typename std::vector<ali_score_block_t<vec_t> >::iterator it_block = blocks.begin();
+//        typename std::vector<ali_score_block_t<vec_t> >::iterator it_block = blocks.begin();
+
+        typename block_vec::iterator block_sl_it = block_sl.begin();
+        typename block_vec::iterator block_sc_it = block_sc.begin();
+        typename block_vec::iterator block_sdiag_it = block_sdiag.begin();
+
+
+
+
         biter it_b = b_start;
-        for( ; it_b != b_end; ++it_b, ++it_block ) {
+
+
+
+
+        for( ; it_b != b_end; ++it_b, block_sl_it += W, block_sc_it += W, block_sdiag_it += W ) {
             vec_t bc = vu::set1(*it_b);
 
             bool lastrow = it_b == (b_end - 1);
 
             vec_t row_max_score = vu::set1(SMALL);
 
-            ali_score_block_t<vec_t> block = *it_block;
+            //ali_score_block_t<vec_t> block = *it_block;
 
             ptr_block = ptr_block_outer;
             aiter a_end_this = ptr_block.a_prof_iter + W * block_width;
@@ -443,70 +462,108 @@ inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start,
             score_t * __restrict s_iter = arr.s.base();
             score_t * __restrict si_iter = arr.si.base();
 
+            _mm_prefetch( &(*ptr_block.a_prof_iter), _MM_HINT_T0 );
+            _mm_prefetch( &(*ptr_block.a_aux_prof_iter), _MM_HINT_T0 );
+            _mm_prefetch( s_iter, _MM_HINT_T0 );
+            _mm_prefetch( si_iter, _MM_HINT_T0 );
+
+
+            vec_t last_sdiag = vu::load( &(*block_sdiag_it));
+            vec_t last_sl = vu::load( &(*block_sl_it));
+            vec_t last_sc = vu::load( &(*block_sc_it));
 
             for(; ptr_block.a_prof_iter != a_end_this; ptr_block.a_prof_iter += W, ptr_block.a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
+                // some 'lessions learned' about instruction ordering when using sse intrinsics:
+                // 1. assigning values that are read/written only once to (const) variables is ok, to improve
+                //    readability, if the assignment is near the use. (rule: don't force the compiler to waste
+                //    registers, by putting unnecessary stuff in between. why? the compiler should be able to reorder everything...)
+                // 2. arithmetic operations should be placed relative to load/store instructions, in a way
+                //    which gives the compiler the most freedom for rearrangements (as long as rule 1 is not violated)
+                // 3. the parameter order of vu::max seems critical (why?)
+                //
+                // The code is written in a kind of static single assignment form to make manual analysis easier:
+                // The basic optimization rule is: place operations so that the number of 'active' values that 'cross'
+                // the operation is minimal. A value is active between its initialization and it's last read-access.
+
 
                 const vec_t ac = vu::load( &(*ptr_block.a_prof_iter) );
-                const vec_t cgap = vu::load( &(*ptr_block.a_aux_prof_iter) );
 
+
+                // there is still large optimization potential in pre-generating match profiles based on bc
+                // there may be combinatorial problem with allowing multi state characters in the QS (allowing it only for
+                // DNA but not AA will be a mid sized p.i.t.a.)
                 const vec_t non_match = vu::cmp_eq( vu::bit_and( ac, bc ), zero );
+
+                const vec_t cgap = vu::load( &(*ptr_block.a_aux_prof_iter) );
 
                 // match increase: sum of match and match_cgap score/penalty
                 const vec_t sm_inc = vu::add( vu::bit_andnot(non_match, match_score), vu::bit_and(cgap, match_cgap) );
 
                 // match score (last_sdiag is preloaded in the previous iteration)
-                const vec_t sm = vu::add(block.last_sdiag, sm_inc );
+                const vec_t s_diag = last_sdiag;
+                const vec_t sm = vu::add(s_diag, sm_inc );
+
+
+
+                // open score for gap-from-left (last_sc is the previous main-cell score)
+                const vec_t sc_left = last_sc;
+                const vec_t sl_open = vu::add( sc_left, vu::bit_andnot( cgap, gap_open) );
+
+                // extension score for gap-from-left (last_sl is the previous gap-from-left score)
+                const vec_t sl_left = last_sl;
+                const vec_t sl_extend = vu::add( sl_left, vu::bit_andnot( cgap, gap_extend) );
+
+
+                const vec_t sl = vu::max( sl_open, sl_extend );
+                last_sl = sl;
+
+                const vec_t sc_above = vu::load( s_iter ); // OPT: it seems to be critical to put this load as late as possible
 
                 // last_sdiag now is preloaded with the 'above' value (it will become the 'diag'
                 // element in the next iteration.)
-
-
-
-                block.last_sdiag = vu::load( s_iter );
-
-                // open score for gap-from-left (last_sc is the previous main-cell score)
-                const vec_t sl_open = vu::add( block.last_sc, vu::bit_andnot( cgap, gap_open) );
-
-                // extension score for gap-from-left (last_sl is the previous gap-from-left score)
-                const vec_t sl_extend = vu::add( block.last_sl, vu::bit_andnot( cgap, gap_extend) );
-
-                const vec_t sl = vu::max( sl_open, sl_extend );
-                block.last_sl = sl;
-
+                last_sdiag = sc_above;
 
                 // open score for gap from above (remember, last_sdiag is preloaded with the 'above' value)
-                const vec_t su_open = vu::add( block.last_sdiag, gap_open);
+                const vec_t su_open = vu::add( sc_above, gap_open);
 
                 // extension score for gap from above (si_iter is the previous gap-from-above score)
-                const vec_t su_GAP_EXTEND = vu::add( vu::load( si_iter ), gap_extend );
+                const vec_t su_extend = vu::add( vu::load( si_iter ), gap_extend );
 
                 // chose between open/extension for gap-from-above
-                const vec_t su = vu::max( su_GAP_EXTEND, su_open );// = max( su_GAP_EXTEND,  );
+                const vec_t su = vu::max( su_open, su_extend );// = max( su_GAP_EXTEND,  );
+
+
                 vu::store( su, si_iter );
 
-
                 // overall max = new main-cell score
+
                 const vec_t sc = vu::max( sm, vu::max( su, sl ) );
-                block.last_sc = sc;
-
-
-                vu::store( sc, s_iter );
-
-
+                last_sc = sc;
                 row_max_score = vu::max( row_max_score, sc );
 
+                vu::store( last_sc, s_iter );
+
+
+
+
+
             }
+
 
             done = ptr_block.a_prof_iter == a_end;
 
             if( done ) {
-                max_score = vu::max( max_score, block.last_sc );
+                max_score = vu::max( max_score, last_sc );
             }
             if( lastrow ) {
                 max_score = vu::max( max_score, row_max_score );
             }
 
-            *it_block = block;
+            //*it_block = block;
+
+            vu::store( last_sdiag, &(*block_sdiag_it) );
+            vu::store( last_sc, &(*block_sc_it) );
+            vu::store( last_sl, &(*block_sl_it) );
 
         }
 
@@ -524,6 +581,354 @@ inline void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffe
 
 
 #endif
+
+
+//
+// rewrite of the vectorized stepwise-style aligner as a class to encasulate profile pre-generation
+//
+
+
+template<typename score_t, size_t W>
+class pvec_aligner_vec {
+public:
+    typedef vector_unit<score_t,W> vu;
+    typedef typename vu::vec_t vec_t;
+
+
+    template<typename mapf>
+    pvec_aligner_vec( const int *seqptrs[W], const unsigned int *auxptrs[W], size_t reflen, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, mapf map, size_t nstates )
+     : pvec_prof_( W * reflen ),
+       aux_prof_( W * reflen ),
+       sm_inc_prof_( W * reflen * nstates ),
+       num_cstates_(nstates)
+//       gap_open_cgap_prof_( W * reflen ),
+//       gap_extend_cgap_prof_( W * reflen )
+
+    {
+
+
+        typename aligned_buffer<score_t>::iterator it = pvec_prof_.begin();
+        typename aligned_buffer<score_t>::iterator ait = aux_prof_.begin();
+//        typename aligned_buffer<score_t>::iterator oit = gap_open_cgap_prof_.begin();
+//        typename aligned_buffer<score_t>::iterator eit = gap_extend_cgap_prof_.begin();
+
+        for( size_t i = 0; i < reflen; ++i ) {
+            for( size_t j = 0; j < W; ++j ) {
+                *it = score_t(seqptrs[j][i]);
+                *ait = (auxptrs[j][i] == AUX_CGAP) ? score_t(-1) : 0;
+
+//                *oit = (auxptrs[j][i] == AUX_CGAP) ? 0 : gap_open_sc;
+//                *eit = (auxptrs[j][i] == AUX_CGAP) ? 0 : gap_extend_sc;
+
+                ++it;
+                ++ait;
+//                ++oit;
+//                ++eit;
+            }
+        }
+
+        assert( it == pvec_prof_.end() );
+        assert( ait == aux_prof_.end() );
+
+        assert( match_cgap_sc + match_score_sc < 0 );
+//        assert( W == 8 );
+        for( size_t i = 0; i < nstates; i++ ) {
+            typename aligned_buffer<score_t>::iterator it = sm_inc_prof_.begin() + i * reflen * W;
+
+            typename aligned_buffer<score_t>::iterator pit = pvec_prof_.begin();
+            typename aligned_buffer<score_t>::iterator ait = aux_prof_.begin();
+            score_t bc = map(i);
+            for( size_t j = 0; j < reflen * W; ++j, ++it, ++pit, ++ait ) {
+                bool match = (bc & *pit) != 0;
+
+                if( match ) {
+                    *it = match_score_sc;
+                } else {
+                    *it = 0;
+                }
+
+                if( *ait == score_t(-1) ) {
+                    *it += match_cgap_sc;
+                }
+
+            }
+        }
+
+
+    }
+
+
+    template<typename biter, typename oiter>
+    inline void align(  biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start ) {
+        typedef typename aligned_buffer<score_t>::iterator aiter;
+        aiter a_start = pvec_prof_.begin();
+        aiter a_end = pvec_prof_.end();
+        aiter a_aux_start = aux_prof_.begin();
+
+
+
+        {
+            // some basic sanity checks for the input arguments
+
+            aiter xxx;
+            assert( sizeof(*xxx) == sizeof(score_t));
+
+            vu::assert_alignment( &(*a_start) );
+            vu::assert_alignment( &(*a_aux_start) );
+            vu::assert_alignment( &(*out_start) );
+        }
+
+
+
+
+        const size_t av_size = std::distance( a_start, a_end );
+        const size_t bsize = std::distance( b_start, b_end );
+
+        const size_t a_size = av_size / W;
+
+
+        const size_t block_width = 512;
+        assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
+
+        const size_t av_minsize = std::max(av_size, block_width * W);
+
+
+        s_.resize( av_minsize );
+        si_.resize( av_minsize );
+
+
+
+
+
+        if( s_.size() % W != 0 ) {
+            throw std::runtime_error( "profile length not multiple of vec-unit width." );
+        }
+
+
+
+        const score_t SMALL = vu::SMALL_VALUE;
+        std::fill( s_.begin(), s_.end(), 0 );
+        std::fill( si_.begin(), si_.end(), SMALL );
+
+
+        vec_t max_score = vu::set1(SMALL);
+
+        const vec_t zero = vu::setzero();
+        const vec_t gap_extend = vu::set1(gap_extend_sc);
+        const vec_t gap_open = vu::set1(gap_open_sc);
+//        const vec_t match_cgap = vu::set1( match_cgap_sc );
+//        const vec_t match_score = vu::set1( match_score_sc );
+
+
+
+        bool done = false;
+
+    //    ali_score_block_t<vec_t> btemp;
+    //
+    //    btemp.last_sl = vu::set1(SMALL);
+    //    btemp.last_sc = vu::set1(0);;
+    //    btemp.last_sdiag = vu::set1(0);;
+    //
+    //    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
+
+        typedef aligned_buffer<score_t,4096> block_vec;
+        block_vec block_sdiag(bsize * W, 0);
+        block_vec block_sl(bsize * W, SMALL);
+        block_vec block_sc(bsize * W, 0);
+
+
+
+
+       // ali_ptr_block2_t ptr_block_outer;
+      //  ptr_block_outer.a_prof_iter = a_start;
+        //ptr_block_outer.a_aux_prof_iter = a_aux_start;
+        //ptr_block_outer.start = 0;
+        size_t block_start_outer = 0;
+        //ptr_block_outer.s_iter = s_.base();
+        //ptr_block_outer.si_iter = si_.base();
+
+
+
+        while( !done ) {
+
+
+
+
+            std::fill( s_.begin(), s_.begin() + W * block_width, 0 );
+            std::fill( si_.begin(), si_.begin() + W * block_width, SMALL );
+
+    //        typename std::vector<ali_score_block_t<vec_t> >::iterator it_block = blocks.begin();
+
+            typename block_vec::iterator block_sl_it = block_sl.begin();
+            typename block_vec::iterator block_sc_it = block_sc.begin();
+            typename block_vec::iterator block_sdiag_it = block_sdiag.begin();
+
+
+            size_t block_end = block_start_outer + block_width;
+
+            if( block_end > a_size ) {
+                block_end = a_size;
+            }
+
+
+            biter it_b = b_start;
+
+
+
+
+            for( ; it_b != b_end; ++it_b, block_sl_it += W, block_sc_it += W, block_sdiag_it += W ) {
+
+                assert(*it_b >= 0);
+                assert(*it_b < num_cstates_);
+
+
+                bool lastrow = it_b == (b_end - 1);
+
+                vec_t row_max_score = vu::set1(SMALL);
+
+                //ali_score_block_t<vec_t> block = *it_block;
+
+                //ptr_block = ptr_block_outer;
+
+
+                size_t block_start = block_start_outer;
+
+                //aiter a_aux_end_this = ptr_block.a_aux_prof_iter + W * block_width;
+
+                score_t * __restrict s_iter = s_.base();
+                score_t * __restrict si_iter = si_.base();
+                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
+                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
+                score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_start * W));
+                _mm_prefetch( sm_inc_iter, _MM_HINT_T0 );
+
+
+                vec_t last_sdiag = vu::load( &(*block_sdiag_it));
+                vec_t last_sl = vu::load( &(*block_sl_it));
+                vec_t last_sc = vu::load( &(*block_sc_it));
+
+                for(; a_aux_prof_iter != a_aux_prof_end; sm_inc_iter += W, a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
+                    // some 'lessions learned' about instruction ordering when using sse intrinsics:
+                    // 1. assigning values that are read/written only once to (const) variables is ok, to improve
+                    //    readability, if the assignment is near the use. (rule: don't force the compiler to waste
+                    //    registers, by putting unnecessary stuff in between. why? the compiler should be able to reorder everything...)
+                    // 2. arithmetic operations should be placed relative to load/store instructions, in a way
+                    //    which gives the compiler the most freedom for rearrangements (as long as rule 1 is not violated)
+                    // 3. the parameter order of vu::max seems critical (why?)
+                    //
+                    // The code is written in a kind of static single assignment form to make manual analysis easier:
+                    // The basic optimization rule is: place operations so that the number of 'active' values that 'cross'
+                    // the operation is minimal. A value is active between its initialization and it's last read-access.
+
+
+                    //const vec_t cgap = vu::load( a_aux_prof_iter );
+
+                    // match increase: sum of match and match_cgap score/penalty
+                    const vec_t sm_inc = vu::load( sm_inc_iter );
+                    const vec_t cgap = vu::cmp_lt( sm_inc, zero ); // HACK: assume that match_score + match_cgap_penalty < 0
+
+
+                    // match score (last_sdiag is preloaded in the previous iteration)
+                    const vec_t s_diag = last_sdiag;
+                    const vec_t sm = vu::add(s_diag, sm_inc );
+
+                    // open score for gap-from-left (last_sc is the previous main-cell score)
+
+                    const vec_t sc_left = last_sc;
+//                    const vec_t sl_open = vu::add( sc_left, vu::load( &(*ptr_block.gap_open_cgap_iter )));
+                    const vec_t sl_open = vu::add( sc_left, vu::bit_andnot( cgap, gap_open) );
+
+                    // extension score for gap-from-left (last_sl is the previous gap-from-left score)
+                    const vec_t sl_left = last_sl;
+                    const vec_t sl_extend = vu::add( sl_left, vu::bit_andnot( cgap, gap_extend) );
+                    //const vec_t sl_extend = vu::add( sl_left, vu::load( &(*ptr_block.gap_extend_cgap_iter )));
+
+
+
+                    const vec_t sl = vu::max( sl_open, sl_extend );
+                    last_sl = sl;
+
+                    const vec_t sc_above = vu::load( s_iter ); // OPT: it seems to be critical to put this load as late as possible
+
+                    // last_sdiag now is preloaded with the 'above' value (it will become the 'diag'
+                    // element in the next iteration.)
+                    last_sdiag = sc_above;
+
+                    // open score for gap from above (remember, last_sdiag is preloaded with the 'above' value)
+                    const vec_t su_open = vu::add( sc_above, gap_open);
+
+                    // extension score for gap from above (si_iter is the previous gap-from-above score)
+                    const vec_t su_extend = vu::add( vu::load( si_iter ), gap_extend );
+
+                    // chose between open/extension for gap-from-above
+                    const vec_t su = vu::max( su_open, su_extend );// = max( su_GAP_EXTEND,  );
+
+
+                    vu::store( su, si_iter );
+
+                    // overall max = new main-cell score
+
+                    const vec_t sc = vu::max( sm, vu::max( su, sl ) );
+                    last_sc = sc;
+                    row_max_score = vu::max( row_max_score, sc );
+
+                    vu::store( last_sc, s_iter );
+
+                }
+
+
+                done = block_start == a_size;
+
+                if( done ) {
+                    max_score = vu::max( max_score, last_sc );
+                }
+                if( lastrow ) {
+                    max_score = vu::max( max_score, row_max_score );
+                }
+
+                //*it_block = block;
+
+                vu::store( last_sdiag, &(*block_sdiag_it) );
+                vu::store( last_sc, &(*block_sc_it) );
+                vu::store( last_sl, &(*block_sl_it) );
+
+            }
+
+
+            block_start_outer = block_end;
+        }
+
+        vu::store( max_score, &(*out_start) );
+    }
+
+
+private:
+    struct ali_score_block_t {
+        vec_t last_sdiag;
+        vec_t last_sl;
+        vec_t last_sc;
+    };
+
+    aligned_buffer<score_t> s_;
+    aligned_buffer<score_t> si_;
+
+    aligned_buffer<score_t> pvec_prof_;
+    aligned_buffer<score_t> aux_prof_;
+    aligned_buffer<score_t> sm_inc_prof_;
+    const size_t num_cstates_;
+//    aligned_buffer<score_t> gap_open_cgap_prof_;
+//    aligned_buffer<score_t> gap_extend_cgap_prof_;
+};
+
+
+
+
+
+
+
+
+
+
 
 //
 // the 'full enchilada' aligner including traceback.

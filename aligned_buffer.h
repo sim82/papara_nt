@@ -25,9 +25,9 @@
 #include <vector>
 
 namespace ab_internal_ {
-template<typename T>
+template<typename T, size_t Talign>
 class alloc {
-    const static size_t align = 4096;
+    //const static size_t align = 4096;
     
 #ifndef WIN32
     struct allocator_posix {
@@ -62,7 +62,7 @@ class alloc {
 public:
     template<typename _Other>
     struct rebind {
-        typedef ab_internal_::alloc<_Other> other;
+        typedef ab_internal_::alloc<_Other,Talign> other;
     };
     typedef T value_type;
     typedef T* pointer;
@@ -74,13 +74,13 @@ public:
 
 
 	alloc( ) {}
-	alloc(const alloc<T>& _Right ) {}
+	alloc(const alloc<T,Talign>& _Right ) {}
 
 	template<class Other>
-	alloc(const alloc<Other>& _Right ) {}
+	alloc(const alloc<Other,Talign>& _Right ) {}
 
     pointer allocate( size_type nobj, const void *lh = 0 ) {
-        return (pointer) allocator::alloc( align, nobj * sizeof(T) );
+        return (pointer) allocator::alloc( Talign, nobj * sizeof(T) );
     }
     
     void deallocate( pointer ptr, size_type nobj ) {
@@ -100,25 +100,26 @@ public:
     
 }
 
-template<typename T>
-struct aligned_buffer : private std::vector<T,ab_internal_::alloc<T> > {
+template<typename T, size_t alignment = 4096>
+struct aligned_buffer : private std::vector<T,ab_internal_::alloc<T,alignment> > {
 public:
-    typedef typename std::vector<T,ab_internal_::alloc<T> >::iterator iterator;
-    typedef typename std::vector<T,ab_internal_::alloc<T> >::const_iterator const_iterator;
+    typedef typename std::vector<T,ab_internal_::alloc<T,alignment> >::iterator iterator;
+    typedef typename std::vector<T,ab_internal_::alloc<T,alignment> >::const_iterator const_iterator;
     
-    aligned_buffer() : std::vector<T,ab_internal_::alloc<T> >() {}
-    aligned_buffer( size_t size ) : std::vector<T,ab_internal_::alloc<T> >(size) {}
+    aligned_buffer() : std::vector<T,ab_internal_::alloc<T,alignment> >() {}
+    aligned_buffer( size_t size ) : std::vector<T,ab_internal_::alloc<T,alignment> >(size) {}
+    aligned_buffer( size_t size, const T &v ) : std::vector<T,ab_internal_::alloc<T,alignment> >(size, v) {}
     
 
-    using std::vector<T,ab_internal_::alloc<T> >::begin;
-    using std::vector<T,ab_internal_::alloc<T> >::end;
-    using std::vector<T,ab_internal_::alloc<T> >::size;
-    using std::vector<T,ab_internal_::alloc<T> >::resize;
-    using std::vector<T,ab_internal_::alloc<T> >::reserve;
-    using std::vector<T,ab_internal_::alloc<T> >::push_back;
-    using std::vector<T,ab_internal_::alloc<T> >::data;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::begin;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::end;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::size;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::resize;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::reserve;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::push_back;
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::data;
     
-    using std::vector<T,ab_internal_::alloc<T> >::operator[];
+    using std::vector<T,ab_internal_::alloc<T,alignment> >::operator[];
     
     inline T* operator() (ptrdiff_t o) {
         return &(operator[](o));

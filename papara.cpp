@@ -22,6 +22,7 @@
 #include <map>
 #include <functional>
 #include <cstring>
+#include <algorithm>
 #include <boost/io/ios_state.hpp>
 
 #include <boost/iostreams/tee.hpp>
@@ -401,6 +402,7 @@ public:
 
         assert( m_qs_seqs.size() == m_qs_names.size() );
         m_qs_pvecs.resize(m_qs_seqs.size());
+        m_qs_cseqs.resize(m_qs_seqs.size());
 
         for( size_t i = 0; i < m_qs_seqs.size(); i++ ) {
 //            seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
@@ -410,6 +412,10 @@ public:
             // function and only append the mapped character into pvec, if it corresponds to a single (=non gap)
             // character.
 
+
+            std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
+                    back_insert_ifer(m_qs_cseqs[i], std::not1( std::ptr_fun(seq_model::cstate_is_gap) )),
+                    seq_model::s2c );
 
             std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
                     back_insert_ifer(m_qs_pvecs[i], seq_model::is_single),
@@ -455,6 +461,10 @@ public:
         return m_qs_seqs.at(i);
     }
 
+    const std::vector<uint8_t> &cseq_at( size_t i ) const {
+        return m_qs_cseqs.at(i);
+    }
+
     void write_pvecs( const char * name ) {
         std::ofstream os( name );
 
@@ -498,6 +508,8 @@ public:
 private:
     std::vector <std::string> m_qs_names;
     std::vector <std::vector<uint8_t> > m_qs_seqs;
+
+    std::vector <std::vector<uint8_t> > m_qs_cseqs;
 
     std::vector<std::vector <pars_state_t> > m_qs_pvecs;
 
@@ -921,6 +933,7 @@ public:
         aligned_buffer<vu_scalar_t> aux_prof;
         align_vec_arrays<vu_scalar_t> arrays;
         aligned_buffer<vu_scalar_t> out_scores(VW);
+        aligned_buffer<vu_scalar_t> out_scores2(VW);
 
         while( true ) {
             block_t block;
@@ -929,7 +942,7 @@ public:
                 break;
             }
 
-            if( cups_per_ref == -1 ) {
+            if( cups_per_ref == uint64_t(-1) ) {
                 cups_per_ref = qs_.calc_cups_per_ref(block.ref_len );
             }
 
@@ -941,11 +954,15 @@ public:
 
             copy_to_profile(block, &pvec_prof, &aux_prof );
 
+            pvec_aligner_vec<vu_scalar_t,VW> pav( block.seqptrs, block.auxptrs, block.ref_len, score_match, score_match_cgap, score_gap_open, score_gap_extend, seq_model::c2p, seq_model::num_cstates() );
+
 //            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
             for( unsigned int i = 0; i < qs_.size(); i++ ) {
 
                 //align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
-                align_pvec_score_vec<vu_scalar_t, VW>( pvec_prof.begin(), pvec_prof.end(), aux_prof.begin(), qs_.pvec_at(i).begin(), qs_.pvec_at(i).end(), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores.begin(), arrays );
+
+
+                pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores.begin() );
 
                 //aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
                 //const vu_scalar_t *score_vec = aligner.get_scores();
@@ -953,9 +970,16 @@ public:
 
 
                 //ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
+#if 0 // test against old version
+                align_pvec_score_vec<vu_scalar_t, VW>( pvec_prof.begin(), pvec_prof.end(), aux_prof.begin(), qs_.pvec_at(i).begin(), qs_.pvec_at(i).end(), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores2.begin(), arrays );
+                bool eq = std::equal( out_scores.begin(), out_scores.end(), out_scores2.begin() );
 
 
-
+                if( !eq ) {
+                    std::cout << "meeeeeeep!\n";
+                }
+                //std::cout << "eq: " << eq << "\n";
+#endif
                 results_.offer( i, block.edges, block.edges + block.num_valid, out_scores.begin() );
 
             }

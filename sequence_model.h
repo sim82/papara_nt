@@ -75,6 +75,26 @@ public:
         return pars_state_t(idx);
     }
 
+    static uint8_t s2c( uint8_t c ) {
+        c = normalize(c);
+        ptrdiff_t idx = std::distance(inverse_meaning.begin(),
+                                   std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
+
+        assert( idx >= 0 );
+
+        if( size_t(idx) >= inverse_meaning.size() ) {
+            std::cerr << "illegal character: " << int(c) << "\n";
+            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+        }
+
+        return idx;
+    }
+
+    static pars_state_t c2p( uint8_t c ) {
+        return pars_state_t(c);
+    }
+
+
     static uint8_t p2s( pars_state_t c ) {
         return inverse_meaning.at(c);
     }
@@ -88,8 +108,16 @@ public:
         return ps == gap_state();
     }
 
+    static inline bool cstate_is_gap( uint8_t cs) {
+       return cs == inverse_meaning.size() - 1;
+   }
+
     static inline pars_state_t gap_state() {
         return inverse_meaning.size() - 1;
+    }
+
+    static inline size_t num_cstates() {
+        return inverse_meaning.size();
     }
 
 };
@@ -126,6 +154,25 @@ public:
 
     }
 
+    static uint8_t s2c( uint8_t c ) {
+        c = normalize(c);
+        ptrdiff_t idx = std::distance(inverse_meaning.begin(),
+                                   std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
+
+        assert( idx >= 0 );
+
+        if( size_t(idx) >= inverse_meaning.size() ) {
+            std::cerr << "illegal character: " << int(c) << "\n";
+            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+        }
+
+        return idx;
+    }
+
+    static pars_state_t c2p( uint8_t c ) {
+        return bit_vector.at(c);
+    }
+
     static uint8_t p2s( pars_state_t c ) {
 
         ptrdiff_t idx = std::distance(bit_vector.begin(),
@@ -150,8 +197,17 @@ public:
         return ps == gap_state();
     }
 
+    static inline bool cstate_is_gap( uint8_t cs) {
+       return cs == inverse_meaning.size() - 1;
+   }
+
+
     static inline pars_state_t gap_state() {
         return bit_vector.back(); // by convention the last element of bit_vector is the gap state
+    }
+
+    static inline size_t num_cstates() {
+        return inverse_meaning.size();
     }
 };
 
