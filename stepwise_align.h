@@ -24,6 +24,8 @@
 #include "vec_unit.h"
 #include "parsimony.h"
 #include "fasta.h"
+#include "ivymike/cycle.h"
+
 //
 // general: the freeshift version of this type of aligner differs from the
 // implementation used in papara mainly by allowing free gaps also on the reference side
@@ -600,7 +602,9 @@ public:
      : pvec_prof_( W * reflen ),
        aux_prof_( W * reflen ),
        sm_inc_prof_( W * reflen * nstates ),
-       num_cstates_(nstates)
+       num_cstates_(nstates),
+       ticks_all_(0),
+       inner_iters_all_(0)
 //       gap_open_cgap_prof_( W * reflen ),
 //       gap_extend_cgap_prof_( W * reflen )
 
@@ -749,6 +753,8 @@ public:
 
 
 
+        ticks ticks1 = getticks();
+        //size_t inner_iters = 0;
         while( !done ) {
 
 
@@ -773,7 +779,7 @@ public:
 
             biter it_b = b_start;
 
-
+            inner_iters_all_ += std::distance(b_start, b_end) * (block_end - block_start_outer);
 
 
             for( ; it_b != b_end; ++it_b, block_sl_it += W, block_sc_it += W, block_sdiag_it += W ) {
@@ -806,6 +812,8 @@ public:
                 vec_t last_sdiag = vu::load( &(*block_sdiag_it));
                 vec_t last_sl = vu::load( &(*block_sl_it));
                 vec_t last_sc = vu::load( &(*block_sc_it));
+
+
 
                 for(; a_aux_prof_iter != a_aux_prof_end; sm_inc_iter += W, a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
                     // some 'lessions learned' about instruction ordering when using sse intrinsics:
@@ -893,15 +901,33 @@ public:
                 vu::store( last_sc, &(*block_sc_it) );
                 vu::store( last_sl, &(*block_sl_it) );
 
+
+
             }
 
 
             block_start_outer = block_end;
         }
 
+        ticks ticks2 = getticks();
+        ticks_all_ += elapsed(ticks2, ticks1 );
+        //
+
         vu::store( max_score, &(*out_start) );
     }
 
+
+    double ticks_per_inner_iter() {
+        return ticks_all_ / double(inner_iters_all_);
+    }
+
+    uint64_t ticks_all() {
+        return ticks_all_;
+    }
+
+    uint64_t inner_iters_all() {
+        return inner_iters_all_;
+    }
 
 private:
     struct ali_score_block_t {
@@ -917,6 +943,10 @@ private:
     aligned_buffer<score_t> aux_prof_;
     aligned_buffer<score_t> sm_inc_prof_;
     const size_t num_cstates_;
+
+    uint64_t ticks_all_;
+    uint64_t inner_iters_all_;
+
 //    aligned_buffer<score_t> gap_open_cgap_prof_;
 //    aligned_buffer<score_t> gap_extend_cgap_prof_;
 };

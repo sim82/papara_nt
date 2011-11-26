@@ -921,6 +921,7 @@ public:
     void operator()() {
 
 
+
         ivy_mike::timer tstatus;
         ivy_mike::timer tprint;
 
@@ -928,6 +929,15 @@ public:
 
 
         uint64_t ncup = 0;
+
+        uint64_t inner_iters = 0;
+        uint64_t ticks_all = 0;
+
+        uint64_t ncup_short = 0;
+
+        uint64_t inner_iters_short = 0;
+        uint64_t ticks_all_short = 0;
+
 
         aligned_buffer<vu_scalar_t> pvec_prof;
         aligned_buffer<vu_scalar_t> aux_prof;
@@ -985,10 +995,24 @@ public:
             }
 
             ncup += block.num_valid * cups_per_ref;
+            ncup_short += block.num_valid * cups_per_ref;
+
+            ticks_all += pav.ticks_all();
+            ticks_all_short += pav.ticks_all();
+
+            inner_iters += pav.inner_iters_all();
+            inner_iters_short += pav.inner_iters_all();
 
             if( rank_ == 0 &&  tprint.elapsed() > 10 ) {
+
+                //std::cout << "thread " << rank_ << " " << ncup << " in " << tstatus.elapsed() << " : "
+                std::cout << ncup / (tstatus.elapsed() * 1e9) << " gncup/s, " << ticks_all / double(inner_iters) << " tpili (short: " << ncup_short / (tprint.elapsed() * 1e9) << ", " << ticks_all_short / double(inner_iters_short) << ")\n";
+
+                ncup_short = 0;
+                ticks_all_short = 0;
+                inner_iters_short = 0;
+
                 tprint = ivy_mike::timer();
-                std::cout << "thread " << rank_ << " " << ncup << " in " << tstatus.elapsed() << " : " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
             }
 
         }
