@@ -827,6 +827,20 @@ public:
                     // The code is written in a kind of static single assignment form to make manual analysis easier:
                     // The basic optimization rule is: place operations so that the number of 'active' values that 'cross'
                     // the operation is minimal. A value is active between its initialization and it's last read-access.
+                    //
+                    // The influence of the compiler is quite large:
+                    // (1) When optimizing for corei7 instead of amdfam10, gcc will order add and andnot instructions differently
+                    //     (andnot add andnot add vs. andnot andnot add add). This gives a 5% advantage on nehalem (but not
+                    //     sandy bridge or barcelona)
+                    // (2) When optimizing for corei7-avx, gcc will automatically use the new 3-operand versions of the 128bit
+                    //     vector instructions, which shortens the inner-loop by around 20% (with corresponding performance increase)
+                    // (3) gcc always uses SIB (scaled index basis) addressing fir the loads/stores. This gains very compact
+                    //     code but has a negative influence on AMD cpus (at least) barcelona. Supposingly the SIB addressing
+                    //     uses multiple micro-ops on amd, which seem to clog-up the pipeline (the throughput is not much more than
+                    //     2ops/cycle.). Clang (as of late 2011) calculates addresses 'by-hand' and uses non SIP addressing. This
+                    //     increses the size of the inner-loop, which in turn runs a bit slower on intel but about 10% faster on AMD.
+                    // (4) MSVC (2011 dev. preview) mixes SIB and manual address calculation (for no apparent reason), and is
+                    //     about 20% slower than gcc on sandy-bridge (might be on par with clang).
 
 
                     //const vec_t cgap = vu::load( a_aux_prof_iter );
