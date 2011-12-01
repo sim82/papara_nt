@@ -140,6 +140,126 @@ struct vector_unit<short, 8> {
 };
 
 
+// vector unit specialization: future AVX 16x16bit integer
+
+template<>
+struct vector_unit<short, 16> {
+
+    const static bool do_checks = false;
+
+    struct vec_t {
+        __m128i l;
+        __m128i h;
+
+        vec_t( const __m128i &ll, const __m128i &hh ) : l(ll), h(hh) {}
+
+    };
+
+    typedef short T;
+
+
+    const static T POS_MAX_VALUE = 0x7fff;
+    const static T LARGE_VALUE = 32000;
+    const static T SMALL_VALUE = -32000;
+    const static T BIAS = 0;
+    const static size_t W = 16;
+
+    static inline vec_t setzero() {
+        return set1(0);
+    }
+
+    static inline vec_t set1( T val ) {
+        return vec_t(_mm_set1_epi16( val ), _mm_set1_epi16( val ));
+    }
+
+    static inline void store( const vec_t &v, T *addr ) {
+
+        if( do_checks && addr == 0 ) {
+            throw std::runtime_error( "store: addr == 0" );
+        }
+        //std::cout << "store to: " << addr << "\n";
+
+        _mm_store_si128( (__m128i*)addr, v.l );
+        _mm_store_si128( (__m128i*)(addr + 8), v.h );
+    }
+
+    static inline const vec_t load( const T* addr ) {
+        return vec_t( _mm_load_si128( (__m128i*)addr ), _mm_load_si128( (__m128i*)(addr + 8 )) );
+    }
+
+    static inline const vec_t bit_and( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_and_si128( a.l, b.l ), _mm_and_si128( a.h, b.h ));
+    }
+
+    static inline const vec_t bit_or( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_or_si128( a.l, b.l ), _mm_or_si128( a.h, b.h ));
+    }
+    static inline const vec_t bit_andnot( const vec_t &a, const vec_t &b ) {
+        return vec_t( _mm_andnot_si128( a.l, b.l ), _mm_andnot_si128( a.h, b.h ) );
+    }
+    static inline const vec_t bit_invert( const vec_t &a ) {
+        return vec_t( _mm_xor_si128( a.l, _mm_set1_epi16(0xffff) ), _mm_xor_si128( a.h, _mm_set1_epi16(0xffff) ) );
+    }
+
+
+//     static inline const vec_t bit_invert( const vec_t &a ) {
+//         //return _mm_andnot_pd(a, set1(0xffff));
+//     }
+
+    static inline const vec_t add( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_add_epi16( a.l, b.l ), _mm_add_epi16( a.h, b.h ));
+    }
+    static inline const vec_t adds( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_adds_epi16( a.l, b.l ), _mm_adds_epi16( a.h, b.h ));
+    }
+
+    static inline const vec_t sub( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_sub_epi16( a.l, b.l ),_mm_sub_epi16( a.h, b.h ));
+    }
+    static inline const vec_t cmp_zero( const vec_t &a ) {
+        return vec_t(_mm_cmpeq_epi16( a.l, _mm_setzero_si128() ), _mm_cmpeq_epi16( a.h, _mm_setzero_si128() ) );
+    }
+
+    static inline const vec_t cmp_eq( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_cmpeq_epi16( a.l, b.l ), _mm_cmpeq_epi16( a.h, b.h ) );
+    }
+
+    static inline const vec_t cmp_lt( const vec_t &a, const vec_t &b ) {
+
+        return vec_t(_mm_cmplt_epi16( a.l, b.l ), _mm_cmplt_epi16( a.h, b.h ) );
+    }
+
+    static inline const vec_t min( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_min_epi16( a.l, b.l ),_mm_min_epi16( a.h, b.h ));
+    }
+
+    static inline const vec_t max( const vec_t &a, const vec_t &b ) {
+        return vec_t(_mm_max_epi16( a.l, b.l ), _mm_max_epi16( a.h, b.h ));
+    }
+
+    static inline const vec_t abs_diff( const vec_t &a, const vec_t &b ) {
+        // i don't really like this function, as ideally this would just be abs(sub(a,b)),
+        // but there doesn't seem to be a fast way to implement abs on pre SSSSSSE3.
+        // The max(sub(a,b),sub(b,a)) work-around seems to be the next-best thing in this special case.
+
+        #ifdef __SSSE3__
+
+        const vec_t &tmp = sub(a,b);
+        return vec_t(_mm_abs_epi16(tmp.l), _mm_abs_epi16(tmp.h));
+        #else
+        // FIXME: is there a faster method for boring old CPUs?
+        return max( sub(a,b), sub(b,a) );
+//         #error missing SSSSSSSSSE3
+        #endif
+    }
+
+    static inline void assert_alignment( T * p ) {
+        assert( size_t(p) % 32 == 0 );
+    }
+
+};
+
+
 
 template<>
 struct vector_unit<int, 4> {
@@ -374,7 +494,7 @@ struct vector_unit<float, 4> {
 #endif
 
 #endif
-#ifdef HAVE_AVX
+#ifdef HAVE_AVX_nope_not_really
 // AVX is the most pointless thing in the world, as far as integers are concerned.
 // waiting for AVX5.7
 

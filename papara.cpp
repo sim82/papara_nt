@@ -72,7 +72,7 @@ class vu_config {
 template<>
 class vu_config<tag_dna> {
 public:
-    const static size_t width = 8;
+    const static size_t width = 16;
     typedef short scalar;
     const static scalar full_mask = scalar(-1);
 };
