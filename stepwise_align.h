@@ -803,9 +803,11 @@ public:
 
                 score_t * __restrict s_iter = s_.base();
                 score_t * __restrict si_iter = si_.base();
-                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
-                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
+//                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
+//                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
                 score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_start * W));
+                score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_end * W));
+
                 _mm_prefetch( sm_inc_iter, _MM_HINT_T0 );
 
 
@@ -815,7 +817,7 @@ public:
 
 
 
-                for(; a_aux_prof_iter != a_aux_prof_end; sm_inc_iter += W, a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
+                for(; sm_inc_iter != sm_inc_end; sm_inc_iter += W/*, a_aux_prof_iter += W*/, s_iter += W, si_iter += W ) {
                     // some 'lessions learned' about instruction ordering when using sse intrinsics:
                     // 1. assigning values that are read/written only once to (const) variables is ok, to improve
                     //    readability, if the assignment is near the use. (rule: don't force the compiler to waste
