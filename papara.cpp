@@ -72,7 +72,7 @@ class vu_config {
 template<>
 class vu_config<tag_dna> {
 public:
-    const static size_t width = 16;
+    const static size_t width = 8;
     typedef short scalar;
     const static scalar full_mask = scalar(-1);
 };
@@ -341,6 +341,28 @@ class queries {
     typedef model<seq_tag> seq_model;
 
 
+    static void normalize_name( std::string & str ) {
+        std::string ns;
+
+        // replace runs of one or more whitespaces with an underscores
+        bool in_ws_run = false;
+
+        for( std::string::iterator it = str.begin(); it != str.end(); ++it ) {
+
+            if( std::isspace(*it) ) {
+                if( !in_ws_run ) {
+                    ns.push_back( '_' );
+                    in_ws_run = true;
+                }
+            } else {
+                ns.push_back(*it);
+                in_ws_run = false;
+            }
+
+        }
+        str.swap(ns);
+
+    }
 
 public:
 
@@ -368,6 +390,8 @@ public:
             if( m_qs_names.empty() ) {
                 throw std::runtime_error( "no qs" );
             }
+
+            std::for_each( m_qs_names.begin(), m_qs_names.end(), std::ptr_fun( normalize_name ));
 
             //
             // setup qs best-score/best-edge lists
@@ -1583,6 +1607,20 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
 }
 
+
+void print_banner( std::ostream &os ) {
+    os << "______    ______    ______        ___\n";
+    os << "| ___ \\   | ___ \\   | ___ \\   |\\ | |   \n";
+    os << "| |_/ /_ _| |_/ /_ _| |_/ /__ | \\| | \n";
+    os << "|  __/ _` |  __/ _` |    // _` |\n";
+    os << "| | | (_| | | | (_| | |\\ \\ (_| |\n";
+    os << "\\_|  \\__,_\\_|  \\__,_\\_| \\_\\__,_|\n";
+
+}
+
+
+
+
 int main( int argc, char *argv[] ) {
 
 //     aligned_buffer<int> xxx(1024);
@@ -1619,6 +1657,8 @@ int main( int argc, char *argv[] ) {
     igp.parse(argc,argv);
 
     if( igp.opt_count('t') != 1 || igp.opt_count('s') != 1  ) {
+        print_banner(std::cerr);
+
         std::cerr << "missing options -t and/or -s (-q is optional)\n";
         return 0;
     }
