@@ -52,6 +52,7 @@ public:
         case 'U':
             return 'T';
         case 'N':
+        case '?':
             return '-';
         default:
             return c;

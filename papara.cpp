@@ -863,8 +863,8 @@ class scoring_results {
     class candidates : private std::vector<candidate> {
     public:
 
-        candidates()
-         : max_num_(10)
+        candidates( size_t max_num )
+         : max_num_(max_num)
         {
             reserve(max_num_);
         }
@@ -891,10 +891,10 @@ class scoring_results {
     };
 
 public:
-    scoring_results( size_t num_qs )
+    scoring_results( size_t num_qs, const candidates &cands_template )
     : best_score_(num_qs, std::numeric_limits<int>::min() ),
       best_ref_(num_qs, size_t(-1)),
-      candss_(num_qs)
+      candss_(num_qs, cands_template )
     {}
 
 
@@ -1530,43 +1530,47 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
 
         rgc.add_trace(qs_traces[i]);
 
-        const scoring_results::candidates &cands = res.candidates_at(i);
 
-        std::vector<std::vector<uint8_t> > unique_traces;
 
-        for( size_t j = 0; j < cands.size(); ++j ) {
-            const scoring_results::candidate &cand = cands[j];
+        if( os_cands.good() ) {
+            const scoring_results::candidates &cands = res.candidates_at(i);
 
-            cand_trace.clear();
+            std::vector<std::vector<uint8_t> > unique_traces;
 
-            score = align_freeshift_pvec<int>(
-                refs.pvec_at(cand.ref()).begin(), refs.pvec_at(cand.ref()).end(),
-                refs.aux_at(cand.ref()).begin(),
-                qp.begin(), qp.end(),
-                score_match, score_match_cgap, score_gap_open, score_gap_extend, cand_trace, arrays
-            );
-            out_qs_ps.clear();
+            for( size_t j = 0; j < cands.size(); ++j ) {
+                const scoring_results::candidate &cand = cands[j];
 
-            std::vector<std::vector<uint8_t> >::iterator it;// = unique_traces.end(); //
+                cand_trace.clear();
 
-            if( true ) {
-                it = std::lower_bound(unique_traces.begin(), unique_traces.end(), cand_trace );
-            } else {
-                it = unique_traces.end();
+                score = align_freeshift_pvec<int>(
+                    refs.pvec_at(cand.ref()).begin(), refs.pvec_at(cand.ref()).end(),
+                    refs.aux_at(cand.ref()).begin(),
+                    qp.begin(), qp.end(),
+                    score_match, score_match_cgap, score_gap_open, score_gap_extend, cand_trace, arrays
+                );
+                out_qs_ps.clear();
+
+                std::vector<std::vector<uint8_t> >::iterator it;// = unique_traces.end(); //
+
+                if( !true ) {
+                    it = std::lower_bound(unique_traces.begin(), unique_traces.end(), cand_trace );
+                } else {
+                    it = unique_traces.end();
+                }
+
+                if( it == unique_traces.end() || *it != cand_trace ) {
+
+                    gapstream_to_alignment_no_ref_gaps(cand_trace, qp, &out_qs_ps, seq_model::gap_state() );
+
+                    unique_traces.insert(it, cand_trace);
+                    os_cands << i << " " << cand.ref() << " " << cand.score() << "\t";
+
+                    //os << std::setw(pad) << std::left << qs.name_at(i);
+                    std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os_cands), seq_model::p2s );
+                    os_cands << std::endl;
+                }
+
             }
-
-            if( it == unique_traces.end() || *it != cand_trace ) {
-
-                gapstream_to_alignment_no_ref_gaps(cand_trace, qp, &out_qs_ps, seq_model::gap_state() );
-
-                unique_traces.insert(it, cand_trace);
-                os_cands << i << " " << cand.ref() << " " << cand.score() << "\t";
-
-                //os << std::setw(pad) << std::left << qs.name_at(i);
-                std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os_cands), seq_model::p2s );
-                os_cands << std::endl;
-            }
-
         }
 
     }
@@ -1720,7 +1724,9 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     t1.print();
 
-    scoring_results res( qs.size() );
+    const size_t num_candidates = 1;
+
+    scoring_results res( qs.size(), scoring_results::candidates(num_candidates) );
 
 
 
@@ -1741,8 +1747,11 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     assert( os_qual.good() );
 
 
-    std::ofstream os_cands( cands_file.c_str() );
-    assert( os_cands.good());
+    std::ofstream os_cands;
+    if( num_candidates > 1 ) {
+        os_cands.open( cands_file.c_str() );
+        assert( os_cands.good());
+    }
 
 
 
