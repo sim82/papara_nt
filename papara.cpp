@@ -807,16 +807,78 @@ private:
 
 class scoring_results {
 
+    class candidate {
+
+    public:
+        candidate( int score, size_t ref ) : score_(score), ref_(ref) {}
+
+        bool operator<(const candidate &other ) const {
+            if( score_ > other.score_ ) {
+                return true;
+            } else {
+                if( score_ == other.score_ ) {
+                    return ref_ < other.ref_;
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        int score() const {
+            return score_;
+        }
+        size_t ref() const {
+            return ref_;
+        }
+
+    private:
+        int score_;
+        size_t ref_;
+    };
+
+    class candidates : private std::vector<candidate> {
+    public:
+
+        candidates()
+         : max_num_(10)
+        {
+            reserve(max_num_);
+        }
+
+        void offer( int score, size_t ref ) {
+
+            candidate c( score,ref);
+
+            insert(std::lower_bound( begin(), end(), c), c );
+
+            if( size() > max_num_) {
+                pop_back();
+            }
+        }
+
+        using std::vector<candidate>::at;
+        using std::vector<candidate>::operator[];
+        using std::vector<candidate>::size;
+
+    private:
+        const size_t max_num_;
+
+        std::vector<candidate> cands_;
+    };
+
 public:
     scoring_results( size_t num_qs )
     : best_score_(num_qs, std::numeric_limits<int>::min() ),
-      best_ref_(num_qs, size_t(-1))
+      best_ref_(num_qs, size_t(-1)),
+      candss_(num_qs)
     {}
 
 
 
     bool offer( size_t qs, size_t ref, int score ) {
         ivy_mike::lock_guard<ivy_mike::mutex> lock(mtx_);
+
+        candss_.at( qs ).offer( score, ref );
 
         if( best_score_.at(qs) < score || (best_score_.at(qs) == score && ref < best_ref_.at(qs))) {
             best_score_[qs] = score;
@@ -835,6 +897,9 @@ public:
 
 
         while( ref_start != ref_end ) {
+            candss_.at( qs ).offer( *score_start, *ref_start );
+
+
             if( best_score_.at(qs) < *score_start || (best_score_.at(qs) == *score_start && *ref_start < best_ref_.at(qs))) {
                 best_score_[qs] = *score_start;
                 best_ref_.at(qs) = *ref_start;
@@ -856,9 +921,15 @@ public:
         return best_ref_.at(i);
     }
 
+    const candidates &candidates_at( size_t i ) const {
+        return candss_.at( i );
+    }
+
 private:
     std::vector<int> best_score_;
     std::vector<size_t> best_ref_;
+
+    std::vector<candidates> candss_;
 
     ivy_mike::mutex mtx_;
 
@@ -1351,10 +1422,38 @@ void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector
     std::reverse( out->begin(), out->end() );
 }
 
+template<typename state_t>
+void gapstream_to_alignment_no_ref_gaps( const std::vector<uint8_t> &gaps, const std::vector<state_t> &raw, std::vector<state_t> *out, state_t gap_char ) {
+
+    typename std::vector<state_t>::const_reverse_iterator rit = raw.rbegin();
+
+
+    for ( std::vector<uint8_t>::const_iterator git = gaps.begin(); git != gaps.end(); ++git ) {
+
+        if ( *git == 1) {
+            out->push_back(gap_char);
+
+        } else if ( *git == 0 ) {
+            assert( rit < raw.rend() );
+            out->push_back(*rit);
+            ++rit;
+
+        } else {
+            assert( rit < raw.rend() );
+            //out->push_back(*rit);
+
+            ++rit;
+        }
+    }
+
+
+    std::reverse( out->begin(), out->end() );
+}
+
 
 
 template<typename pvec_t, typename seq_tag>
-void align_best_scores( std::ostream &os, std::ostream &os_quality, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad ) {
+void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad ) {
     // create the actual alignments for the best scoring insertion position (=do the traceback)
 
     typedef typename queries<seq_tag>::pars_state_t pars_state_t;
@@ -1380,6 +1479,8 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
 
     std::vector<std::vector<uint8_t> > qs_traces( qs.size() );
 
+    std::vector<uint8_t> cand_trace;
+
     for( size_t i = 0; i < qs.size(); i++ ) {
         int best_edge = res.bestedge_at(i);
 
@@ -1404,6 +1505,46 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, const querie
         }
 
         rgc.add_trace(qs_traces[i]);
+
+        const scoring_results::candidates &cands = res.candidates_at(i);
+
+        std::vector<std::vector<uint8_t> > unique_traces;
+
+        for( size_t j = 0; j < cands.size(); ++j ) {
+            const scoring_results::candidate &cand = cands[j];
+
+            cand_trace.clear();
+
+            score = align_freeshift_pvec<int>(
+                refs.pvec_at(cand.ref()).begin(), refs.pvec_at(cand.ref()).end(),
+                refs.aux_at(cand.ref()).begin(),
+                qp.begin(), qp.end(),
+                score_match, score_match_cgap, score_gap_open, score_gap_extend, cand_trace, arrays
+            );
+            out_qs_ps.clear();
+
+            std::vector<std::vector<uint8_t> >::iterator it;// = unique_traces.end(); //
+
+            if( true ) {
+                it = std::lower_bound(unique_traces.begin(), unique_traces.end(), cand_trace );
+            } else {
+                it = unique_traces.end();
+            }
+
+            if( it == unique_traces.end() || *it != cand_trace ) {
+
+                gapstream_to_alignment_no_ref_gaps(cand_trace, qp, &out_qs_ps, seq_model::gap_state() );
+
+                unique_traces.insert(it, cand_trace);
+                os_cands << i << " " << cand.ref() << " " << cand.score() << "\t";
+
+                //os << std::setw(pad) << std::left << qs.name_at(i);
+                std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os_cands), seq_model::p2s );
+                os_cands << std::endl;
+            }
+
+        }
+
     }
 
     os << refs.num_seqs() + qs.size() << " " << rgc.transformed_ref_len() << "\n";
@@ -1564,6 +1705,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     std::string score_file(filename(run_name, "alignment"));
     std::string quality_file(filename(run_name, "quality"));
+    std::string cands_file(filename(run_name, "cands"));
 
 
     size_t pad = 1 + std::max(qs.max_name_length(), refs.max_name_length());
@@ -1575,11 +1717,13 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     assert( os_qual.good() );
 
 
+    std::ofstream os_cands( cands_file.c_str() );
+    assert( os_cands.good());
 
 
 
     //refs.write_seqs(os, pad);
-    align_best_scores( os, os_qual, qs, refs, res, pad );
+    align_best_scores( os, os_qual, os_cands, qs, refs, res, pad );
 
 }
 
