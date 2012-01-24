@@ -1,6 +1,7 @@
 #include <boost/dynamic_bitset.hpp>
 #include <vector>
-#include <tr1/unordered_set>
+//#include <tr1/unordered_set>
+#include <boost/tr1/unordered_set.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <algorithm>
@@ -30,16 +31,17 @@ public:
 class bitset_hash {
 public:
     inline size_t operator()( const boost::dynamic_bitset<> &bs ) const {
-        BOOST_STATIC_ASSERT( sizeof( size_t ) == sizeof( boost::dynamic_bitset<>::block_type ) );
+		// on 64bit windows 'block_type' appears to be 32bit vs. 64bit size_t.
+		// I guess the >= in the assert should work, even though the hashing
+		// might be suboptimal if only half of the 64bit value is used. don't
+		// know what to do. The type chaos (aka. LLP64) on windows sucks.
+		
+		BOOST_STATIC_ASSERT( sizeof( size_t ) >= sizeof( boost::dynamic_bitset<>::block_type ) );
         
         boost::dynamic_bitset<>::block_type hash = 0;
         
         to_block_range( bs, bitset_hash_iterator<boost::dynamic_bitset<>::block_type>(hash));
         
-        
-        
-        // FIXME: what to do when size_t and Block have different width?
-        // would a 'static if' with no overhead work?
         return size_t(hash);
     }
 };

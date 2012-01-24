@@ -292,7 +292,7 @@ public:
     }
 };
 
-
+#if 0
 
 class lnode_newview_background_racy {
 
@@ -599,7 +599,7 @@ public:
 
 };
 
-
+#endif
 
 class lnode_newview_background {
 
