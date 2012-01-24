@@ -83,7 +83,6 @@ public:
 // #define XSIZE(x) (sizeof(x) / sizeof(*x))
 int main( int argc, char *argv[] ) {
 
-
     
 //     tdmatrix<int> tdm( 10, 10 );
 // 

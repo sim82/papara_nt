@@ -9,8 +9,8 @@ include_directories( ${include_directories} ivy_mike/src . ublasJama-1.0.2.3 )
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)
-include_directories( ${include_directories} E:\\src\\boost_1_46_1\\boost_1_46_1)
-LINK_DIRECTORIES( ${LINK_DIRECTORIES} E:\\src\\boost_1_46_1\\boost_1_46_1\\stage\\lib)
+include_directories( ${include_directories} C:\\src\\boost_1_46_1)
+LINK_DIRECTORIES( ${LINK_DIRECTORIES} C:\\src\\boost_1_46_1\\stage\\lib)
 set( BOOST_LIBS )
 set( SYSDEP_LIBS )
 ELSE()
