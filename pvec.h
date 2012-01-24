@@ -1,7 +1,7 @@
 
 #ifndef __pvec_h
 #define __pvec_h
-// #define BOOST_UBLAS_NDEBUG
+//#define BOOST_UBLAS_NDEBUG
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/numeric/ublas/banded.hpp>
 #include <boost/numeric/ublas/io.hpp>
@@ -10,6 +10,7 @@
 #include <EigenvalueDecomposition.hpp>
 #include <cassert>
 #include <algorithm>
+#include <iostream>
 
 //#define USE_CBLAS
 #ifdef USE_CBLAS
@@ -22,20 +23,50 @@ extern "C" {
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
+#include "sequence_model.h"
+namespace {
+
+
 class pvec_cgap {
     //     aligned_buffer<parsimony_state> v;
     std::vector<parsimony_state> v;
     std::vector<int> auxv;
 
-    
-    
+    template<typename seq_model>
+    class seq2aux {
+    public:
+        int operator()( parsimony_state c ) {
+
+            if( seq_model::is_gap(c) ) {
+                return AUX_CGAP;
+            } else {
+                return 0;
+            }
+        }
+    };
+
 public:
+    
+    
     void init( const std::vector<uint8_t> &seq ) {
 //         assert( v.size() == 0 );
         v.resize(seq.size());
         auxv.resize( seq.size() );
         std::transform( seq.begin(), seq.end(), v.begin(), dna_parsimony_mapping::d2p );
         std::transform( seq.begin(), seq.end(), auxv.begin(), dna_parsimony_mapping::d2aux );
+    }
+
+
+
+
+    template<typename seq_model>
+    void init2( const std::vector<uint8_t> &seq, const seq_model &sm ) {
+        v.resize(seq.size());
+        auxv.resize(seq.size());
+        std::transform( seq.begin(), seq.end(), v.begin(), seq_model::s2p );
+        std::transform( v.begin(), v.end(), auxv.begin(), seq2aux<seq_model>() );
+
+        std::cerr << ">>>>>>>>>>>>>>>> WARNING: untested strange code!!!\n";
     }
 
     inline const std::vector<parsimony_state> &get_v() {
@@ -178,18 +209,18 @@ public:
     
 };
 
-using namespace boost::numeric;
-
 class probgap_model {
-    ublas::matrix<double> m_evecs;
-    ublas::vector<double> m_evals;
-    ublas::matrix<double> m_evecs_inv;
 
-    ublas::diagonal_matrix<double> m_evals_diag; // used temporarily.
-    ublas::matrix<double> m_prob_matrix;
-    ublas::matrix<double> m_temp_matrix;
+    boost::numeric::ublas::matrix<double> m_evecs;
+    boost::numeric::ublas::vector<double> m_evals;
+    boost::numeric::ublas::matrix<double> m_evecs_inv;
+
+//    ublas::diagonal_matrix<double> m_evals_diag; // used temporarily.
+//    ublas::matrix<double> m_prob_matrix;
+//    ublas::matrix<double> m_temp_matrix;
 
     double m_gap_freq;
+    bool m_valid;
 
     double calc_gap_freq ( const std::vector< std::vector< uint8_t > > &seqs ) {
         size_t ngaps = 0;
@@ -207,51 +238,62 @@ class probgap_model {
     }
 
 public:
-    probgap_model( const std::vector< std::vector<uint8_t> > &seqs ) : m_evals_diag(2), m_prob_matrix(2,2), m_temp_matrix(2,2) {
-        // initialize probgap model from input sequences
+    probgap_model() : m_valid(false) {}
 
-        m_gap_freq = calc_gap_freq( seqs );
-
-        double f[2] = {1-m_gap_freq, m_gap_freq};
-
-        ublas::matrix<double> rate_matrix(2,2);
-        rate_matrix(0,0) = -f[0];
-        rate_matrix(0,1) = f[0];
-        rate_matrix(1,0) = f[1];
-        rate_matrix(1,1) = -f[1];
-
-        ublas::EigenvalueDecomposition ed(rate_matrix);
-
-        m_evecs = ed.getV();
-        m_evals = ed.getRealEigenvalues();
-
-        // use builtin ublas lu-factorization rather than jama
-        {
-            ublas::matrix<double> A(m_evecs);
-            ublas::permutation_matrix<size_t> pm( A.size1() );
-            size_t res = ublas::lu_factorize(A,pm);
-            if( res != 0 ) {
-                throw std::runtime_error( " ublas::lu_factorize failed" );
-            }
-            m_evecs_inv = ublas::identity_matrix<double>( A.size1());
-
-            ublas::lu_substitute(A,pm,m_evecs_inv);
-        }
-//         ublas::LUDecomposition lud(m_evecs);
-//         m_evecs_inv = lud.pseudoinverse();
-//         std::cout << "inv jama: " << m_evecs_inv << "\n";
+    probgap_model( const std::vector< std::vector<uint8_t> > &seqs ) : m_valid(false) {
+    	reset( seqs );
     }
 
-    const ublas::matrix<double> &setup_pmatrix( double t ) {
+    void reset( const std::vector< std::vector<uint8_t> > &seqs ) {
+	   // initialize probgap model from input sequences
+    	reset( calc_gap_freq( seqs ) );
+    }
+    void reset( double gap_freq ) {
+    	namespace ublas = boost::numeric::ublas;
+
+    	m_gap_freq = gap_freq;
+		double f[2] = {1-m_gap_freq, m_gap_freq};
+
+		ublas::matrix<double> rate_matrix(2,2);
+		rate_matrix(0,0) = -f[0];
+		rate_matrix(0,1) = f[0];
+		rate_matrix(1,0) = f[1];
+		rate_matrix(1,1) = -f[1];
+
+		ublas::EigenvalueDecomposition ed(rate_matrix);
+
+		m_evecs = ed.getV();
+		m_evals = ed.getRealEigenvalues();
+
+		// use builtin ublas lu-factorization rather than jama
+		{
+			ublas::matrix<double> A(m_evecs);
+			ublas::permutation_matrix<size_t> pm( A.size1() );
+			size_t res = ublas::lu_factorize(A,pm);
+			if( res != 0 ) {
+				throw std::runtime_error( " ublas::lu_factorize failed" );
+			}
+			m_evecs_inv = ublas::identity_matrix<double>( A.size1());
+
+			ublas::lu_substitute(A,pm,m_evecs_inv);
+		}
+		m_valid = true;
+    }
+
+    boost::numeric::ublas::matrix<double> setup_pmatrix( double t ) {
+    	namespace ublas = boost::numeric::ublas;
+
+    	ublas::diagonal_matrix<double> evals_diag(2);
+		ublas::matrix<double> prob_matrix(2,2);
+		ublas::matrix<double> temp_matrix(2,2);
+
 
         for( int i = 0; i < 2; i++ ) {
-            m_evals_diag(i,i) = exp( t * m_evals(i));
+            evals_diag(i,i) = exp( t * m_evals(i));
         }
 
-//         m_prob_matrix = ublas::prod( m_evecs, m_evals_diag );
-//         m_prob_matrix = ublas::prod( m_prob_matrix, m_evecs_inv );
-        m_prob_matrix = ublas::prod( ublas::prod( m_evecs, m_evals_diag, m_temp_matrix ), m_evecs_inv );
-
+        prob_matrix = ublas::prod( ublas::prod( m_evecs, evals_diag, temp_matrix ), m_evecs_inv );
+        //m_prob_matrix = ublas::prod( ublas::prod( m_evecs, m_evals_diag ), m_evecs_inv );
 
 //         std::cout << "pmatrix: " << m_prob_matrix << "\n";
 
@@ -259,7 +301,7 @@ public:
 
 //         throw std::runtime_error( "xxx" );
 
-        return m_prob_matrix;
+        return prob_matrix;
     }
 
 
@@ -270,15 +312,24 @@ public:
 class pvec_pgap {
     //     aligned_buffer<parsimony_state> v;
     std::vector<parsimony_state> v;
-    ublas::matrix<double> gap_prob;
+    boost::numeric::ublas::matrix<double> gap_prob;
 
     
     
 public:
     static ivy_mike::stupid_ptr<probgap_model> pgap_model;
 
+    inline const std::vector<parsimony_state> &get_v() {
+        return v;
+    }
+
+    inline const boost::numeric::ublas::matrix<double> &get_gap_prob() {
+        return gap_prob;
+    }
+
+
     void init( const std::vector<uint8_t> &seq ) {
-        assert( v.size() == 0 );
+        //assert( v.size() == 0 );
         v.resize(seq.size());
 
         std::transform( seq.begin(), seq.end(), v.begin(), dna_parsimony_mapping::d2p );
@@ -302,11 +353,44 @@ public:
 
     }
 
+    template<typename seq_model>
+    void init2( const std::vector<uint8_t> &seq, seq_model sm ) {
+        //assert( v.size() == 0 );
+        v.resize(seq.size());
+
+        std::transform( seq.begin(), seq.end(), v.begin(), seq_model::s2p );
+        //std::transform( seq.begin(), seq.end(), auxv.begin(), dna_parsimony_mapping::d2aux );
+
+        gap_prob.resize(2, seq.size());
+
+        for( size_t i = 0; i < seq.size(); i++ ) {
+            // ( 0 )
+            // ( 1 ) means gap
+
+
+            if( seq_model::is_gap(v[i]) ) {
+                gap_prob( 0, i ) = 0.0;
+                gap_prob( 1, i ) = 1.0;
+            } else {
+                gap_prob( 0, i ) = 1.0;
+                gap_prob( 1, i ) = 0.0;
+            }
+        }
 
 
 
-    static void newview( pvec_pgap &p, pvec_pgap &c1, pvec_pgap &c2, double z1, double z2, tip_case tc ) {
-        assert( c1.v.size() == c2.v.size() );
+    }
+
+
+    void newview( const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    	newview( *this, c1, c2, z1, z2, tc );
+
+    	//std::cout << "newview: " << gap_prob.size1() << "\n";
+    }
+
+    static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    	namespace ublas = boost::numeric::ublas;
+    	assert( c1.v.size() == c2.v.size() );
 
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
@@ -423,7 +507,8 @@ public:
     	//return v1 / (v1 + v2);
 
     	v1 *= 1 - pgap_model->gap_freq();
-    	v1 *= pgap_model->gap_freq();
+    //	throw std::runtime_error( "i think there is an error in this function. why v1 in the next line?");
+    	v2 *= pgap_model->gap_freq();
 
     	float v = v1 / (v1 + v2);
 
@@ -436,11 +521,22 @@ public:
     	return v;
     }
 
+    static inline double gap_ancestral_probability( double v1, double v2 ) {
+		assert( pgap_model.is_valid_ptr() );
+		//return v1 / (v1 + v2);
+
+		const double freq_ngap = 1 - pgap_model->gap_freq();
+		const double freq_gap = pgap_model->gap_freq();
+
+
+		return v2 * freq_gap / (v1 * freq_ngap + v2 * freq_gap);
+	}
+
 
 
     inline void to_gap_post_vec( std::vector<double> &outv ) {
 
-    	const ublas::matrix<double> &t = get_pgap();
+    	const boost::numeric::ublas::matrix<double> &t = get_pgap();
 
     	outv.clear();
     	outv.resize(v.size());
@@ -449,7 +545,11 @@ public:
 
     }
    
-
+    template<typename oiter>
+    inline void to_ancestral_gap_prob( oiter it ) {
+    	const boost::numeric::ublas::matrix<double> &t = get_pgap();
+    	std::transform(t.begin2(), t.end2(), (t.begin1() + 1).begin(), it, gap_ancestral_probability );
+    }
 
 
     template<typename vt>
@@ -477,6 +577,7 @@ public:
 
 //         std::for_each( auxv.begin(), auxv.end(), ostream_test(std::cout) );
 
+        namespace ublas = boost::numeric::ublas;
 
 
         ublas::matrix<double> t = get_pgap();
@@ -581,11 +682,12 @@ public:
 //         ivy_mike::binary_twizzle( t.begin2(), t.end2(), (t.begin1() + 1).begin(), strided_inserter<oiter_,STRIDE>(out), std::less<double>() );
 //     }
     
-    const ublas::matrix<double> get_pgap() {
+    const boost::numeric::ublas::matrix<double> &get_pgap() {
         return gap_prob;
     }
 
 
 };
 ivy_mike::stupid_ptr<probgap_model> pvec_pgap::pgap_model;
+}
 #endif

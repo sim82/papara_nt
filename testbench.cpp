@@ -8,8 +8,12 @@
 #include <iterator>
 #include <utility>
 #include <map>
+#include <cassert>
 
 #include <sys/time.h>
+
+#include <boost/thread.hpp>
+#include <boost/shared_ptr.hpp>
 
 #include "align_pvec_vec.h"
 
@@ -73,7 +77,7 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
         score_t * __restrict s_iter = &arr.s[0];
 
         
-        bool lastrow = ib == (b.size() - 1);
+//        bool lastrow = ib == (b.size() - 1);
         
        
         last_sdiag = *s_iter;
@@ -81,7 +85,7 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
         
         for( size_t ia = astart; ia <= ib + band_width; ++ia, ++s_iter ) {  
             score_t ac = a[ia];
-            const bool cgap = a_aux[ia] == aux_cgap;
+            const bool cgap = int(a_aux[ia]) == aux_cgap;
             
             // determine match or mis-match according to parsimony bits coming from the tree.
             bool is_match = ( ac & bc ) != 0;
@@ -167,7 +171,7 @@ class testbench {
         
         m_qs_pvecs.resize( num_qs );
         
-        for( int i = 0; i < m_qs_pvecs.size(); ++i ) {
+        for( size_t i = 0; i < m_qs_pvecs.size(); ++i ) {
             size_t len;
             is >> len;
             while( isspace( is.get() ) && !is.eof() ) {}
@@ -189,7 +193,7 @@ class testbench {
         m_ref_pvecs.resize( num_ref );
         m_ref_aux.resize( num_ref );
         
-        for( int i = 0; i < m_ref_pvecs.size(); ++i ) {
+        for( size_t i = 0; i < m_ref_pvecs.size(); ++i ) {
             size_t len;
             is >> len;
             while( isspace( is.get() ) && !is.eof() ) {}
@@ -213,7 +217,7 @@ class testbench {
     template<typename T, size_t min_len>
     static void trim_ref( std::vector<T> &v ) {
         
-        
+    	const size_t max_len = min_len;
         while( v.size() < min_len ) {
             std::vector<T> v_new = v;
             
@@ -224,7 +228,7 @@ class testbench {
             
         }
         
-        const size_t max_len = min_len * 2;
+
         if( v.size() > max_len ) {
             v.resize( max_len );
         }
@@ -241,7 +245,7 @@ class testbench {
         
     }
 public:  
-    testbench( const char *qs_name, const char *ref_name ) {
+    testbench( const char *qs_name, const char *ref_name, size_t num_ref, size_t num_qs ) {
         {
             std::ifstream is( qs_name );
             load_qs( is );
@@ -253,8 +257,8 @@ public:
         
         
         // reduce size of testset
-        size_t num_ref = 32;
-        size_t num_qs = 32;
+//        size_t num_ref = 192;
+//        size_t num_qs = 200;
       
 #if 0
         const size_t ref_len = 128;
@@ -263,6 +267,13 @@ public:
         std::for_each( m_ref_aux.begin(), m_ref_aux.end(), &trim_ref<unsigned int,ref_len> );
         std::for_each( m_qs_pvecs.begin(), m_qs_pvecs.end(), &trim_max<uint8_t,qs_len> );
 #endif
+
+//        for( size_t i = 0; i < m_ref_pvecs.size(); ++i ) {
+//        	const size_t ref_len = 4000;
+//
+//        	assert( m_ref_pvec)
+//
+//        }
 
         num_ref = std::min( num_ref, m_ref_pvecs.size() );
         num_qs = std::min( num_qs, m_qs_pvecs.size() );
@@ -288,11 +299,11 @@ public:
             for( size_t j = 0; j < m_qs_pvecs.size(); ++j ) {
                 
 
-                int score2 = 0;
+//                int score2 = 0;
                 int score = align_pvec_score_seq( m_ref_pvecs[i], m_ref_aux[i], m_qs_pvecs[j], score_mismatch, score_match_cgap, score_gap_open, score_gap_extend, arr );
                 //std::cout << "score " << i << " " << j << " = " << score << " " << score2 << "\n";
 //                 if( score != score2 ) {
-                    std::cout << "score " << i << " " << j << " = " << score << "\n";
+   //                 std::cout << "score " << i << " " << j << " = " << score << "\n";
 //                 }
                 ncup += reflen * m_qs_pvecs[i].size();
                 
@@ -306,6 +317,7 @@ public:
         std::cerr << "GNcups: " << ncup / (t1.elapsed() * 1e9) << "\n";
     }
     
+    template<typename score_t, const size_t W>
     void run_vec() {
         align_arrays arr;
         
@@ -313,8 +325,6 @@ public:
         
         timer t1;
         
-        const size_t W = 8;
-        typedef short score_t;
         
         for( size_t i = 0; i < m_ref_pvecs.size(); i += W ) {
             const int *seqptrs[W];
@@ -346,7 +356,7 @@ public:
                 
                 for( size_t k = 0; k < num_valid; ++k ) {
                 
-                    std::cout << "score " << i + k << " " << j << " = " << scores[k] << "\n";
+           //         std::cout << "score " << i + k << " " << j << " = " << scores[k] << "\n";
                     m_vec_res[std::pair<size_t,size_t>(i+k,j)] = scores[k];
                 }
                 ncup += num_valid * reflen * m_qs_pvecs[i].size();
@@ -360,6 +370,132 @@ public:
     }
     
     
+
+    template<typename score_t, const size_t W>
+    class worker {
+    	size_t m_num_threads;
+		size_t m_rank;
+
+    	std::vector< std::vector<int> > &m_ref_pvecs;
+    	std::vector< std::vector<unsigned int> > &m_ref_aux;
+    	std::vector<std::vector <uint8_t> > &m_qs_pvecs;
+    	std::map<std::pair<size_t,size_t>,int> &m_vec_res;
+
+
+    public:
+    	worker( size_t num_threads, size_t rank, std::vector< std::vector<int> > &ref_pvecs, std::vector< std::vector<unsigned int> > &ref_aux, std::vector<std::vector <uint8_t> > &qs_pvecs, std::map<std::pair<size_t,size_t>,int> &vec_res )
+    	:
+          m_num_threads( num_threads ),
+          m_rank( rank ),
+          m_ref_pvecs( ref_pvecs ),
+          m_ref_aux( ref_aux ),
+    	  m_qs_pvecs( qs_pvecs ),
+    	  m_vec_res( vec_res )
+    	{}
+
+    	void pin() {
+
+    		cpu_set_t cpuset;
+
+    		CPU_ZERO(&cpuset);
+    		CPU_SET(m_rank, &cpuset);
+
+    		if(pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
+			{
+    			throw std::runtime_error( "thread pinning failed\n");
+			}
+    	}
+
+    	void operator()() {
+
+    		const size_t start = W * m_rank;
+
+    		for( size_t i = start; i < m_ref_pvecs.size(); i += (W * m_num_threads) ) {
+				const int *seqptrs[W];
+				const unsigned int *auxptrs[W];
+				size_t num_valid = 0;
+				for( size_t j = 0; j < W; ++j ) {
+					if( i + j < m_ref_pvecs.size() ) {
+						assert(m_ref_pvecs[i+j].size() > 1000 );
+						seqptrs[j] = m_ref_pvecs[i+j].data();
+						auxptrs[j] = m_ref_aux[i+j].data();
+						++num_valid;
+					} else {
+						seqptrs[j] = seqptrs[0];
+						auxptrs[j] = auxptrs[0];
+					}
+				}
+
+				assert( num_valid > 0 );
+
+				const size_t reflen = m_ref_pvecs[i].size();
+
+//				std::cout << "reflen: " << reflen << "\n";
+
+				const align_pvec_score<score_t,W> aligner(seqptrs, auxptrs, reflen, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
+
+
+	//             std::cerr << "ref: " << i << "\n";
+				for( size_t j = 0; j < m_qs_pvecs.size(); ++j ) {
+
+					aligner.align( m_qs_pvecs[j].begin(), m_qs_pvecs[i].end() );
+					const score_t *scores = aligner.get_scores();
+
+					for( size_t k = 0; k < num_valid; ++k ) {
+
+			   //         std::cout << "score " << i + k << " " << j << " = " << scores[k] << "\n";
+						m_vec_res[std::pair<size_t,size_t>(i+k,j)] = scores[k];
+					}
+					//ncup += num_valid * reflen * m_qs_pvecs[i].size();
+				}
+
+
+			}
+
+    	}
+
+    };
+
+    template<typename score_t, const size_t W>
+	void run_vec_mc( size_t num_threads ) {
+
+
+
+    	//typedef worker<typename score_t, Wx> worker_t;
+
+
+    	timer t1;
+
+    	boost::thread_group tg;
+
+    	std::vector<std::map<std::pair<size_t,size_t>,int> > res(num_threads);
+    	if( num_threads > 1 ) {
+			for( size_t i = 0; i < num_threads; ++i ) {
+
+
+				tg.create_thread(worker<score_t, W>(num_threads, i, m_ref_pvecs, m_ref_aux, m_qs_pvecs, res[i]));
+
+			//	tg.create_thread(worker<score_t, W>(num_threads, i, &m_ref_pvecs, &m_ref_aux, &m_qs_pvecs));
+			}
+
+			tg.join_all();
+    	} else {
+    		worker<score_t, W> w(1, 0, m_ref_pvecs, m_ref_aux, m_qs_pvecs, res[0]);
+    		w();
+    	}
+    	m_vec_res.clear();
+
+    	for( size_t i = 0; i < num_threads; ++i ) {
+//    		std::cout << res[i].size() << "\n";
+
+    		m_vec_res.insert(res[i].begin(), res[i].end() );
+    	}
+
+
+		std::cerr << "aligned " << m_ref_pvecs.size() << " x " << m_qs_pvecs.size() << " seqs in " << t1.elapsed() << " s\n";
+	}
+
+
     void compare() {
         
         for( std::map< std::pair< size_t, size_t >, int >::iterator it = m_seq_res.begin(); it != m_seq_res.end(); ++it ) {
@@ -371,15 +507,41 @@ public:
             }
             
         }
+        std::cout << "checked\n";
+
     }
 };
 
 
 
-int main() {
-    testbench tb( "qs.bin", "ref.bin" );
-    tb.run_seq();
-    tb.run_vec();
+int main( int argc, char *argv[] ) {
+
+	size_t num_refs = atoi(argv[1] );
+	size_t num_qs = atoi(argv[2] );
+	size_t num_threads = atoi(argv[3] );
+	size_t width = atoi(argv[4] );
+
+
+    testbench tb( "qs.bin", "ref.bin", num_refs, num_qs );
+//    tb.run_vec<short,8>();
+//    tb.run_vec<int,4>();
+
+    std::cout << "width: " << width << " threads: " << num_threads << " : ";
+
+    if( width == 1 ) {
+    	tb.run_seq();
+    } else if( width == 4 ) {
+    	tb.run_vec_mc<int,4>(num_threads);
+    } else if( width == 8 ) {
+    	tb.run_vec_mc<short,8>(num_threads);
+    } else {
+    	std::cerr << "unsupported vector unit width: " << width << "\n";
+    }
+
     
-    tb.compare();
+    if( !true ) {
+    	tb.run_seq();
+
+    	tb.compare();
+    }
 }

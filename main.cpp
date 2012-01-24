@@ -18,6 +18,7 @@
 
 #include "parsimony.h"
 #include "pvec.h"
+#include "align_utils.h"
 
 #include "pars_align_seq.h"
 #include "pars_align_gapp_seq.h"
@@ -386,7 +387,7 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 
     //std::cout << "traversal for branch: " << *(n1->m_data) << " " << *(n2->m_data) << "\n";
 
-    rooted_traveral_order( n1, n2, trav_order, incremental );
+    rooted_traversal_order( n1, n2, trav_order, incremental );
 //     std::cout << "traversal: " << trav_order.size() << "\n";
 
     for( std::deque< rooted_bifurcation< ivy_mike::tree_parser_ms::lnode > >::iterator it = trav_order.begin(); it != trav_order.end(); ++it ) {
@@ -456,7 +457,7 @@ static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t
 
 void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq );
 
-class papara_nt_i {
+class papara_nt_i : boost::noncopyable{
 public:
     virtual ~papara_nt_i() {}
 
@@ -480,12 +481,18 @@ class papara_nt : public papara_nt_i {
     const static int score_gap_extend = 1;
     const static int score_mismatch = 1;
     const static int score_match_cgap = 3;
-    
+
+
+//    const static int score_gap_open = 1;
+//    const static int score_gap_extend = 1;
+//    const static int score_mismatch = 3;
+//    const static int score_match_cgap = 10;
+
     //typedef pvec_pgap pvec_t;
     typedef my_adata_gen<pvec_t> my_adata;
 
 
-    const static size_t VW = 4;
+    const static size_t VW = 8;
 
     struct block_t {
         block_t() {
@@ -502,8 +509,8 @@ class papara_nt : public papara_nt_i {
         int num_valid;
     };
 
-    papara_nt( const papara_nt &other );
-    papara_nt & operator=( const papara_nt &other );
+//    papara_nt( const papara_nt &other );
+//    papara_nt & operator=( const papara_nt &other );
 
 
 
@@ -538,7 +545,7 @@ class papara_nt : public papara_nt_i {
         worker( papara_nt & pnt, size_t rank ) : m_pnt(pnt), m_rank(rank) {}
         void operator()() {
 
-            pars_align_seq::arrays seq_arrays(true);
+            pars_align_seq<>::arrays seq_arrays(true);
             pars_align_gapp_seq::arrays seq_arrays_gapp(true);
             
             ivy_mike::timer tstatus;
@@ -561,7 +568,7 @@ class papara_nt : public papara_nt_i {
                         last_tstatus = tstatus.elapsed();
                     }
                 }
-#if 0
+#if 1
                 assert( VW == 8 );
                 const align_pvec_score<short,8> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
                 for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
@@ -586,7 +593,7 @@ class papara_nt : public papara_nt_i {
                                     const int *seqptr = block.seqptrs[k];
                                     const unsigned int *auxptr = block.auxptrs[k];
 
-                                    pars_align_seq pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+                                    pars_align_seq<> pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
                                     int res = pas.alignFreeshift(INT_MAX);
 
                                     if( res != score_vec[k] ) {
@@ -795,23 +802,23 @@ class papara_nt : public papara_nt_i {
     }
     
     void gapstream_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > &map) { 
-        
-        int seq_ptr = 0;
-        
-        for ( std::vector<uint8_t>::const_reverse_iterator git = gaps.rbegin(); git != gaps.rend(); ++git ) {
-
-            if ( *git == 1) {
-                ++seq_ptr;
-            } else if ( *git == 0 ) {
-
-                map.push_back(seq_ptr);
-                
-                ++seq_ptr;
-            } else {
-                map.push_back(seq_ptr);
-                
-            }
-        }        
+        align_utils::trace_to_position_map( gaps, &map );
+//        int seq_ptr = 0;
+//
+//        for ( std::vector<uint8_t>::const_reverse_iterator git = gaps.rbegin(); git != gaps.rend(); ++git ) {
+//
+//            if ( *git == 1) {
+//                ++seq_ptr;
+//            } else if ( *git == 0 ) {
+//
+//                map.push_back(seq_ptr);
+//
+//                ++seq_ptr;
+//            } else {
+//                map.push_back(seq_ptr);
+//
+//            }
+//        }
     }
     
     void write_qs_pvecs( const char * name ) {
@@ -840,7 +847,7 @@ public:
 
 
 
-    papara_nt( const char* opt_tree_name, const char *opt_alignment_name, const char *opt_qs_name )
+    papara_nt( const char* opt_tree_name, const char *opt_alignment_name, const char *opt_qs_name, bool write_testbench )
       : m_ln_pool(new ln_pool( std::auto_ptr<node_data_factory>(new my_fact<my_adata>) ))
     {
 
@@ -985,8 +992,11 @@ public:
             seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
         }
         
-        write_qs_pvecs( "qs.bin" );
-        write_ref_pvecs( "ref.bin" );
+        if( write_testbench ) {
+
+        	write_qs_pvecs( "qs.bin" );
+        	write_ref_pvecs( "ref.bin" );
+        }
 
     }
 
@@ -1170,7 +1180,7 @@ public:
         
         lout << "generating best scoring alignments\n";
         ivy_mike::timer t1;
-        pars_align_seq::arrays seq_arrays(true);
+        pars_align_seq<>::arrays seq_arrays(true);
         pars_align_gapp_seq::arrays seq_arrays_gapp(true);
 
         double mean_quality = 0.0;
@@ -1184,7 +1194,7 @@ public:
             int res = -1;
             std::vector<uint8_t> tbv;
 
-            if( false ) {
+            if( true ) {
 				const int *seqptr = m_ref_pvecs[best_edge].data();
 				const unsigned int *auxptr = m_ref_aux[best_edge].data();
 
@@ -1192,7 +1202,7 @@ public:
 
 				const size_t stride = 1;
 				const size_t aux_stride = 1;
-				pars_align_seq pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
+				pars_align_seq<> pas( seqptr, m_qs_pvecs[i].data(), ref_len, m_qs_pvecs[i].size(), stride, auxptr, aux_stride, seq_arrays, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
 				res = pas.alignFreeshift(INT_MAX);
 				pas.tracebackCompressed(tbv);
             } else {
@@ -1253,6 +1263,7 @@ public:
                 seq_to_position_map( m_qs_seqs[i], map_ref );
                 gapstream_to_position_map( tbv, map_aligned );
                 
+
                 if( map_ref.size() != map_aligned.size() ) {
                     throw std::runtime_error( "alignment quirk: map_ref.size() != map_aligned.size()" );
                 }
@@ -1383,6 +1394,8 @@ int main( int argc, char *argv[] ) {
     bool opt_use_cgap;
     int opt_num_threads;
     std::string opt_run_name;
+    bool opt_write_testbench;
+
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
@@ -1390,6 +1403,7 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'c', igo::value<bool>(opt_use_cgap, true).set_default(false) );
     igp.add_opt( 'j', igo::value<int>(opt_num_threads).set_default(1) );
     igp.add_opt( 'n', igo::value<std::string>(opt_run_name).set_default("default") );
+    igp.add_opt( 'b', igo::value<bool>(opt_write_testbench, true).set_default(false) );
     
     igp.parse(argc,argv);
 
@@ -1425,9 +1439,9 @@ int main( int argc, char *argv[] ) {
     std::auto_ptr<papara_nt_i> pnt_ptr;
 
     if( !opt_use_cgap ) {
-        pnt_ptr.reset( new papara_nt<pvec_pgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name ));
+        pnt_ptr.reset( new papara_nt<pvec_pgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name, opt_write_testbench ));
     } else {
-        pnt_ptr.reset( new papara_nt<pvec_cgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name ));
+        pnt_ptr.reset( new papara_nt<pvec_cgap>( opt_tree_name.c_str(), opt_alignment_name.c_str(), qs_name, opt_write_testbench ));
     }
     
 //     return 0;

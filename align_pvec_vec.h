@@ -96,15 +96,21 @@ public:
         m_out_score.resize(W);
     }
     
+
     inline void align( const std::vector<uint8_t> &b ) const {
+        align(b.begin(), b.end() );
+    }
+
+    template<typename iiter>
+    inline void align( iiter bstart, iiter bend ) const {
         typedef vector_unit<score_t, W> vu;
         typedef typename vu::vec_t vec_t;
         
         
         size_t asize = m_a_prof.size() / W;
-        assert( asize > b.size() );
+        assert( ptrdiff_t(asize) > std::distance(bstart, bend) );
         
-        const size_t band_width = asize - b.size();
+        const size_t band_width = asize - std::distance(bstart, bend);
         std::fill( m_s.begin(), m_s.end(), 0 );
         
         const score_t LARGE = 32000;
@@ -117,8 +123,8 @@ public:
         const vec_t match_cgap = vu::set1( m_match_cgap );
         const vec_t mismatch_score = vu::set1(m_mismatch_score);
         const vec_t zero = vu::setzero();
-        for( size_t ib = 0; ib < b.size(); ib++ ) {
-            const vec_t bc = vu::set1(b[ib]);
+        for( size_t ib = 0; bstart != bend; ++bstart, ++ib ) {
+            const vec_t bc = vu::set1(*bstart);
             
             vec_t last_sl = vu::set1(LARGE);
             vec_t last_sc = vu::set1(LARGE);

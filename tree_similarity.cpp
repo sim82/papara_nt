@@ -102,7 +102,7 @@ void get_all_splits( lnode *t, std::vector< std::pair< lnode*, lnode* > > &edges
 
     
     std::deque<rooted_bifurcation<lnode> > trav_order;
-    rooted_traveral_order(t, t->back, trav_order, false );
+    rooted_traversal_order(t, t->back, trav_order, false );
     
     std::tr1::unordered_map<int, boost::dynamic_bitset<> > res;
     
@@ -199,7 +199,10 @@ void get_all_splits( lnode *t, std::vector< std::pair< lnode*, lnode* > > &edges
         
         splits.push_back( smaller_bs );
         
-        if( c > ntips / 2 ) {
+
+        // if more than half of the bits are set, flip the bitvector (=make it the smaller split set)
+        // if _exactly_ half of the bits are set, modify the vector (=flip it or don't flip it) such that the lowest bit is true (=make it deterministic)
+        if( c > ntips / 2 || (ntips % 2 == 0 && c == ntips / 2 && splits.back()[0] == false )) {
             splits.back().flip();
         }
         
@@ -234,6 +237,17 @@ bool split_sets_equal( const std::vector<boost::dynamic_bitset<> > &s1, const st
 }
 
 double compare_trees( lnode *t1, lnode *t2, split_set_t &splits2 ) {
+
+	// TODO: is this valid as a sanity check? If an lnode is deallocated, the m_thisptr is in an undefined state,
+	// and there should be tree possible behavious:
+	// 1: the memory has not been reused or has been reused for some unrelated stuff,
+	//    the internal pointer of m_thisptr is most likely != this => assert
+	// 2: the memory has been reused for another lnode => we're out of luck (this situation can not be caught)
+	// 3: the memory has become unmapped => reproducible segfault
+
+	assert( t1->m_thisptr.get() == t1 );
+	assert( t2->m_thisptr.get() == t2 );
+
     std::vector<lnode *> sorted_tips;
     std::tr1::unordered_set<boost::dynamic_bitset<>, bitset_hash > split_map;
     {
