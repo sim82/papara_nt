@@ -89,7 +89,7 @@ namespace {
 
 const int score_gap_open = -3;
 const int score_gap_extend = -1;
-const int score_match = 1;
+const int score_match = 2;
 const int score_match_cgap = -3;
 
 
@@ -368,28 +368,28 @@ public:
 
     typedef typename seq_model::pars_state_t pars_state_t;
 
-    queries( const char *opt_qs_name ) {
+    queries( const std::string &opt_qs_name ) {
 
 
-        if( opt_qs_name != 0 ) {
+//        if( !opt_qs_name.empty() ) {
             //
             // read query sequences
             //
 
-            if( opt_qs_name != 0 ) {
-                std::ifstream qsf( opt_qs_name );
+            if( !opt_qs_name.empty() ) {
+                std::ifstream qsf( opt_qs_name.c_str() );
 
                 if( !qsf.good() ) {
                     throw std::runtime_error( "cannot open qs file");
                 }
 
-                // mix them with the qs from the ref alignment
+                // mix them with the qs from the ref alignment <-- WTF? must have been sniffing whiteboard cleaner... the qs are read before the ref seqs...
                 read_fasta( qsf, m_qs_names, m_qs_seqs);
             }
 
-            if( m_qs_names.empty() ) {
-                throw std::runtime_error( "no qs" );
-            }
+//            if( m_qs_names.empty() ) {
+//                throw std::runtime_error( "no qs" );
+//            }
 
             std::for_each( m_qs_names.begin(), m_qs_names.end(), std::ptr_fun( normalize_name ));
 
@@ -399,7 +399,7 @@ public:
 
 
             m_qs_pvecs.resize( m_qs_names.size() );
-        }
+//        }
 //        m_qs_bestscore.resize(m_qs_names.size());
 //        std::fill( m_qs_bestscore.begin(), m_qs_bestscore.end(), 32000);
 //        m_qs_bestedge.resize(m_qs_names.size());
@@ -1477,7 +1477,7 @@ void gapstream_to_alignment_no_ref_gaps( const std::vector<uint8_t> &gaps, const
 
 
 template<typename pvec_t, typename seq_tag>
-void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad ) {
+void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad, const bool ref_gaps ) {
     // create the actual alignments for the best scoring insertion position (=do the traceback)
 
     typedef typename queries<seq_tag>::pars_state_t pars_state_t;
@@ -1575,15 +1575,22 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
 
     }
 
-    os << refs.num_seqs() + qs.size() << " " << rgc.transformed_ref_len() << "\n";
 
+    if( ref_gaps ) {
+        os << refs.num_seqs() + qs.size() << " " << rgc.transformed_ref_len() << "\n";
+    } else {
+        os << refs.num_seqs() + qs.size() << " " << refs.pvec_size() << "\n";
+    }
     // write refs (and apply the ref gaps)
 
     for( size_t i = 0; i < refs.num_seqs(); i++ ) {
         os << std::setw(pad) << std::left << refs.name_at(i);
 
-        rgc.transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::ostream_iterator<char>(os), '-' );
-        //std::transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::ostream_iterator<char>(os), seq_model::normalize);
+        if( ref_gaps ) {
+            rgc.transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::ostream_iterator<char>(os), '-' );
+        } else {
+            std::transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::ostream_iterator<char>(os), seq_model::normalize);
+        }
 
         //std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), seq_model::normalize );
         os << "\n";
@@ -1597,8 +1604,11 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
 
         out_qs_ps.clear();
 
-        gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state(), rgc);
-
+        if( ref_gaps ) {
+            gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state(), rgc);
+        } else {
+            gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state() );
+        }
 
         os << std::setw(pad) << std::left << qs.name_at(i);
         std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::ostream_iterator<char>(os), seq_model::p2s );
@@ -1698,12 +1708,13 @@ std::string filename( const std::string &run_name, const char *type ) {
 
 bool file_exists(const char *filename)
 {
-  std::ifstream is(filename);
-  return is;
+    std::ifstream is(filename);
+    return is;
 }
 
+
 template<typename pvec_t, typename seq_tag>
-void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name ) {
+void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps ) {
 
     ivy_mike::perf_timer t1;
 
@@ -1724,7 +1735,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     t1.print();
 
-    const size_t num_candidates = 1;
+    const size_t num_candidates = 0;
 
     scoring_results res( qs.size(), scoring_results::candidates(num_candidates) );
 
@@ -1756,7 +1767,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
 
     //refs.write_seqs(os, pad);
-    align_best_scores( os, os_qual, os_cands, qs, refs, res, pad );
+    align_best_scores( os, os_qual, os_cands, qs, refs, res, pad, ref_gaps );
 
 }
 
@@ -1768,9 +1779,80 @@ void print_banner( std::ostream &os ) {
     os << "|  __/ _` |  __/ _` |    // _` |\n";
     os << "| | | (_| | | | (_| | |\\ \\ (_| |\n";
     os << "\\_|  \\__,_\\_|  \\__,_\\_| \\_\\__,_|\n";
+    os << "  Version 2.0\n";
 
 }
 
+void pad( std::ostream &os, size_t w ) {
+    for( size_t i = 0; i < w; ++i ) {
+        os << " ";
+    }
+}
+
+void print_help( std::ostream &os, const std::vector<std::string> &options, const std::vector<std::string> &text ) {
+    assert( options.size() == text.size() );
+
+    size_t max_opt_size = 0;
+
+    for( size_t i = 0; i < options.size(); ++i ) {
+        max_opt_size = std::max( max_opt_size, options[i].size() );
+    }
+
+
+    size_t pad_right = 3;
+    size_t col_width = 2 + max_opt_size + pad_right;
+    for( size_t i = 0; i < options.size(); ++i ) {
+        pad( os, 2 );
+        os << options[i];
+        pad( os, col_width - 2 - options[i].size() );
+        //os << text[i];
+        const std::string &t = text[i];
+
+
+        for( size_t j = 0; j < t.size(); ++j ) {
+            if( t[j] == '@') {
+                os << "\n";
+                pad( os, col_width );
+            } else {
+                os << t[j];
+            }
+        }
+
+        os << "\n";
+    }
+    
+    
+}
+
+
+void print_help( std::ostream &os ) {
+    std::vector<std::string> options;
+    std::vector<std::string> text;
+
+    options.push_back( "-t <tree file>" );
+    text.push_back( "File name of the reference tree (newick format)");
+
+    options.push_back( "-s <ref alignment>" );
+    text.push_back( "File name of the reference alignment (phylip format)");
+
+    options.push_back( "-q <query seqs.>" );
+    text.push_back( "File name of the query sequences (fasta format)");
+
+    options.push_back( "-a" );
+    text.push_back( "Sequences are protein data");
+
+    options.push_back( "-j <num threads>" );
+    text.push_back( "Specify number of threads (default:1)");
+
+    options.push_back( "-n <run name>" );
+    text.push_back( "Specify filename suffix of the output@files (default: \"default\")");
+
+    options.push_back( "-r" );
+    text.push_back( "Turn of writing RA-side gaps in the output file.");
+
+    print_help( os, options, text );
+
+}
 
 
 
@@ -1794,6 +1876,7 @@ int main( int argc, char *argv[] ) {
     bool opt_write_testbench;
     bool opt_force_overwrite;
     bool opt_aa;
+    bool opt_no_ref_gaps;
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
@@ -1804,7 +1887,7 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'n', igo::value<std::string>(opt_run_name).set_default("default") );
     igp.add_opt( 'b', igo::value<bool>(opt_write_testbench, true).set_default(false) );
     igp.add_opt( 'f', igo::value<bool>(opt_force_overwrite, true).set_default(false) );
-    
+    igp.add_opt( 'r', igo::value<bool>(opt_no_ref_gaps, true).set_default(false) );
 
 
     igp.parse(argc,argv);
@@ -1813,15 +1896,17 @@ int main( int argc, char *argv[] ) {
         print_banner(std::cerr);
 
         std::cerr << "missing options -t and/or -s (-q is optional)\n";
+
+        print_help( std::cerr );
         return 0;
     }
     ivy_mike::timer t;
 
-    const char *qs_name = 0;
-    if( !opt_qs_name.empty() ) {
-        qs_name = opt_qs_name.c_str();
-    }
-    
+//    const char *qs_name = 0;
+//    if( !opt_qs_name.empty() ) {
+//        qs_name = opt_qs_name.c_str();
+//    }
+//
     std::string log_filename = filename( opt_run_name, "log" );
 
     if( opt_run_name != "default" && !opt_force_overwrite && file_exists(log_filename.c_str()) ) {
@@ -1840,21 +1925,21 @@ int main( int argc, char *argv[] ) {
     
     
 
-
+    const bool ref_gaps = !opt_no_ref_gaps;
 
 
     if( opt_use_cgap ) {
 
         if( opt_aa ) {
-            run_papara<pvec_cgap, tag_aa>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
         } else {
-            run_papara<pvec_cgap, tag_dna>( qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
         }
     } else {
         if( opt_aa ) {
-            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
         } else {
-            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name );
+            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
         }
     }
 

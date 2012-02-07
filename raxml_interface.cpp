@@ -580,7 +580,7 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 	}
 
 
-	if( !have_files ) {
+	if( true || !have_files ) {
 		Poco::Pipe raxout_pipe;
 
 		args.push_back("-w");
@@ -595,6 +595,9 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 		pipe_into_deque( raxout_pipe, raxbuf );
 
 		std::cout << "raxml wrote " << raxbuf.size() << "\n";
+
+		std::copy( raxbuf.begin(), raxbuf.end(), std::ostream_iterator<char>(std::cout));
+		std::cout << "\n";
 
 		proc.wait();
 	}

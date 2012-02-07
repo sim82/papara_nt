@@ -252,13 +252,15 @@ public:
     	namespace ublas = boost::numeric::ublas;
 
     	m_gap_freq = gap_freq;
-		double f[2] = {1-m_gap_freq, m_gap_freq};
-
+		double f[2] = {m_gap_freq, 1-m_gap_freq};
+    	        //double f[2] = {1-m_gap_freq, m_gap_freq};
 		ublas::matrix<double> rate_matrix(2,2);
 		rate_matrix(0,0) = -f[0];
 		rate_matrix(0,1) = f[0];
 		rate_matrix(1,0) = f[1];
 		rate_matrix(1,1) = -f[1];
+
+		std::cout << "rate matrix: " << rate_matrix << "\n";
 
 		ublas::EigenvalueDecomposition ed(rate_matrix);
 

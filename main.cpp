@@ -1186,6 +1186,8 @@ public:
         double mean_quality = 0.0;
         double n_quality = 0.0;
 
+        const size_t pad = max_name_len() + 1;
+
         for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
             int best_edge = m_qs_bestedge[i];
 
@@ -1236,7 +1238,7 @@ public:
 
             std::transform( out_qs.begin(), out_qs.end(), out_qs.begin(), dna_parsimony_mapping::p2d );
 
-            os << m_qs_names[i] << "\t";
+            os << std::setw(pad) << std::left << m_qs_names[i];
             std::copy( out_qs.begin(), out_qs.end(), std::ostream_iterator<char>(os));
             os << "\n";
 
@@ -1299,14 +1301,32 @@ public:
         std::cout << t2.elapsed() << std::endl;
 
     }
+
+    size_t max_name_len() {
+        size_t ml = 0;
+
+        for( size_t i = 0; i < m_ref_names.size(); i++ ) {
+            ml = std::max( ml, m_ref_names[i].size() );
+        }
+
+
+        for( size_t i = 0; i < m_qs_names.size(); i++ ) {
+            ml = std::max( ml, m_qs_names[i].size() );
+        }
+
+        return ml;
+    }
+
     void dump_ref_seqs ( std::ostream &os ) {
+        const size_t pad = max_name_len() + 1;
+
         for( size_t i = 0; i < m_ref_seqs.size(); i++ ) {
             std::string outs;
             outs.resize(m_ref_seqs[i].size() );
 
             std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), outs.begin(), normalize_dna );
 
-            os << m_ref_names[i] << "\t" << outs << "\n";
+            os << std::setw(pad) << std::left << m_ref_names[i] << outs << "\n";
         }
     }
 

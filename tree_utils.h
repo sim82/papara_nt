@@ -80,6 +80,15 @@ void rooted_traveral_order_rec( lnode *n, container &cont, bool incremental = fa
     assert( n->m_data->isTip || n1 != 0 );
     assert( n->m_data->isTip || n2 != 0 );
     
+    // FIXME: why did I allow n to be a tip in the assertions above. fix this some time!
+    // this function will crash if n is a tip...
+    // TODO: should this function silently ignore+return if n is a tip, or
+    // is it better to enforce strict handling at a higher level?
+    // This function itself does not descent into links to tips, so high level handling
+    // makes more sense.
+
+    assert( n1 != 0 && n2 != 0 );
+
     n->towards_root = true;
     n->next->towards_root = false;
     n->next->next->towards_root = false;
