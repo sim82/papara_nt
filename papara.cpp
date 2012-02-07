@@ -85,12 +85,46 @@ public:
     const static scalar full_mask = scalar(-1);
 };
 
+struct papara_score_parameters {
+    
+    static papara_score_parameters default_scores() {
+        return papara_score_parameters(-3,-1,2,-3);
+    }
+
+    static papara_score_parameters parse_scores( const char *opts) {
+        
+        int o, e, m, mc;
+        int n = sscanf( opts, "%d:%d:%d:%d", &o, &e, &m, &mc );
+        
+        if( n != 4 ) {
+            std::cerr <<  "cannot parse user options for papara: '" << opts << "'\nIt should match the following format: <open>:<extend>:<match>:<match cg>\n";
+            throw std::runtime_error( "bailing out" );
+        }
+        
+        return papara_score_parameters(o, e, m, mc);
+
+    }
+    
+    papara_score_parameters( int open_, int ext_, int match_, int match_cg_ ) 
+     : gap_open( open_ ),
+       gap_extend( ext_ ),
+       match( match_ ),
+       match_cgap( match_cg_ )
+    {}
+    
+    int gap_open;
+    int gap_extend;
+    int match;
+    int match_cgap;
+    
+};
+
 namespace {
 
-const int score_gap_open = -3;
-const int score_gap_extend = -1;
-const int score_match = 2;
-const int score_match_cgap = -3;
+// const int score_gap_open = -3;
+// const int score_gap_extend = -1;
+// const int score_match = 2;
+// const int score_match_cgap = -3;
 
 
 //typedef sequence_model::model<sequence_model::tag_dna> seq_model;
@@ -555,7 +589,7 @@ public:
 
             //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
         lout << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
-        lout << "scores: " << score_gap_open << " " << score_gap_extend << " " << score_match << " " << score_match_cgap << "\n";
+        
 
 
 
@@ -979,6 +1013,7 @@ class worker {
 
     const size_t rank_;
 
+    const papara_score_parameters sp_;
 
     static void copy_to_profile( const block_t &block, aligned_buffer<vu_scalar_t> *prof, aligned_buffer<vu_scalar_t> *aux_prof ) {
         size_t reflen = block.ref_len;
@@ -1012,7 +1047,8 @@ class worker {
     }
 
 public:
-    worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank ) : block_queue_(*bq), results_(*res), qs_(qs), rank_(rank) {}
+    worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank, const papara_score_parameters &sp ) 
+      : block_queue_(*bq), results_(*res), qs_(qs), rank_(rank), sp_(sp) {}
     void operator()() {
 
 
@@ -1059,7 +1095,7 @@ public:
 
             copy_to_profile(block, &pvec_prof, &aux_prof );
 
-            pvec_aligner_vec<vu_scalar_t,VW> pav( block.seqptrs, block.auxptrs, block.ref_len, score_match, score_match_cgap, score_gap_open, score_gap_extend, seq_model::c2p, seq_model::num_cstates() );
+            pvec_aligner_vec<vu_scalar_t,VW> pav( block.seqptrs, block.auxptrs, block.ref_len, sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, seq_model::c2p, seq_model::num_cstates() );
 
 //            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
             for( unsigned int i = 0; i < qs_.size(); i++ ) {
@@ -1067,7 +1103,7 @@ public:
                 //align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
 
 
-                pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores.begin() );
+                pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, out_scores.begin() );
 
                 //aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
                 //const vu_scalar_t *score_vec = aligner.get_scores();
@@ -1263,7 +1299,7 @@ void gapstream_to_position_map( const std::vector< uint8_t >& gaps, std::vector<
 
 
 template<typename pvec_t, typename seq_tag>
-void calc_scores( size_t n_threads, const references<pvec_t, seq_tag> &refs, const queries<seq_tag> &qs, scoring_results *res ) {
+void calc_scores( size_t n_threads, const references<pvec_t, seq_tag> &refs, const queries<seq_tag> &qs, scoring_results *res, const papara_score_parameters &sp ) {
 
     //
     // build the alignment blocks
@@ -1283,10 +1319,10 @@ void calc_scores( size_t n_threads, const references<pvec_t, seq_tag> &refs, con
     typedef worker<seq_tag> worker_t;
 
     for( size_t i = 1; i < n_threads; ++i ) {
-        tg.create_thread(worker_t(&bq, res, qs, i));
+        tg.create_thread(worker_t(&bq, res, qs, i, sp));
     }
 
-    worker_t w0(&bq, res, qs, 0 );
+    worker_t w0(&bq, res, qs, 0, sp );
     w0();
 
     tg.join_all();
@@ -1477,7 +1513,7 @@ void gapstream_to_alignment_no_ref_gaps( const std::vector<uint8_t> &gaps, const
 
 
 template<typename pvec_t, typename seq_tag>
-void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad, const bool ref_gaps ) {
+void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp ) {
     // create the actual alignments for the best scoring insertion position (=do the traceback)
 
     typedef typename queries<seq_tag>::pars_state_t pars_state_t;
@@ -1520,7 +1556,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
                 refs.pvec_at(best_edge).begin(), refs.pvec_at(best_edge).end(),
                 refs.aux_at(best_edge).begin(),
                 qp.begin(), qp.end(),
-                score_match, score_match_cgap, score_gap_open, score_gap_extend, qs_traces.at(i), arrays
+                sp.match, sp.match_cgap, sp.gap_open, sp.gap_extend, qs_traces.at(i), arrays
         );
 
 
@@ -1546,7 +1582,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
                     refs.pvec_at(cand.ref()).begin(), refs.pvec_at(cand.ref()).end(),
                     refs.aux_at(cand.ref()).begin(),
                     qp.begin(), qp.end(),
-                    score_match, score_match_cgap, score_gap_open, score_gap_extend, cand_trace, arrays
+                    sp.match, sp.match_cgap, sp.gap_open, sp.gap_extend, cand_trace, arrays
                 );
                 out_qs_ps.clear();
 
@@ -1714,7 +1750,7 @@ bool file_exists(const char *filename)
 
 
 template<typename pvec_t, typename seq_tag>
-void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps ) {
+void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps, const papara_score_parameters &sp ) {
 
     ivy_mike::perf_timer t1;
 
@@ -1723,6 +1759,8 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     t1.add_int();
     references<pvec_t,seq_tag> refs( tree_name.c_str(), alignment_name.c_str(), &qs );
 
+    
+    
     t1.add_int();
 
     qs.preprocess();
@@ -1740,9 +1778,9 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     scoring_results res( qs.size(), scoring_results::candidates(num_candidates) );
 
 
+    lout << "scoring scheme: " << sp.gap_open << " " << sp.gap_extend << " " << sp.match << " " << sp.match_cgap << "\n";
 
-
-    calc_scores<pvec_t, seq_tag>(num_threads, refs, qs, &res );
+    calc_scores<pvec_t, seq_tag>(num_threads, refs, qs, &res, sp );
 
     std::string score_file(filename(run_name, "alignment"));
     std::string quality_file(filename(run_name, "quality"));
@@ -1767,7 +1805,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
 
     //refs.write_seqs(os, pad);
-    align_best_scores( os, os_qual, os_cands, qs, refs, res, pad, ref_gaps );
+    align_best_scores( os, os_qual, os_cands, qs, refs, res, pad, ref_gaps, sp );
 
 }
 
@@ -1850,6 +1888,9 @@ void print_help( std::ostream &os ) {
     options.push_back( "-r" );
     text.push_back( "Turn of writing RA-side gaps in the output file.");
 
+    options.push_back( "-p" );
+    text.push_back( "User defined scoring scheme: <open>:<extend>:<match>:<match cg>@The default scores correspond to '-p -3:-1:2:-3'" );
+    
     print_help( os, options, text );
 
 }
@@ -1870,6 +1911,8 @@ int main( int argc, char *argv[] ) {
     std::string opt_tree_name;
     std::string opt_alignment_name;
     std::string opt_qs_name;
+    std::string opt_user_parameters;
+    
     bool opt_use_cgap;
     int opt_num_threads;
     std::string opt_run_name;
@@ -1877,6 +1920,7 @@ int main( int argc, char *argv[] ) {
     bool opt_force_overwrite;
     bool opt_aa;
     bool opt_no_ref_gaps;
+    bool opt_print_help;
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
@@ -1888,11 +1932,21 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'b', igo::value<bool>(opt_write_testbench, true).set_default(false) );
     igp.add_opt( 'f', igo::value<bool>(opt_force_overwrite, true).set_default(false) );
     igp.add_opt( 'r', igo::value<bool>(opt_no_ref_gaps, true).set_default(false) );
-
-
+    igp.add_opt( 'p', igo::value<std::string>(opt_user_parameters).set_default("") );
+    igp.add_opt( 'h', igo::value<bool>(opt_print_help, true).set_default(false) );
+    
     igp.parse(argc,argv);
 
-    if( igp.opt_count('t') != 1 || igp.opt_count('s') != 1  ) {
+    if( opt_print_help ) {
+        print_banner( std::cerr );
+        std::cerr << "\nUser options:\n";
+        print_help( std::cerr);
+        return 0;
+        
+    }
+         
+    
+    if( igp.opt_count('t') != 1 || igp.opt_count('s') != 1 ) {
         print_banner(std::cerr);
 
         std::cerr << "missing options -t and/or -s (-q is optional)\n";
@@ -1928,18 +1982,26 @@ int main( int argc, char *argv[] ) {
     const bool ref_gaps = !opt_no_ref_gaps;
 
 
+    papara_score_parameters sp = papara_score_parameters::default_scores();
+    if( !opt_user_parameters.empty() ) {
+        std::cout << "meeeeep\n";
+        
+        sp = papara_score_parameters::parse_scores(opt_user_parameters.c_str());
+    }
+    
+    
     if( opt_use_cgap ) {
 
         if( opt_aa ) {
-            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
+            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
         } else {
-            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
+            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
         }
     } else {
         if( opt_aa ) {
-            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
+            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
         } else {
-            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps );
+            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
         }
     }
 
