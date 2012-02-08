@@ -1901,7 +1901,6 @@ int main( int argc, char *argv[] ) {
 
 //     aligned_buffer<int> xxx(1024);
     
-    
 
     
     namespace igo = ivy_mike::getopt;
