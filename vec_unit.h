@@ -394,10 +394,10 @@ struct vector_unit<float, 4> {
 
     const static int SIGN_MASK_INT = 0x7FFFFFFF;
     
-    const static T LARGE_VALUE  = 1e8;
-    const static T SMALL_VALUE = -1e8;
-    const static T BIAS = 0;
-    const static size_t W = 4;
+    constexpr static T LARGE_VALUE  = 1e8;
+    constexpr static T SMALL_VALUE = -1e8;
+    constexpr static T BIAS = 0;
+    constexpr static size_t W = 4;
     
     static inline vec_t cast_from_int( const __m128i &iv ) {
     	return _mm_castsi128_ps( iv );
@@ -505,10 +505,10 @@ struct vector_unit<double, 2> {
 
 //    const static uint64_t SIGN_MASK_U64 = 0x7FFFFFFFFFFFFFFF;
 
-    const static T LARGE_VALUE  = 1e8;
-    const static T SMALL_VALUE = -1e8;
-    const static T BIAS = 0;
-    const static size_t W = 2;
+    constexpr static T LARGE_VALUE  = 1e8;
+    constexpr static T SMALL_VALUE = -1e8;
+    constexpr static T BIAS = 0;
+    constexpr static size_t W = 2;
 
     static inline vec_t cast_from_int( const __m128i &iv ) {
         return _mm_castsi128_pd( iv );

@@ -1415,7 +1415,7 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
 }
 
 
-void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend ) {
+void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> *a, std::vector<uint8_t> *b, float gap_open, float gap_extend ) {
 
  
     typedef float score_t;
@@ -1425,9 +1425,9 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     
     
     
-    if( s.size() < a.size()  ) {
-        s.resize( a.size() );
-        si.resize( a.size() );
+    if( s.size() < a->size()  ) {
+        s.resize( a->size() );
+        si.resize( a->size() );
     }
     
     std::fill( s.begin(), s.end(), 0 );
@@ -1438,10 +1438,10 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     int max_a = 0;
     int max_b = 0;
     
-    std::vector<bool> sl_stay( a.size() * b.size() );
-    std::vector<bool> su_stay( a.size() * b.size() );
-    std::vector<bool> s_l( a.size() * b.size() );
-    std::vector<bool> s_u( a.size() * b.size() );
+    std::vector<bool> sl_stay( a->size() * b->size() );
+    std::vector<bool> su_stay( a->size() * b->size() );
+    std::vector<bool> s_l( a->size() * b->size() );
+    std::vector<bool> s_u( a->size() * b->size() );
     
     struct index_calc {
         const size_t as, bs;
@@ -1457,11 +1457,11 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         
     };
     
-    index_calc ic( a.size(), b.size() );
+    index_calc ic( a->size(), b->size() );
     
     
-    for( size_t ib = 0; ib < b.size(); ib++ ) {
-        char bc = b[ib];
+    for( size_t ib = 0; ib < b->size(); ib++ ) {
+        char bc = (*b)[ib];
         
         score_t last_sl = SMALL;
         score_t last_sc = 0.0;
@@ -1471,12 +1471,12 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         
         score_t * __restrict s_iter = s.base();
         score_t * __restrict si_iter = si.base();
-        score_t * __restrict s_end = s_iter + a.size();
-        bool lastrow = ib == (b.size() - 1);
+        score_t * __restrict s_end = s_iter + a->size();
+        bool lastrow = ib == (b->size() - 1);
         
         //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
-        for( size_t ia = 0; ia < a.size(); ++ia, ++s_iter, ++si_iter ) {  
-            score_t match = sm.get_score( a[ia], bc );
+        for( size_t ia = 0; ia < a->size(); ++ia, ++s_iter, ++si_iter ) {  
+            score_t match = sm.get_score( (*a)[ia], bc );
             
 //             getchar();
             score_t sm = last_sdiag + match;
@@ -1549,8 +1549,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     std::vector<uint8_t> a_tb;
     std::vector<uint8_t> b_tb;
     
-    int ia = a.size() - 1;
-    int ib = b.size() - 1;
+    int ia = a->size() - 1;
+    int ib = b->size() - 1;
     
     
     
@@ -1560,14 +1560,14 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     bool in_u = false;
     
     while( ia > max_a ) {
-        a_tb.push_back(a[ia]);
+        a_tb.push_back((*a)[ia]);
         b_tb.push_back('-');
         --ia;
     }
     
     while( ib > max_b ) {
         a_tb.push_back('-');
-        b_tb.push_back(b[ib]);
+        b_tb.push_back((*b)[ib]);
         --ib;
     }
     
@@ -1579,8 +1579,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
             in_u = s_u[c];
             
             if( !in_l && !in_u ) {
-                a_tb.push_back(a[ia]);
-                b_tb.push_back(b[ib]);
+                a_tb.push_back((*a)[ia]);
+                b_tb.push_back((*b)[ib]);
                 --ia;
                 --ib;
             }
@@ -1589,12 +1589,12 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         
         if( in_u ) {
             a_tb.push_back('-');
-            b_tb.push_back(b[ib]);
+            b_tb.push_back((*b)[ib]);
             --ib;
             
             in_u = su_stay[c];
         } else if( in_l ) {
-            a_tb.push_back(a[ia]);
+            a_tb.push_back((*a)[ia]);
             b_tb.push_back('-');
             --ia;
             
@@ -1605,27 +1605,35 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     }
     
     while( ia >= 0 ) {
-        a_tb.push_back(a[ia]);
+        a_tb.push_back((*a)[ia]);
         b_tb.push_back('-');
         --ia;
     }
     
     while( ib >= 0 ) {
         a_tb.push_back('-');
-        b_tb.push_back(b[ib]);
+        b_tb.push_back((*b)[ib]);
         --ib;
     }
     
-    a.resize( a_tb.size() );
-    std::copy( a_tb.rbegin(), a_tb.rend(), a.begin() );
+//     a.resize( a_tb.size() );
+//     std::copy( a_tb.rbegin(), a_tb.rend(), a.begin() );
+//     
+//     b.resize( b_tb.size() );
+//     std::copy( b_tb.rbegin(), b_tb.rend(), b.begin() );
     
-    b.resize( b_tb.size() );
-    std::copy( b_tb.rbegin(), b_tb.rend(), b.begin() );
+    a->assign( a_tb.rbegin(), a_tb.rend() );
+    b->assign( b_tb.rbegin(), b_tb.rend() );
     
 //     std::copy( a.begin(), a.end(), std::ostream_iterator<char>(std::cout) );
 //     std::cout << "\n";
 //     std::copy( b.begin(), b.end(), std::ostream_iterator<char>(std::cout) );
 //     std::cout << "\n";
+}
+
+// compatibility wrapper for old code that uses references as output parameters
+inline void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend ) {
+    align_freeshift( sm, &a, &b, gap_open, gap_extend );
 }
 
 #endif

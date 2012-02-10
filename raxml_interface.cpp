@@ -700,12 +700,15 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 
 
 
-		pvecs->push_back(ublas::matrix<double>(width, 4));
-		ublas::matrix<double> &mat = pvecs->back();
-
+		//pvecs->push_back(ublas::matrix<double>(width, 4));
+		//ublas::matrix<double> &mat = pvecs->back();
+        ublas::matrix<double> mat( width, 4 );
+        
 		// the underlying unbounded_array seems to be guaranteed to have a sensible memory layout. read straight into it.
 		// TODO: get fancy and directly back the boost::matrix with the mmaped binary file ;-)
 		pis.read((char*)mat.data().begin(), width * 4 * 8 );
+        
+        pvecs->emplace_back( ublas::trans(mat) );
 	}
 
 	size_t s = -1;

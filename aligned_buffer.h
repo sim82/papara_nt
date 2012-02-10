@@ -218,6 +218,7 @@ public:
     
     
     void construct( pointer p, const_reference t) { new ((void*) p) T(t); }
+    void construct( pointer p ) { new ((void*) p) T(); }
     
     
     void destroy( pointer p ){ ((T*)p)->~T(); }
