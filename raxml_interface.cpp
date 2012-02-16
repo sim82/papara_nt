@@ -606,6 +606,45 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 
 }
 
+std::vector<ublas::matrix<double> > read_binary_anc_probs( std::istream &pis ) {
+    std::vector<ublas::matrix<double> > pvecs;
+    
+    
+
+    while( !pis.eof() ) {
+        int32_t counter;
+        pis.read((char*)&counter, 4 );
+
+
+
+        if( counter == -1 ) {
+            break;
+        }
+
+        assert( size_t(counter) == pvecs.size() );
+
+        int32_t width;
+        pis.read((char*)&width, 4 );
+
+//      std::cout << "width: " << width << "\n";
+        assert( width > 0 );
+
+
+
+        //pvecs->push_back(ublas::matrix<double>(width, 4));
+        //ublas::matrix<double> &mat = pvecs->back();
+        ublas::matrix<double> mat( width, 4 );
+        
+        // the underlying unbounded_array seems to be guaranteed to have a sensible memory layout. read straight into it.
+        // TODO: get fancy and directly back the boost::matrix with the mmaped binary file ;-)
+        pis.read((char*)mat.data().begin(), width * 4 * 8 );
+        
+        pvecs.emplace_back( ublas::trans(mat) );
+    }    
+    
+    return pvecs;
+}
+
 lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<ublas::matrix<double> > *pvecs ) {
 	ivy_mike::perf_timer perf_timer(!true);
 
@@ -672,44 +711,11 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	// this is a huge improvement over the text file stuff (below) and now reads at 1200Mb/s
 	// from warm disk-cache instead of 20 Mb/s...
 
-	pvecs->clear();
+	//pvecs->clear();
+    *pvecs = read_binary_anc_probs( pis );
 	ivy_mike::timer t1;
 
-	std::vector<double> tmp;
-	std::string line;
-	std::vector<double> token;
-	std::stringstream strstr;
 
-	while( !pis.eof() ) {
-		int32_t counter;
-		pis.read((char*)&counter, 4 );
-
-
-
-		if( counter == -1 ) {
-			break;
-		}
-
-		assert( size_t(counter) == pvecs->size() );
-
-		int32_t width;
-		pis.read((char*)&width, 4 );
-
-//		std::cout << "width: " << width << "\n";
-		assert( width > 0 );
-
-
-
-		//pvecs->push_back(ublas::matrix<double>(width, 4));
-		//ublas::matrix<double> &mat = pvecs->back();
-        ublas::matrix<double> mat( width, 4 );
-        
-		// the underlying unbounded_array seems to be guaranteed to have a sensible memory layout. read straight into it.
-		// TODO: get fancy and directly back the boost::matrix with the mmaped binary file ;-)
-		pis.read((char*)mat.data().begin(), width * 4 * 8 );
-        
-        pvecs->emplace_back( ublas::trans(mat) );
-	}
 
 	size_t s = -1;
 	for( size_t i = 0; i < pvecs->size(); ++i ) {
@@ -882,3 +888,4 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 
 }
 #endif
+

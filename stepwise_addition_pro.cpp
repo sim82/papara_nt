@@ -139,7 +139,15 @@ public:
         {
             auto &d = ref_gap_prob_log_.data();
             std::transform( d.begin(), d.end(), d.begin(), log );
+            
+            
         }
+        
+//         for( auto it1 = ref_gap_prob_.begin1(); it1 != ref_gap_prob_.end1(); ++it1 ) {
+//             std::copy( it1.begin(), it1.end(), std::ostream_iterator<float>( std::cout, " " ));
+//             std::cout << "\n";
+//             
+//         }
         
         precalc_log_odds();
     }
@@ -232,7 +240,9 @@ public:
 
         assert( m_.size() == ref_len_ + 1 );
 
-
+        best_score_ = neg_inf_;
+        best_i_ = -1;
+        best_j_ = -1;
 
 
         for( size_t i = 1; i < qlen + 1; ++i ) {
@@ -271,7 +281,7 @@ public:
             
             const losvec::iterator m_end = m_.end();
 
-            for( ; m0 != m_end; m1 = m0++, d1 = d0++, i1 = i0++, ++bsl, ++gap_prob_log, ++traceback_iter ) {
+            for( size_t j = 1; m0 != m_end; m1 = m0++, d1 = d0++, i1 = i0++, ++bsl, ++gap_prob_log, ++traceback_iter, ++j ) {
                 //ublas::matrix_row<dmat> a_state(ref_state_prob_, j-1 );
                 //ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
 
@@ -302,7 +312,7 @@ public:
 //                 std::cout << "\t";
                 auto m_log_max = max3<float>(
                            diag_m + p_ngap_log,
-                           diag_d + p_gap_log,
+                           diag_d,
                            diag_i,
                            tb_m_to_m,
                            tb_m_to_d,
@@ -362,11 +372,21 @@ public:
                 );
 #endif
                 diag_d = *d0;
-                *d0 = d_log_max.first;
+                *d0 = d_log_max.first + p_gap_log;
                 *traceback_iter |= d_log_max.second;
                
 
-                end_state_ = max3( *m0, *i0, *d0, tb_m_to_m, tb_m_to_i, tb_m_to_d );
+                
+                if( m0 == m_end - 1 || i == qlen ) {
+                    if( *m0 > best_score_ ) {
+                        best_score_ = *m0;
+                        best_i_ = i;
+                        best_j_ = j;
+                        best_state_ = m_log_max.second;
+                    }
+                    
+                }
+                //end_state_ = max3( *m0, *i0, *d0, tb_m_to_m, tb_m_to_i, tb_m_to_d );
                 //std::cout << end_state_.first << " ";
 //                 std::cout << match_log_odds << " ";
                 //lof_t old_m = m_[j];
@@ -376,7 +396,9 @@ public:
           
         }
 
-        return m_.back();
+        //return m_.back();
+        
+        return best_score_;
     }
     
     
@@ -386,8 +408,10 @@ public:
         int ia = traceback_.size1() - 1;
         int ib = traceback_.size2() - 1;
         
-        int max_a = ia;
-        int max_b = ib;
+        int max_a = best_i_;
+        int max_b = best_j_;
+        
+        assert( ia == max_a || ib == max_b );
         
         
 //         for( auto it1 = traceback_.begin1(); it1 != traceback_.end1(); ++it1 ) {
@@ -404,18 +428,18 @@ public:
         std::vector<uint8_t> tb_out;
         tb_out.reserve( ia + ib );
         
-//         while( ia > max_a ) {
-//             tb_out.push_back(2);
-//             --ia;
-//         }
-//         
-//         while( ib > max_b ) {
-//             tb_out.push_back(1);
-//             --ib;
-//         }
+        while( ia > max_a ) {
+            tb_out.push_back(2);
+            --ia;
+        }
+        
+        while( ib > max_b ) {
+            tb_out.push_back(1);
+            --ib;
+        }
         
         {
-            char tb_end = end_state_.second;
+            char tb_end = best_state_;
         
             in_u = (tb_end & tb_m_to_i) != 0;
             in_l = (tb_end & tb_m_to_d) != 0;    
@@ -508,11 +532,12 @@ private:
     const lof_t delta_;// = log(0.1);
     const lof_t epsilon_;// = log(0.5);
 
-    size_t max_col_;
-    size_t max_row_;
-    double max_score_;
-
-
+//     size_t max_col_;
+//     size_t max_row_;
+    double best_score_;
+    size_t best_i_;
+    size_t best_j_;
+    short best_state_;
 
 
 
@@ -1245,7 +1270,14 @@ public:
                 my_adata *c2 = it->child2->m_data->get_as<my_adata>();
                  std::cout << "newview: " << *it << " " << p << " " << it->parent << "\n";
                 //         std::cout << "tip case: " << (*it) << "\n";
-                pvec_pgap::newview(p->pvec(), c1->pvec(), c2->pvec(), it->child1->backLen, it->child2->backLen, it->tc);
+                 
+                auto z1 = it->child1->backLen;
+                auto z2 = it->child2->backLen;
+                 
+                z1 = 0.0001;
+                z2 = 0.0001;
+                
+                pvec_pgap::newview(p->pvec(), c1->pvec(), c2->pvec(), z1, z2, it->tc);
                 
             }
             
@@ -1363,7 +1395,8 @@ public:
             
         }
         
-        
+
+        pool_->clear();
         pool_->mark(tree_);
         pool_->sweep();
         
