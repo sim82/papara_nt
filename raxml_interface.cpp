@@ -526,7 +526,7 @@ std::string digest_files( const std::vector<std::string> &files ) {
 namespace ublas = boost::numeric::ublas;
 
 void launch_or_not( const std::string &raxml, Poco::Process::Args args, const std::string &digest, std::vector<std::string> *out_files ) {
-	std::string temp_name = "/tmp/";
+	std::string temp_name = "/space/tmp/";
 	temp_name += "propara_";
 	temp_name += digest;
 

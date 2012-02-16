@@ -19,6 +19,8 @@
 #include <iostream>
 #include <fstream>
 
+#define BOOST_UBLAS_NDEBUG
+
 #include <boost/thread.hpp>
 #include <boost/bind.hpp>
 #include <boost/dynamic_bitset.hpp>
@@ -53,8 +55,8 @@ typedef std::vector<unsigned char> sequence;
 
 namespace {
  
-    double g_delta = 1.0;
-    double g_epsilon = 1.0;
+//     double g_delta = log(0.1);
+//     double g_epsilon = log(0.5);
 }
 
 class log_odds {
@@ -71,6 +73,43 @@ private:
 };
 
 
+static std::vector<uint8_t> gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<uint8_t> &raw, uint8_t gap_char, bool upper ) {
+
+    std::vector<uint8_t> out;
+    
+    std::vector<uint8_t>::const_reverse_iterator rit = raw.rbegin();
+
+
+    // 'gap indicator': if upper is set, insert gap into reference (=if gaps[i] == 2).
+    const uint8_t gap_ind = upper ? 2 : 1;
+
+
+
+    for ( std::vector<uint8_t>::const_iterator git = gaps.begin(); git != gaps.end(); ++git ) {
+
+
+
+        if ( *git == gap_ind ) {
+            out.push_back(gap_char);
+        } else {
+            
+            if( rit != raw.rend() ) {
+                out.push_back(*rit);
+                ++rit;
+            } else {
+                out.push_back( 'X' );
+            }
+        }
+    }
+    if( rit != raw.rend() ) {
+
+        std::cerr << "too short tb: " << raw.rend() - rit << " upper: " << upper << "\n";
+    }
+    std::reverse(out.begin(), out.end());
+    
+    return out;
+}
+
 class log_odds_viterbi {
     typedef ublas::matrix<double> dmat;
     typedef std::vector<double> dsvec;
@@ -85,16 +124,23 @@ class log_odds_viterbi {
 
 public:
     log_odds_viterbi( const dmat &state, const dmat &gap, boost::array<double,4> state_freq )
-    : ref_state_prob_(state), ref_gap_prob_(gap), ref_len_(state.size2()),
+    : 
+      ref_state_prob_(state), ref_gap_prob_(gap), ref_len_(state.size2()),
       state_freq_(state_freq),
       neg_inf_( -std::numeric_limits<lof_t>::infinity() ),
       m_(state.size2() + 1),
       d_(state.size2() + 1),
       i_(state.size2() + 1),
       max_matrix_height_(0),
-      delta_(g_delta),
-      epsilon_(g_epsilon)
+      delta_(log(0.1)),
+      epsilon_(log(0.5))
     {
+        ref_gap_prob_log_ = ref_gap_prob_;
+        {
+            auto &d = ref_gap_prob_log_.data();
+            std::transform( d.begin(), d.end(), d.begin(), log );
+        }
+        
         precalc_log_odds();
     }
 
@@ -106,11 +152,14 @@ public:
         // init first rows
         std::fill( m_.begin(), m_.end(), 0.0 );
         std::fill( d_.begin(), d_.end(), 0.0 );
-        std::fill( i_.begin(), i_.end(), 0.0 /*neg_inf_*/ );
+        std::fill( i_.begin(), i_.end(), neg_inf_ );
 
+        std::fill( traceback_.begin1().begin(), traceback_.begin1().end(), tb_d_to_d | tb_m_to_d );
+        traceback_(0, 0) = tb_m_to_m;
+        
         // init first columns
         m_[0] = 0.0;
-        d_[0] = 0.0; /*neg_inf_*/
+        d_[0] = neg_inf_;
         i_[0] = 0.0;
 
 
@@ -142,15 +191,40 @@ public:
 //         }
     }
 
-    template<typename T>
-    static inline T max3( const T &a, const T &b, const T &c ) {
-        return std::max( a, std::max( b, c ));
+    template<typename T, typename T2>
+    static inline std::pair<T,T2> max2( const T &a, const T &b, const T2 &a2, const T2 &b2 ) {
+        if( a > b ) {
+            return std::make_pair( a, a2 );
+        } else {
+            return std::make_pair( b, b2 );
+        }
     }
-
+    
+    
+    
+    template<typename T, typename T2>
+    static inline std::pair<T,T2> max3( const T &a, const T &b, const T &c, const T2 &a2, const T2 &b2, const T2 &c2, bool dump = false ) {
+        //return std::max( a, std::max( b, c ));
+        if( dump ) {
+            std::cout << "(" << a << " " << b << " " << c << ")";
+        }
+        
+        if( a > b ) {
+            return max2( a, c, a2, c2 );
+        } else {
+            return max2( b, c, b2, c2 );
+        }
+    }
+    
+            
+    
+    
 
     double align( const std::vector<uint8_t> &qs ) {
         const size_t qlen = qs.size();
 
+        traceback_.resize(qlen + 1, m_.size(), false);
+        
         setup( qlen );
 
         //dmat ref_state_trans = trans(ref_state_prob_);
@@ -184,14 +258,20 @@ public:
             losvec::iterator d1 = d_.begin();
             losvec::iterator i1 = i_.begin();
             ublas::matrix_row<lomat>::const_iterator bsl = b_state_lo.begin();
+            
+            ublas::matrix_row<ublas::matrix<short>> traceback_row( traceback_, i );
+            auto traceback_iter = traceback_row.begin();
+            *traceback_iter = tb_i_to_i | tb_m_to_i;
+            ++traceback_iter;
+            
 //             losvec::iterator rg = ref_gap_odds_.begin();
 //             losvec::iterator rng = ref_ngap_odds_.begin();
 
-            auto gap_prob = ref_gap_prob_.begin2();
+            auto gap_prob_log = ref_gap_prob_log_.begin2();
             
             const losvec::iterator m_end = m_.end();
 
-            for( ; m0 != m_end; m1 = m0++, d1 = d0++, i1 = i0++, ++bsl, ++gap_prob ) {
+            for( ; m0 != m_end; m1 = m0++, d1 = d0++, i1 = i0++, ++bsl, ++gap_prob_log, ++traceback_iter ) {
                 //ublas::matrix_row<dmat> a_state(ref_state_prob_, j-1 );
                 //ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
 
@@ -207,23 +287,34 @@ public:
 //                 const lof_t ngap_odds = *rng;
 
 
-                lof_t p_ngap = *gap_prob;
-                lof_t p_gap = *(gap_prob.begin() + 1);
+                lof_t p_ngap_log = *gap_prob_log;
+                lof_t p_gap_log = *(gap_prob_log.begin() + 1);
+                
+//                 p_gap = std::max( p_gap, 0.01f );
                 
 //                 lof_t m_log_sum = log(
 //                            exp(diag_m) * p_ngap
 //                          + exp(diag_d) * p_gap
 //                          + exp(diag_i)
 //                 );
-                lof_t m_log_max = max3<float>(
-                           diag_m + log(p_ngap),
-                           diag_d + log(p_gap),
-                           diag_i 
+                
+             //   std::cout << "logp: " << log(p_gap) << " ";
+//                 std::cout << "\t";
+                auto m_log_max = max3<float>(
+                           diag_m + p_ngap_log,
+                           diag_d + p_gap_log,
+                           diag_i,
+                           tb_m_to_m,
+                           tb_m_to_d,
+                           tb_m_to_i,
+                           !true
                 );
                 
                 diag_m = *m0;
-                *m0 = m_log_max + match_log_odds;
-
+                *m0 = m_log_max.first + match_log_odds;
+                *traceback_iter = m_log_max.second; // do not or, because it's the first value tritten to the tb matrix
+//                 std::cout << *m0 << " ";
+                
 #if 0
                 std::cout << i << " " << j << " " << m_(i,j) << " : " << m_(i-1, j-1) + ngap_log_odds
                         << " " << d_(i-1, j-1) + gap_log_odds << " " << i_(i-1, j-1) + gap_log_odds << " " << match_log_odds << " " << gap_log_odds << " " << ngap_log_odds << " max: " << m_max << "\n";
@@ -238,20 +329,31 @@ public:
 //                           exp(diag_m) /** delta_*/
 //                         + exp(diag_i) /** epsilon_*/
 //                 );
-                lof_t i_log_max = std::max(
-                          diag_m, /** delta_*/
-                          diag_i /** epsilon_*/
+                auto i_log_max = max3<float>(
+                          diag_m + delta_,
+                          diag_i + epsilon_,
+                          diag_d + delta_,
+                          tb_i_to_m,
+                          tb_i_to_i,
+                          tb_i_to_d
                 );
-                *i0 = i_log_max;
-
+                
+                
+                *i0 = i_log_max.first;
+                *traceback_iter |= i_log_max.second;
+                
 #if 1
 //                 lof_t d_log_sum = log(
 //                           exp(*m1) /** delta_*/
 //                         + exp(*d1) /** epsilon_*/
 //                 );
-                lof_t d_log_max = std::max(
-                          *m1, /** delta_*/
-                          *d1 /** epsilon_*/
+                auto d_log_max = max3<float>(
+                          *m1 + delta_,
+                          *d1 + epsilon_,
+                          *i1 + delta_,
+                          tb_d_to_m,
+                          tb_d_to_d,
+                          tb_d_to_i
                 );
 #else
                 lof_t d_log_sum = *m1 + math_approx::log(
@@ -260,20 +362,132 @@ public:
                 );
 #endif
                 diag_d = *d0;
-                *d0 = d_log_max;
+                *d0 = d_log_max.first;
+                *traceback_iter |= d_log_max.second;
+               
 
-
+                end_state_ = max3( *m0, *i0, *d0, tb_m_to_m, tb_m_to_i, tb_m_to_d );
+                //std::cout << end_state_.first << " ";
+//                 std::cout << match_log_odds << " ";
                 //lof_t old_m = m_[j];
 
             }
+//             std::cout << "\n";
+          
         }
 
         return m_.back();
     }
-
+    
+    
+    std::vector<uint8_t> traceback() {
+        std::cout << "end state: " << std::hex << int(end_state_.second) << std::dec << "\n";
+        
+        int ia = traceback_.size1() - 1;
+        int ib = traceback_.size2() - 1;
+        
+        int max_a = ia;
+        int max_b = ib;
+        
+        
+//         for( auto it1 = traceback_.begin1(); it1 != traceback_.end1(); ++it1 ) {
+//             std::cout << std::hex;
+//             std::copy( it1.begin(), it1.end(), std::ostream_iterator<int>( std::cout, " " ));
+//             std::cout << std::dec << "\n";
+//             
+//         }
+        
+        
+        bool in_l = false;
+        bool in_u = false;
+     
+        std::vector<uint8_t> tb_out;
+        tb_out.reserve( ia + ib );
+        
+//         while( ia > max_a ) {
+//             tb_out.push_back(2);
+//             --ia;
+//         }
+//         
+//         while( ib > max_b ) {
+//             tb_out.push_back(1);
+//             --ib;
+//         }
+        
+        {
+            char tb_end = end_state_.second;
+        
+            in_u = (tb_end & tb_m_to_i) != 0;
+            in_l = (tb_end & tb_m_to_d) != 0;    
+            
+            assert( !in_u || !in_l );
+        }
+        
+        while( ia > 0 && ib > 0 ) {
+            auto tb = traceback_( ia, ib );
+//             std::cout << std::hex;
+//             std::cout << "tb: " << int(tb) << "\n";
+//             std::cout << std::dec;
+            if( !in_l && !in_u ) {
+                in_l = (tb & tb_m_to_d) != 0;
+                in_u = (tb & tb_m_to_i) != 0;
+                
+//                 if( !in_l && !in_u ) {
+//                     
+//                     
+//                 }
+                tb_out.push_back(0);
+                --ia;
+                --ib;
+            } else if( in_u ) {
+                tb_out.push_back(2);
+                --ia;
+                
+                in_u = (tb & tb_i_to_i) != 0;
+                in_l = (tb & tb_i_to_d) != 0;
+            } else if( in_l ) {
+                tb_out.push_back(1);
+                --ib;
+                
+                in_l = (tb & tb_d_to_d) != 0;
+                in_u = (tb & tb_d_to_i) != 0;
+            }
+            
+            
+        }
+        
+        while( ia > 0 ) {
+            tb_out.push_back(2);
+            --ia;
+        }
+        
+        while( ib > 0 ) {
+            tb_out.push_back(1);
+            --ib;
+        }
+        
+        
+        //return std::vector<char>( tb_out.rbegin(), tb_out.rend() );
+        
+        return tb_out;
+    }
+private:
+    ublas::matrix<short> traceback_;
+    static const short tb_i_to_i = 0x1;
+    static const short tb_i_to_m = 0x2;
+    static const short tb_d_to_d = 0x4;
+    static const short tb_d_to_m = 0x8;
+    static const short tb_m_to_m = 0x10;
+    static const short tb_m_to_i = 0x20;
+    static const short tb_m_to_d = 0x40;
+    static const short tb_i_to_d = 0x80;
+    static const short tb_d_to_i = 0x100;
+    
     dmat ref_state_prob_;
     dmat ref_gap_prob_;
-
+    dmat ref_gap_prob_log_;
+    
+    
     lomat ref_state_lo_;
 //     losvec ref_gap_odds_;
 //     losvec ref_ngap_odds_;
@@ -287,6 +501,8 @@ public:
     losvec d_;
     losvec i_;
 
+    std::pair<lof_t, char> end_state_;
+    
     size_t max_matrix_height_;
 
     const lof_t delta_;// = log(0.1);
@@ -620,7 +836,7 @@ public:
 
 //             std::copy( mapped_seqs_.back().begin(), mapped_seqs_.back().end(), std::ostream_iterator<int>( std::cout, " " ));
 
-            // the raw sequences stored in 'seqs_' filtered for invalid states (e.g., gaps and characters not
+            // the raw sequences stored in 'seqs_' are filtered for invalid states (e.g., gaps and characters not
             // present in the scoring matrix already. So the members of 'mapped_seqs_' must have the same length.
 
             assert( mapped_seqs_.back().size() == it->size() );
@@ -892,6 +1108,22 @@ public:
         std::cout << "gap rate: " << rgap << "\n";
         return rgap;
     }
+    
+    void align_ref_seqs( std::ostream &os, const std::vector<uint8_t> &tb ) {
+        auto idx = used_seqs_.find_first();
+        
+        while( idx != used_seqs_.npos ) {
+            const sequence &seq = aligned_seqs_.at(idx);
+            auto ali = gapstream_to_alignment( tb, seq, '-', true );
+            
+            std::copy( ali.begin(), ali.end(), std::ostream_iterator<char>(std::cout) );
+            std::cout << "\n";
+            
+            aligned_seqs_.at(idx) = std::move(ali);
+            
+            idx = used_seqs_.find_next(idx);
+        }
+    }
     void init_tree_sequences() {
         // initialize the tip nodes with the aligned sequence data
         
@@ -926,14 +1158,23 @@ public:
         std::vector<ublas::matrix<double> > pvecs;
         write_ali_and_tree_for_raxml();
 
-        lnode *n = generate_marginal_ancestral_state_pvecs( *pool_, "sa_tree", "sa_ali", &pvecs );
-
-        tree_ = n;
+        
+        // generate anc state pvecs using external raxml, and replace the current 'main-tree' with the one 
+        // from raxml.
+        tree_ = generate_marginal_ancestral_state_pvecs( *pool_, "sa_tree", "sa_ali", &pvecs );
         init_tree_sequences();
         
         double gap_freq = calc_gap_freq();
         
-        auto cand_id = order_->find_next_candidate();
+        size_t cand_id = order_->find_next_candidate();
+        std::cout << "cand_id: " << cand_id << "\n";
+        
+        if( cand_id == size_t(-1) ) { 
+            return false;
+            
+        }
+
+        
         const auto &cand_seq = seqs_.seq_at(cand_id);
         const auto &cand_mapped_seq = seqs_.mapped_seq_at(cand_id);
         
@@ -944,7 +1185,7 @@ public:
         
         std::cout << "pvecs: " << pvecs.size() << "\n";
 
-        std::cout << n->backLabel << " " << n->next->backLabel << " " << n->next->next->backLabel << "\n";
+//         std::cout << n->backLabel << " " << n->next->backLabel << " " << n->next->next->backLabel << "\n";
 
 
 //        std::deque<rooted_bifurcation<lnode> > to;
@@ -969,7 +1210,7 @@ public:
         
         
         std::vector<lnode *> labelled_nodes;
-        iterate_lnode(n, back_insert_ifer( labelled_nodes, has_node_label ));
+        iterate_lnode(tree_, back_insert_ifer( labelled_nodes, has_node_label ));
 
         
         
@@ -982,8 +1223,16 @@ public:
         
         
         bool incremental = false;
+        
+        double best_score = -std::numeric_limits<double>::infinity();
+        std::vector<uint8_t> best_tb;
+        lnode *best_np = nullptr;
+        
+        
         for( lnode *np : labelled_nodes ) {
 
+            // splice virtual root into current insertion edge.
+            // NOTE: splice_with_rollback will automatically undo the insertion on scope-exit
             ivy_mike::tree_parser_ms::splice_with_rollback swr( np, virtual_root );
             
             
@@ -1037,6 +1286,25 @@ public:
             std::copy( cand_seq.begin(), cand_seq.end(), std::ostream_iterator<char>(std::cout));
             std::cout << "\n";
             std::cout << "score: " << score << "\n";
+            
+            
+            
+//             auto tb = lov.traceback();
+//             auto qs_ali = gapstream_to_alignment(tb, cand_seq, '-', false );
+//             std::copy( tb.begin(), tb.end(), std::ostream_iterator<int>( std::cout, " " ) );
+//             std::cout << "\n";
+//            
+//             dump_ref_seqs( std::cout, tb );
+//             
+//             std::copy( qs_ali.begin(), qs_ali.end(), std::ostream_iterator<char>( std::cout ) );
+//             std::cout << "\n";
+            
+            if( score > best_score ) {
+                best_score = score;
+                best_tb = lov.traceback();
+                best_np = np;
+            }
+            
 //             std::cout << np->m_data->nodeLabel << " " << np->m_data->isTip << "\n";
 //             
 //             
@@ -1044,29 +1312,58 @@ public:
 //             std::cout << "\n";
         }
         
+        {
 
-//         lnode *tn = labelled_nodes[1];
-//         std::cout << tn->m_data->nodeLabel << "\n";
-// 
-//         if( tn->m_data->isTip ) {
-//             std::cout << "is tip\n";
-//             assert( tn->back != 0 );
-//             
-//             tn = tn->back;
-//         }
-//         
-//         std::deque<rooted_bifurcation<lnode> > to;
-//         rooted_traveral_order_rec( tn, to, false );
-// 
-//         for( auto it = to.begin(); it != to.end(); ++it ) {
-//             std::cout << *it << "\n";
-//         }
-
-
-
-//         size_t next_candidate = order_->find_next_candidate();
-
-
+            assert( best_np != nullptr );
+            
+            ivy_mike::tree_parser_ms::splice_with_rollback swr( best_np, virtual_root );
+            swr.commit();
+            virtual_root->back = lnode::create(*pool_);
+            virtual_root->back->m_data->setTipName( seqs_.name_at(cand_id));
+            virtual_root->back->m_data->isTip = true;
+            
+            auto qs_ali = gapstream_to_alignment(best_tb, cand_seq, '-', false );
+//             std::copy( tb.begin(), tb.end(), std::ostream_iterator<int>( std::cout, " " ) );
+//             std::cout << "\n";
+           
+            align_ref_seqs( std::cout, best_tb );
+            std::copy( qs_ali.begin(), qs_ali.end(), std::ostream_iterator<char>( std::cout ) );
+            std::cout << "\n";
+            
+            aligned_seqs_.at(cand_id) = std::move(qs_ali);
+            
+            
+            
+        }
+        
+        // officially add cand_id to the set of completed sequences.
+        used_seqs_[cand_id] = true;
+        
+        // write aligned seqeuences
+        {
+            if( !inc_log_.good() ) {
+                inc_log_.open("inc_log" );
+                
+            }
+            
+            inc_log_ << cand_id << "\n\n";
+            size_t idx = used_seqs_.find_first();
+            
+            while( idx != used_seqs_.npos ) {
+                
+                const sequence &seq = aligned_seqs_.at(idx);
+                
+            
+                std::copy( seq.begin(), seq.end(), std::ostream_iterator<char>(inc_log_) );                
+                inc_log_ << "\n";
+                
+                idx = used_seqs_.find_next(idx);
+            }
+            
+            
+        }
+        
+        
         pool_->mark(tree_);
         pool_->sweep();
         
@@ -1111,7 +1408,7 @@ private:
 
     std::vector<sequence> aligned_seqs_;
 
-    
+    std::ofstream inc_log_;
     
 };
 
@@ -1293,8 +1590,8 @@ int main( int argc, char *argv[] ) {
 
 
     while(true) {
-        bool done = builder.insertion_step();
-        if( done ) {
+        bool valid = builder.insertion_step();
+        if( !valid ) {
             break;
         }
     }
