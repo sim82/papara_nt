@@ -12,6 +12,7 @@
  *  for more details.
  */
 
+#include "pch.h"
 
 #define BOOST_UBLAS_NDEBUG 1
 #include <stdexcept>

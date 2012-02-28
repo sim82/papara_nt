@@ -14,7 +14,7 @@ LINK_DIRECTORIES( ${LINK_DIRECTORIES} E:\\src\\boost_1_46_1\\boost_1_46_1\\stage
 set( BOOST_LIBS )
 set( SYSDEP_LIBS )
 ELSE()
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -march=native -std=c++0x")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Winvalid-pch -Wall -Wwrite-strings -march=native -std=c++0x")
 set( BOOST_LIBS boost_thread boost_program_options)
 set(SYSDEP_LIBS pthread)
 #LINK_DIRECTORIES( ${LINK_DIRECTORIES} /usr/lib64/atlas-sse2 )

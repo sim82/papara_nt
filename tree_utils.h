@@ -23,7 +23,6 @@ enum tip_case {
 template<class lnode>
 struct rooted_bifurcation {
     
-    
     lnode * parent;
     lnode * child1;
     lnode * child2;

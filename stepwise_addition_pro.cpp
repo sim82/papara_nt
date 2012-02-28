@@ -11,6 +11,9 @@
  *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
  *  for more details.
  */
+
+#include "pch.h"
+
 #include <cctype>
 
 #include <algorithm>
@@ -37,7 +40,6 @@
 #include "ivymike/tree_parser.h"
 #include "ivymike/tdmatrix.h"
 #include "ivymike/algorithm.h"
-
 
 namespace tree_parser = ivy_mike::tree_parser_ms;
 
@@ -132,8 +134,8 @@ public:
       d_(state.size2() + 1),
       i_(state.size2() + 1),
       max_matrix_height_(0),
-      delta_(log(0.1)),
-      epsilon_(log(0.5))
+      delta_(log(0.01)),
+      epsilon_(log(0.1))
     {
         ref_gap_prob_log_ = ref_gap_prob_;
         {
@@ -159,7 +161,16 @@ public:
 
         // init first rows
         std::fill( m_.begin(), m_.end(), 0.0 );
-        std::fill( d_.begin(), d_.end(), 0.0 );
+        
+        
+        //std::fill( d_.begin(), d_.end(), 0.0 );
+        {
+            int i = 0; // TODO: still wearing my STL hat. Not really sure if std::generate + lambda is better than a for loop...
+            std::generate( d_.begin(), d_.end(), [&]() { return delta_ + (i++) * epsilon_; });
+        
+            m_.assign( d_.begin(), d_.end() );
+            
+        }
         std::fill( i_.begin(), i_.end(), neg_inf_ );
 
         std::fill( traceback_.begin1().begin(), traceback_.begin1().end(), tb_d_to_d | tb_m_to_d );
@@ -168,7 +179,7 @@ public:
         // init first columns
         m_[0] = 0.0;
         d_[0] = neg_inf_;
-        i_[0] = 0.0;
+        i_[0] = delta_;
 
 
 
@@ -243,7 +254,7 @@ public:
         best_score_ = neg_inf_;
         best_i_ = -1;
         best_j_ = -1;
-
+        short last_state = 0;
 
         for( size_t i = 1; i < qlen + 1; ++i ) {
             const int b = qs[i-1];
@@ -256,6 +267,9 @@ public:
             //          const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
             //          const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
 
+            i_[0] = delta_ + (i-1) * epsilon_;
+            m_[0] = i_[0];
+            
             lof_t diag_m = m_[0];
             lof_t diag_d = d_[0];
             lof_t diag_i = i_[0];
@@ -375,17 +389,17 @@ public:
                 *d0 = d_log_max.first + p_gap_log;
                 *traceback_iter |= d_log_max.second;
                
-
+                last_state = m_log_max.second;
                 
-                if( m0 == m_end - 1 || i == qlen ) {
-                    if( *m0 > best_score_ ) {
-                        best_score_ = *m0;
-                        best_i_ = i;
-                        best_j_ = j;
-                        best_state_ = m_log_max.second;
-                    }
-                    
-                }
+//                 if( m0 == m_end - 1 || i == qlen ) {
+//                     if( *m0 > best_score_ ) {
+//                         best_score_ = *m0;
+//                         best_i_ = i;
+//                         best_j_ = j;
+//                         best_state_ = m_log_max.second;
+//                     }
+//                     
+//                 }
                 //end_state_ = max3( *m0, *i0, *d0, tb_m_to_m, tb_m_to_i, tb_m_to_d );
                 //std::cout << end_state_.first << " ";
 //                 std::cout << match_log_odds << " ";
@@ -397,6 +411,12 @@ public:
         }
 
         //return m_.back();
+        
+        
+        best_score_ = m_.back();
+        best_i_ = qlen;
+        best_j_ = m_.size() - 1;
+        best_state_ = last_state;
         
         return best_score_;
     }
@@ -788,6 +808,20 @@ public:
         sorted_ = false;
     }
     
+    void put_fast( const K &key, V &&value ) {
+        pairs_.emplace_back( key, value );
+        
+        sorted_ = false;
+    }
+    template<typename... Args>
+    void emplace_fast( const K &key, Args&&... args) {
+        pairs_.emplace_back( key, args... );
+        
+        sorted_ = false;
+    
+    }
+    
+    
     void put( const K &key, const V &value ) {
         if( !sorted_ ) {
             throw std::runtime_error( "flat_map::put on unsorted map" );
@@ -796,9 +830,9 @@ public:
         ipair p{key, value};
         auto lb = std::lower_bound( pairs_.begin(), pairs_.end(), p );
         
-        pairs_.emplace(lb, p);
+        pairs_.insert(lb, std::move(p));
     }
-
+    
     const V * get( const K &key ) const {
         if( !sorted_ ) {
             throw std::runtime_error( "flat_map::get on unsorted map" );
@@ -840,6 +874,8 @@ private:
 class sequences {
 
 public:
+    sequences() = delete;
+    
     sequences( std::istream &is ) : pw_scoring_matrix_( 3, 0 ) {
         assert( is.good() );
 
@@ -869,10 +905,11 @@ public:
 
         }
 
-        
+        max_name_len_ = 0;
         name_to_index_.reserve(names_.size());
         for( size_t i = 0; i < names_.size(); ++i ) {
             name_to_index_.put_fast( names_[i], i );
+            max_name_len_ = std::max( max_name_len_, names_[i].size() );
         }
         name_to_index_.sort();
         //std::sort( name_to_index_.begin(), name_to_index_.end() );
@@ -948,6 +985,10 @@ public:
         return seqs_.size() - 1;
     }
 
+    size_t max_name_len() const {
+        return max_name_len_;
+    }
+    
 private:
 
     void normalize_seq( std::vector<uint8_t> &seq ) {
@@ -990,6 +1031,7 @@ private:
     std::vector<std::vector<uint8_t> > seqs_;
     std::vector<std::vector<uint8_t> > mapped_seqs_;
     std::vector<std::string> names_;
+    size_t max_name_len_;
     //std::vector<name_to_index_pair> name_to_index_;
     flat_map<std::string,size_t> name_to_index_;
 
@@ -1055,6 +1097,9 @@ public:
         std::string name_clonea = seqs->name_at( seqa ) + "_clone";
         std::string name_cloneb = seqs->name_at( seqb ) + "_clone";
 
+        cloned_names_.push_back(name_clonea);
+        cloned_names_.push_back(name_cloneb);
+        
         size_t seqa_clone = seqs->clone_seq( seqa, name_clonea );
         size_t seqb_clone = seqs->clone_seq( seqb, name_cloneb );
 
@@ -1274,8 +1319,8 @@ public:
                 auto z1 = it->child1->backLen;
                 auto z2 = it->child2->backLen;
                  
-                z1 = 0.0001;
-                z2 = 0.0001;
+//                 z1 = 0.0001;
+//                 z2 = 0.0001;
                 
                 pvec_pgap::newview(p->pvec(), c1->pvec(), c2->pvec(), z1, z2, it->tc);
                 
@@ -1403,34 +1448,116 @@ public:
         return true;
     }
 
-private:
-
-    void write_ali_and_tree_for_raxml() {
+    void write_ali_and_tree( const char *tree_name, const char *ali_name, bool pad = true ) {
+        
+        std::cout << "write tree: " << tree_name << "\n";
         {
-            std::ofstream os( "sa_tree" );
+            std::ofstream os( tree_name );
             tree_parser::print_newick( tree_, os );
         }
 
 
 
-        std::ofstream os( "sa_ali" );
+        std::ofstream os( ali_name );
 
 
         size_t pos = used_seqs_.find_first();
 
         os << used_seqs_.count() << " " << aligned_seqs_.at(pos).size() << "\n";
 
-        while( pos != used_seqs_.npos ){
-            assert( pos < aligned_seqs_.size() );
-
-            os << seqs_.name_at(pos) << " ";
-            std::copy( aligned_seqs_[pos].begin(), aligned_seqs_[pos].end(), std::ostream_iterator<char>(os));
-            os << "\n";
-
+        
+        std::sort( cloned_names_.begin(), cloned_names_.end() ); // most likely they are already sorted from a previous call of prune_cloned_nodes
+        
+        std::copy( cloned_names_.begin(), cloned_names_.end(), std::ostream_iterator<std::string>(std::cout, "\n"));
+        while( pos != used_seqs_.npos ) {
+            const auto &name = seqs_.name_at(pos);
+            
+            
+//             std::cerr << "name: " << name << " " << std::binary_search( cloned_names_.begin(), cloned_names_.begin(), name ) << "\n";
+            // FIXME: kind of hack: don't print out cloned seqs when pad is set (=on final printout)
+            if( !pad || !std::binary_search( cloned_names_.begin(), cloned_names_.end(), name )) {
+                assert( pos < aligned_seqs_.size() );
+                
+                os << name;
+                
+                // pad column
+                if( pad ) {
+                    const size_t max_len = seqs_.max_name_len();
+                    //                 std::cout << "name: " << name << "\n";
+                    assert( name.size() <= max_len );
+                    
+                    
+                    for( size_t i = 0; i < max_len - name.size() + 1; ++i ) {
+                        os << " ";
+                    }
+                } else {
+                    os << " ";
+                }
+                std::copy( aligned_seqs_[pos].begin(), aligned_seqs_[pos].end(), std::ostream_iterator<char>(os));
+                os << "\n";
+            }
             pos = used_seqs_.find_next(pos);
         }
 
     }
+    
+    void prune_cloned_nodes() {
+        std::vector<lnode *>rn;
+        std::sort( cloned_names_.begin(), cloned_names_.end() );
+        apply_lnode( tree_, [&](lnode *n) {
+        
+            if( n->m_data->isTip ) {
+                // TODO: lol, I guess linear search would be better for the 2 elements in cloned_names_...
+                if( std::binary_search( cloned_names_.begin(), cloned_names_.end(), n->m_data->tipName ) ) {
+                    rn.push_back( n );
+                }
+            }
+        });
+        
+        std::cout << "rn: " << rn.size() << "\n";
+        
+        for( lnode *n : rn ) {
+            tree_parser::prune_with_rollback pwr(n->back);
+            pwr.commit();
+          
+            tree_ = pwr.get_save_node();
+        }
+        
+        
+    }
+    
+private:
+
+    void write_ali_and_tree_for_raxml() {
+        write_ali_and_tree( "sa_tree", "sa_ali", false );
+        
+    }
+//         {
+//             std::ofstream os( "sa_tree" );
+//             tree_parser::print_newick( tree_, os );
+//         }
+// 
+// 
+// 
+//         std::ofstream os( "sa_ali" );
+// 
+// 
+//         size_t pos = used_seqs_.find_first();
+// 
+//         os << used_seqs_.count() << " " << aligned_seqs_.at(pos).size() << "\n";
+// 
+//         while( pos != used_seqs_.npos ){
+//             assert( pos < aligned_seqs_.size() );
+// 
+//             os << seqs_.name_at(pos) << " ";
+//             std::copy( aligned_seqs_[pos].begin(), aligned_seqs_[pos].end(), std::ostream_iterator<char>(os));
+//             os << "\n";
+// 
+//             pos = used_seqs_.find_next(pos);
+//         }
+// 
+//     }
+
 
 
     const sequences &seqs_;
@@ -1442,7 +1569,7 @@ private:
     std::vector<sequence> aligned_seqs_;
 
     std::ofstream inc_log_;
-    
+    std::vector<std::string> cloned_names_;
 };
 
 //void insertion_loop( sequences *seqs, addition_order *order, ln_pool * const pool ) {
@@ -1628,7 +1755,10 @@ int main( int argc, char *argv[] ) {
             break;
         }
     }
-
+    builder.prune_cloned_nodes();
+    builder.write_ali_and_tree( "sa_tree_end", "sa_ali_end" );
+    
+    
 //    builder.write_ali_and_tree_for_raxml();
 
 
