@@ -1313,7 +1313,7 @@ public:
                 my_adata *p = it->parent->m_data->get_as<my_adata>();
                 my_adata *c1 = it->child1->m_data->get_as<my_adata>();
                 my_adata *c2 = it->child2->m_data->get_as<my_adata>();
-                 std::cout << "newview: " << *it << " " << p << " " << it->parent << "\n";
+//                  std::cout << "newview: " << *it << " " << p << " " << it->parent << "\n";
                 //         std::cout << "tip case: " << (*it) << "\n";
                  
                 auto z1 = it->child1->backLen;
@@ -1326,15 +1326,17 @@ public:
                 
             }
             
-             std::cout << "vr: " << *virtual_root->m_data << " " << virtual_root << "\n";
-            
+            const bool verbose_scoring = false;
+            if( verbose_scoring ) {
+                std::cout << "vr: " << *virtual_root->m_data << " " << virtual_root << "\n";
+            }
             const pvec_pgap &rpp = virtual_root->m_data->get_as<my_adata>()->pvec();
             const boost::numeric::ublas::matrix< double > &pm = rpp.get_gap_prob();
             const auto &anc_gap = virtual_root->m_data->get_as<my_adata>()->calculate_anc_gap_probs();
             
-            
-            std::cout << pm.size1() << " " << pm.size2() << "\n";
-            
+            if( verbose_scoring ) {
+                std::cout << pm.size1() << " " << pm.size2() << "\n";
+            }
 //             for( auto it1 = pm.begin2(); it1 != pm.end2(); ++it1 ) {
 //                 std::transform( it1.begin(), it1.end(), std::ostream_iterator<double>( std::cout, "\t" ), [](double x) {return x; /*std::max(1.0,-log(x));*/});
 //                 std::cout << "\n";
@@ -1352,18 +1354,24 @@ public:
             }
             assert( node_label != size_t(-1) );
             
-            std::cout << "node label: " << node_label << "\n";
+            
+            if( verbose_scoring ) {
+                std::cout << "node label: " << node_label << "\n";
+            }
             auto const & anc_state = pvecs.at( node_label );
             
             
             boost::array<double,4> bg_state{0.25, 0.25, 0.25, 0.25};
             log_odds_viterbi lov(anc_state, anc_gap, bg_state );
             auto score = lov.align(cand_mapped_seq);
-            std::cout << "cand:\n";
-            std::copy( cand_seq.begin(), cand_seq.end(), std::ostream_iterator<char>(std::cout));
-            std::cout << "\n";
-            std::cout << "score: " << score << "\n";
             
+//             std::cout << "cand:\n";
+//             std::copy( cand_seq.begin(), cand_seq.end(), std::ostream_iterator<char>(std::cout));
+//             std::cout << "\n";
+            
+            if( verbose_scoring ) {
+                std::cout << "score: " << score << "\n";
+            }
             
             
 //             auto tb = lov.traceback();
@@ -1404,8 +1412,9 @@ public:
 //             std::cout << "\n";
            
             align_ref_seqs( std::cout, best_tb );
-            std::copy( qs_ali.begin(), qs_ali.end(), std::ostream_iterator<char>( std::cout ) );
-            std::cout << "\n";
+            
+//             std::copy( qs_ali.begin(), qs_ali.end(), std::ostream_iterator<char>( std::cout ) );
+//             std::cout << "\n";
             
             aligned_seqs_.at(cand_id) = std::move(qs_ali);
             
@@ -1463,7 +1472,12 @@ public:
 
         size_t pos = used_seqs_.find_first();
 
-        os << used_seqs_.count() << " " << aligned_seqs_.at(pos).size() << "\n";
+        
+        if( pad ) {
+            os << (used_seqs_.count() - cloned_names_.size()) << " " << aligned_seqs_.at(pos).size() << "\n";
+        } else {
+            os << used_seqs_.count() << " " << aligned_seqs_.at(pos).size() << "\n";
+        }
 
         
         std::sort( cloned_names_.begin(), cloned_names_.end() ); // most likely they are already sorted from a previous call of prune_cloned_nodes
