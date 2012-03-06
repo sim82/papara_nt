@@ -3,7 +3,6 @@
 #include "tree_utils.h"
 #include "ivymike/tree_parser.h"
 #include "ivymike/multiple_alignment.h"
-#include "ivymike/flat_map.h"
 #include "boost/dynamic_bitset.hpp"
 
 using ivy_mike::tree_parser_ms::ln_pool;
@@ -21,6 +20,20 @@ void pad( std::ostream &os, size_t n, char c ) {
     }
 }
 
+class tip_name_collector {
+
+public:
+	typedef ivy_mike::tree_parser_ms::lnode lnode;
+	tip_name_collector( std::vector<std::string> *names ) : names_(names) {}
+	void operator()(lnode *n) {
+		if( n->m_data->isTip ) {
+			names_->push_back(n->m_data->tipName);
+		}
+	}
+private:
+	std::vector<std::string> *names_;
+};
+
 int main( int argc, char *argv[] ) {
     if( argc != 3 ) {
         std::cerr << "usage: " << argv[0] << "<tree file> <phylip file>\n";
@@ -33,13 +46,14 @@ int main( int argc, char *argv[] ) {
     lnode *n = p.parse();
     
     std::vector<std::string> tip_names;
-    
-    
-    apply_lnode(n, [&](lnode *x) {
-        if( x->m_data->isTip ) {
-            tip_names.push_back( x->m_data->tipName );
-        }
-    });
+   
+    tip_name_collector tnc(&tip_names); 
+    visit_lnode( n, tnc );  
+//    apply_lnode(n, [&](lnode *x) {
+//        if( x->m_data->isTip ) {
+//           tip_names.push_back( x->m_data->tipName );
+//        }
+//    });
     
     ivy_mike::multiple_alignment ma;
     ma.load_phylip(argv[2]);
@@ -55,7 +69,7 @@ int main( int argc, char *argv[] ) {
         const std::string &name = ma.names[i];
         max_name_len = std::max( max_name_len, name.size() );
         
-        const auto &data = ma.data[i];
+        const std::vector<uint8_t> &data = ma.data[i];
         
         if( !std::binary_search( tip_names.begin(), tip_names.end(), name ) ) {
             boost::dynamic_bitset<> bs(data.size());
@@ -81,11 +95,16 @@ int main( int argc, char *argv[] ) {
     }
     for( size_t i = 0, e = ma.names.size(); i != e; ++i ) {
         std::cout << ma.names[i];
-        const auto &data = ma.data[i];
+        const std::vector<uint8_t> &data = ma.data[i];
         pad( std::cout, max_name_len - ma.names[i].size() + 1, ' ' );
         
         // excract 'unmasked' characters from current sequence
-        std::transform(unmasked.begin(), unmasked.end(), std::ostream_iterator<char>(std::cout), [&](size_t u) { return data[u]; });
+    //    std::transform(unmasked.begin(), unmasked.end(), std::ostream_iterator<char>(std::cout), [&](size_t u) { return data[u]; });
+    //
+    	for( std::vector<size_t>::iterator it = unmasked.begin(); it != unmasked.end(); ++it ) {
+		assert( *it < data.size() );
+		std::cout << data[*it];
+	}
         std::cout << "\n";
     }
     
