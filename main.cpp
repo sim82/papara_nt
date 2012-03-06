@@ -1393,7 +1393,7 @@ std::string filename( const std::string &run_name, const char *type ) {
 bool file_exists(const char *filename)
 {
   std::ifstream is(filename);
-  return is;
+  return is.good();
 }
 
 
