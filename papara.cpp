@@ -30,7 +30,7 @@
 #include <boost/iostreams/tee.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/bind.hpp>
-
+#include <boost/dynamic_bitset.hpp>
 
 
 #include "sequence_model.h"
@@ -631,16 +631,19 @@ public:
             multiple_alignment ref_ma;
             ref_ma.load_phylip( opt_alignment_name );
 
-
-
+            std::vector<my_adata *> tmp_adata;
+            boost::dynamic_bitset<> unmasked;
+            
             for( unsigned int i = 0; i < ref_ma.names.size(); i++ ) {
 
                 std::map< std::string, sptr::shared_ptr<lnode> >::iterator it = name_to_lnode.find(ref_ma.names[i]);
 
-                // process sequences fomr the ref_ma depending on, if they are contained in the tree.
+                // process sequences from the ref_ma depending on, if they are contained in the tree.
                 // if they are, they are 'swapped' into m_ref_seqs
                 // if they are not, into m_qs_seqs. (gaps in the QS are removed later)
-
+                //
+                // additionally, all columns that contain only gaps are removed from the reference sequences.
+                
                 if( it != name_to_lnode.end() ) {
                     sptr::shared_ptr< lnode > ln = it->second;
                     //      adata *ad = ln->m_data.get();
@@ -648,16 +651,71 @@ public:
                     assert( ivy_mike::isa<my_adata>(ln->m_data.get()) ); //typeid(*ln->m_data.get()) == typeid(my_adata ) );
                     my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
 
+                    // store the adata ptr corresponding to the current ref sequence for later use
+                    assert( tmp_adata.size() == m_ref_seqs.size() );
+                    
+                    tmp_adata.push_back(adata);
                     m_ref_names.push_back(std::string() );
                     m_ref_seqs.push_back(std::vector<uint8_t>() );
 
                     m_ref_names.back().swap( ref_ma.names[i] );
                     m_ref_seqs.back().swap( ref_ma.data[i] );
 
-                    // WARNING: make sure not to keep references to elements of m_ref_seqs at this point!
-                    adata->init_pvec( m_ref_seqs.back() );
+                    // mark all non-gap positions of the current reference in bit-vector 'unmaked'
+                    const std::vector<uint8_t> &seq = m_ref_seqs.back();
+                    if( unmasked.empty() ) {
+                        unmasked.resize( seq.size() );
+                    } 
+                    assert( unmasked.size() == seq.size() );
+                    
+                    
+                    for( size_t j = 0, e = seq.size(); j != e; ++j ) {
+                        unmasked[j] |= !seq_model::is_gap( seq_model::s2p(seq[j]));
+                    }
+                    
+                    
                 } else {
                     qs->add(ref_ma.names[i], &ref_ma.data[i]);
+                }
+            }
+            {
+                // remove all 'pure-gap' columns from the ref sequences
+                
+                assert( tmp_adata.size() == m_ref_seqs.size() );
+
+                // retrieve a list of non-gap indices from the bit-vector
+                std::vector<size_t> unmasked_idx;
+                {
+                    size_t i = unmasked.find_first();
+                    while( i != unmasked.npos ) {
+//                         std::cout << "um: " << i << "\n";
+                        
+                        unmasked_idx.push_back(i);
+                        i = unmasked.find_next(i);
+                    }
+                }
+                for( size_t i = 0, e = m_ref_seqs.size(); i != e; ++i ) {
+                    
+                    std::vector<uint8_t> seq_tmp;
+                    seq_tmp.reserve(unmasked_idx.size());
+                 
+                    const std::vector<uint8_t> &seq_orig = m_ref_seqs[i];
+                    
+                    // copy all unmasked ref characters to seq_tmp
+                    for( std::vector<size_t>::iterator it = unmasked_idx.begin(); it != unmasked_idx.end(); ++it ) {
+                        
+                        if( !(*it < seq_orig.size()) ) {
+                            std::cerr << "meep: " << *it << " " << seq_orig.size() << "\n";
+                        }
+                        assert( *it < seq_orig.size() );
+                        
+                        
+                        seq_tmp.push_back( seq_orig[*it] );
+                    }
+                    m_ref_seqs[i].swap( seq_tmp );
+                    
+                    //initialize the corresponding adata object with the cleaned ref seq.
+                    tmp_adata.at(i)->init_pvec( m_ref_seqs[i] );
                 }
             }
         }
@@ -674,6 +732,10 @@ public:
 
     }
 
+    void remove_full_gaps() {
+        
+    }
+    
     void build_ref_vecs() {
         // pre-create the ancestral state vectors. This step is necessary for the threaded version, because otherwise, each
         // thread would need an independent copy of the tree to do concurrent newviews. Anyway, having a copy of the tree
@@ -1514,12 +1576,10 @@ void gapstream_to_alignment_no_ref_gaps( const std::vector<uint8_t> &gaps, const
     std::reverse( out->begin(), out->end() );
 }
 
-
-
 template<typename pvec_t, typename seq_tag>
-void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp ) {
-    // create the actual alignments for the best scoring insertion position (=do the traceback)
-
+std::vector<std::vector<uint8_t> > generate_traces( std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, const papara_score_parameters &sp ) {
+    
+    
     typedef typename queries<seq_tag>::pars_state_t pars_state_t;
     typedef model<seq_tag> seq_model;
 
@@ -1529,17 +1589,8 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
 
 
 
-    double mean_quality = 0.0;
-    double n_quality = 0.0;
-
-    std::vector<pars_state_t> out_qs_ps;
+     std::vector<pars_state_t> out_qs_ps;
     align_arrays_traceback<int> arrays;
-
-
-
-    ref_gap_collector rgc( refs.pvec_size() );
-
-    // store the best alignment traces per qs
 
     std::vector<std::vector<uint8_t> > qs_traces( qs.size() );
 
@@ -1568,7 +1619,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
             std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
         }
 
-        rgc.add_trace(qs_traces[i]);
+
 
 
 
@@ -1614,7 +1665,72 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
         }
 
     }
+    
 
+    
+    return qs_traces;
+}
+
+
+template<typename pvec_t, typename seq_tag>
+void align_best_scores2( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp ) 
+{
+
+    typedef typename queries<seq_tag>::pars_state_t pars_state_t;
+    typedef model<seq_tag> seq_model;
+    
+    
+    std::vector<std::vector<uint8_t> > qs_traces = generate_traces(os_quality, os_cands, qs, refs, res, sp );
+    std::vector<pars_state_t> out_qs_ps;
+    for( size_t i = 0; i < qs.size(); ++i ) {
+        const std::vector<pars_state_t> &qp = qs.pvec_at(i);
+
+        out_qs_ps.clear();
+
+        
+        gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state() );
+        //boost::dynamic_bitset<> bs( out_qs_ps.size() );
+        std::vector<bool> bs( out_qs_ps.size() );
+        std::transform( out_qs_ps.begin(), out_qs_ps.end(), bs.begin(), seq_model::is_gap );
+    }
+    
+    
+}
+
+template<typename pvec_t, typename seq_tag>
+void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const queries<seq_tag> &qs, const references<pvec_t,seq_tag> &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp ) {
+    // create the actual alignments for the best scoring insertion position (=do the traceback)
+
+    typedef typename queries<seq_tag>::pars_state_t pars_state_t;
+    typedef model<seq_tag> seq_model;
+
+
+//     lout << "generating best scoring alignments\n";
+//     ivy_mike::timer t1;
+
+
+
+    double mean_quality = 0.0;
+    double n_quality = 0.0;
+// 
+    
+    
+     std::vector<pars_state_t> out_qs_ps;
+
+    // create the best alignment traces per qs
+
+    
+    std::vector<std::vector<uint8_t> > qs_traces = generate_traces(os_quality, os_cands, qs, refs, res, sp );
+    
+    
+    // collect ref gaps introduiced by qs
+    ref_gap_collector rgc( refs.pvec_size() );
+    for( std::vector<std::vector<uint8_t> >::iterator it = qs_traces.begin(); it != qs_traces.end(); ++it ) {
+        rgc.add_trace(*it);
+    }
+    
+
+    
 
     if( ref_gaps ) {
         os << refs.num_seqs() + qs.size() << " " << rgc.transformed_ref_len() << "\n";
@@ -1687,7 +1803,7 @@ void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream
 
 
     }
-    lout << "alignment finished: " << t1.elapsed() << "\n";
+    
     lout << "mean quality: " << mean_quality / n_quality << "\n";
 
 }
@@ -1771,6 +1887,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     t1.add_int();
 
+    refs.remove_full_gaps();
     refs.build_ref_vecs();
 
     t1.add_int();
