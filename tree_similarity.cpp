@@ -1,3 +1,4 @@
+
 #include <iterator>
 #include <stdexcept>
 #include <algorithm>
@@ -14,13 +15,15 @@
 #include "ivymike/smart_ptr.h"
 
 #include <ivymike/time.h>
-#include "tree_similarity.h"
+#include "ivymike/tree_split_utils.h"
 #include "tree_utils.h"
 
 
 
 using namespace ivy_mike::tree_parser_ms;
+using namespace ivy_mike;
 
+#if 0
 //
 // generate hash value for boost::bitset. this is a bit verbose, but seems to be the only portable solution
 //
@@ -284,6 +287,7 @@ double compare_trees( lnode *t1, lnode *t2, split_set_t &splits2 ) {
     
 }
 
+#endif
 int main2( int argc, char *argv[] ) {
 //     assert(false);
     ln_pool pool;
