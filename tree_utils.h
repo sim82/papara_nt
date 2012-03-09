@@ -1,6 +1,6 @@
 #ifndef __tree_utils_h
 #define __tree_utils_h
-
+#if 0
 #include <algorithm>
 #include <stdexcept>
 #include <vector>
@@ -534,4 +534,5 @@ inline bool is_tip( ivy_mike::tree_parser_ms::lnode * l ) {
 
 
 
+#endif
 #endif

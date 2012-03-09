@@ -48,7 +48,7 @@
 #include "raxml_interface.h"
 
 #include "math_approx.h"
-
+#include "ivymike/tree_traversal_utils.h"
 #include "ivymike/multiple_alignment.h"
 
 #include "ivymike/tree_parser.h"
@@ -62,6 +62,12 @@
 using ivy_mike::tree_parser_ms::lnode;
 using ivy_mike::tree_parser_ms::ln_pool;
 using ivy_mike::tree_parser_ms::node_data_factory;
+
+using ivy_mike::back_insert_ifer;
+using ivy_mike::rooted_bifurcation;
+using ivy_mike::apply_lnode;
+using ivy_mike::iterate_lnode;
+
 
 namespace ublas = boost::numeric::ublas;
 

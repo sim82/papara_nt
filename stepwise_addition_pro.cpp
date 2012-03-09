@@ -23,7 +23,7 @@
 #include <boost/bind.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
-#include "tree_utils.h"
+
 #include "pairwise_seq_distance.h"
 #include "stepwise_align.h"
 #include "raxml_interface.h"
@@ -33,6 +33,7 @@
 #include "ivymike/tree_parser.h"
 #include "ivymike/tdmatrix.h"
 #include "ivymike/algorithm.h"
+#include "ivymike/tree_traversal_utils.h"
 
 
 namespace tree_parser = ivy_mike::tree_parser_ms;
@@ -40,6 +41,10 @@ namespace tree_parser = ivy_mike::tree_parser_ms;
 using ivy_mike::tree_parser_ms::ln_pool;
 using ivy_mike::tree_parser_ms::lnode;
 
+using ivy_mike::apply_lnode;
+using ivy_mike::back_insert_ifer;
+using ivy_mike::iterate_lnode;
+using ivy_mike::rooted_bifurcation;
 namespace ublas = boost::numeric::ublas;
 
 

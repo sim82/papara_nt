@@ -649,7 +649,8 @@ public:
                     assert( ivy_mike::isa<my_adata>(ln->m_data.get()) ); //typeid(*ln->m_data.get()) == typeid(my_adata ) );
                     my_adata *adata = static_cast<my_adata *> (ln->m_data.get());
 
-                    // store the adata ptr corresponding to the current ref sequence for later use
+                    // store the adata ptr corresponding to the current ref sequence for later use.
+                    // (their indices in m_ref_seqs and tmp_adata correspond.)
                     assert( tmp_adata.size() == m_ref_seqs.size() );
                     
                     tmp_adata.push_back(adata);
@@ -701,10 +702,6 @@ public:
                     
                     // copy all unmasked ref characters to seq_tmp
                     for( std::vector<size_t>::iterator it = unmasked_idx.begin(); it != unmasked_idx.end(); ++it ) {
-                        
-                        if( !(*it < seq_orig.size()) ) {
-                            std::cerr << "meep: " << *it << " " << seq_orig.size() << "\n";
-                        }
                         assert( *it < seq_orig.size() );
                         
                         

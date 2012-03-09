@@ -19,13 +19,16 @@ extern "C" {
 }
 #endif
 
-#include "tree_utils.h"
+#include "ivymike/tree_traversal_utils.h"
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
 #include "sequence_model.h"
 namespace {
-
+//using ivy_mike::tip_case;
+using ivy_mike::TIP_TIP;
+using ivy_mike::TIP_INNER;
+using ivy_mike::INNER_INNER;
 
 class pvec_cgap {
     //     aligned_buffer<parsimony_state> v;
@@ -76,7 +79,7 @@ public:
         return auxv;
     }
 
-    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, tip_case tc ) {
+    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, ivy_mike::tip_case tc ) {
 
     	if( c1.v.size() != c2.v.size() ) {
     		std::cout << "size2: " << c1.size() << " " << c2.size() << "\n";
@@ -384,13 +387,13 @@ public:
     }
 
 
-    void newview( const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    void newview( const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, ivy_mike::tip_case tc ) {
     	newview( *this, c1, c2, z1, z2, tc );
 
     	//std::cout << "newview: " << gap_prob.size1() << "\n";
     }
 
-    static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, ivy_mike::tip_case tc ) {
     	namespace ublas = boost::numeric::ublas;
     	assert( c1.v.size() == c2.v.size() );
 

@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "tree_utils.h"
+#include "ivymike/tree_traversal_utils.h"
 #include "ivymike/tree_parser.h"
 #include "ivymike/multiple_alignment.h"
 #include "boost/dynamic_bitset.hpp"
@@ -8,6 +8,9 @@
 using ivy_mike::tree_parser_ms::ln_pool;
 using ivy_mike::tree_parser_ms::parser;
 using ivy_mike::tree_parser_ms::lnode;
+
+using ivy_mike::tip_collector_dumb;
+using ivy_mike::visit_lnode;
 
 
 bool is_gap( char c ) {
