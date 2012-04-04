@@ -23,7 +23,7 @@ set( BOOST_LIBS boost_thread boost_program_options)
 set(SYSDEP_LIBS pthread)
 #LINK_DIRECTORIES( ${LINK_DIRECTORIES} /usr/lib64/atlas-sse2 )
 
-se( ALL_HEADERS )
+set( ALL_HEADERS )
 ENDIF()
 
 

@@ -39,7 +39,7 @@ namespace boost { namespace numeric { namespace ublas {
 QRDecomposition::QRDecomposition (const Matrix &A) {
       // Initialize.
       QR = A;
-	  assert( A.size1() < std::numeric_limits<int>::max() && A.size2() < std::numeric_limits<int>::max());
+	  assert( A.size1() < size_t(std::numeric_limits<int>::max()) && A.size2() < size_t(std::numeric_limits<int>::max()));
       m = int(A.size1()); // TODO: cast to int
       n = int(A.size2());
       Rdiag = Vector(n);
@@ -166,7 +166,7 @@ QRDecomposition::Matrix QRDecomposition::solve (const Matrix &B) {
       BOOST_UBLAS_CHECK (isFullRank(), singular ());
       
       // Copy right hand side
-	   assert( B.size2() < std::numeric_limits<int>::max());
+	   assert( B.size2() < size_t(std::numeric_limits<int>::max()));
 
       int nx = int(B.size2()); // TODO: cast to int
       Matrix X(B);

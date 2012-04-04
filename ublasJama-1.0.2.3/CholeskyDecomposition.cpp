@@ -27,7 +27,7 @@ CholeskyDecomposition::CholeskyDecomposition (const Matrix& A) {
 
      // Initialize.
 
-	  assert( A.size1() <= std::numeric_limits<int>::max() );
+	  assert( A.size1() <= size_t(std::numeric_limits<int>::max()) );
 
       n = int(A.size1()); // TODO: cast added by me. 
       L = Matrix(n,n);
@@ -134,7 +134,7 @@ CholeskyDecomposition::Matrix CholeskyDecomposition::solve (const Matrix& B) con
 
       // Copy right hand side.
       Matrix X(B);
-	  assert( B.size2() < std::numeric_limits<int>::max() );
+	  assert( B.size2() < size_t(std::numeric_limits<int>::max()) );
       int nx = int(B.size2()); // TODO: cast to int added by me
 
 	      // Solve L*Y = B;

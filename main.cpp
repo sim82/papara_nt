@@ -605,7 +605,7 @@ class papara_nt : public papara_nt_i {
 
                                 m_pnt.m_qs_bestscore[i] = score_vec[k];
 
-								assert( block.edges[k] <= std::numeric_limits<int>::max() );
+								assert( block.edges[k] <= size_t(std::numeric_limits<int>::max()) );
                                 m_pnt.m_qs_bestedge[i] = int(block.edges[k]); // TODO: dto, maybe change to size_t
                             }
                         }
@@ -1070,7 +1070,7 @@ public:
 
 					m_qs_bestscore[it->qs] = it->res;
 
-					assert( it->edge <= std::numeric_limits<int>::max() );
+					assert( it->edge <= size_t(std::numeric_limits<int>::max()) );
 					m_qs_bestedge[it->qs] = int(it->edge); // TODO: review: can m_qs_bestedge become size_t? 
 				}
 

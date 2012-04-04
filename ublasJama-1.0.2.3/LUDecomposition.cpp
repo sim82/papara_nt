@@ -31,7 +31,7 @@ LUDecomposition::LUDecomposition (const Matrix& A) {
 
    // Use a "left-looking", dot-product, Crout/Doolittle algorithm.
 
-      assert( A.size1() < std::numeric_limits<int>::max() && A.size2() < std::numeric_limits<int>::max());
+      assert( A.size1() < size_t(std::numeric_limits<int>::max()) && A.size2() < size_t(std::numeric_limits<int>::max()));
 
       LU = A;
       m = int(A.size1());
@@ -213,7 +213,7 @@ LUDecomposition::Matrix LUDecomposition::solve (const Matrix& B) const {
       BOOST_UBLAS_CHECK(isNonsingular(), singular("Matrix is singular."));
 
       // Copy right hand side with pivoting
-	  assert( B.size2() < std::numeric_limits<int>::max());
+	  assert( B.size2() < size_t(std::numeric_limits<int>::max()));
       int nx = int(B.size2()); // TODO: cast to int
       Matrix X(m,nx);
       for (int i = 0; i < m; i++) {
