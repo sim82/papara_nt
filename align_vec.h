@@ -276,7 +276,7 @@ void align_vec_blocked( persistent_state_blocked<score_t,sscore_t> &ps, size_t a
             //         std::cout << "sbm: " << m.state_backmap(bc) << " " << (W * asize) << std::endl;
             sscore_t *qpp_iter = bc_.qpp_iter;
             
-            _mm_prefetch(qpp_iter,_MM_HINT_T0);
+            _mm_prefetch((const char *)qpp_iter,_MM_HINT_T0);
 
             score_t * __restrict s_iter = bc_.s_iter;
             score_t * __restrict su_iter = bc_.su_iter;

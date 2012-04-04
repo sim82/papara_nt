@@ -21,8 +21,12 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
-
+#include <vector>
 #include "ivymike/algorithm.h"
+
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 
 namespace sequence_model {
 
@@ -191,7 +195,11 @@ public:
 
 
     static inline bool is_single(pars_state_t ps) {
+#ifndef _MSC_VER
         return __builtin_popcount(ps) == 1;
+#else
+        return __popcnt(ps);
+#endif
     }
 
     static inline bool is_gap(pars_state_t ps) {

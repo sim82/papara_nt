@@ -12,7 +12,7 @@
  *  for more details.
  */
 
-#include "pch.h"
+//#include "pch.h"
 
 #include <cctype>
 
@@ -818,6 +818,7 @@ public:
         
         sorted_ = false;
     }
+#ifndef MSVC
     template<typename... Args>
     void emplace_fast( const K &key, Args&&... args) {
         pairs_.emplace_back( key, args... );
@@ -825,7 +826,7 @@ public:
         sorted_ = false;
     
     }
-    
+#endif
     
     void put( const K &key, const V &value ) {
         if( !sorted_ ) {

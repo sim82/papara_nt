@@ -19,7 +19,10 @@
 #include <cstddef>
 #include <cassert>
 #include <stdexcept>
+
+#ifndef _MSC_VER
 #include <x86intrin.h>
+#endif
 #if 1
 
 #include <vector>
@@ -145,7 +148,7 @@ private:
 #if defined(__GNUC__)
     T arr_[SIZE] __attribute__ ((aligned (ALIGNMENT)));
 #elif defined(_MSC_VER)
-    __declspec(align(32)) T arr_[SIZE]
+    __declspec(align(32)) T arr_[SIZE];
 #else
 #error "unsupported compiler"
 #endif

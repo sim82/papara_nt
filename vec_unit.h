@@ -21,8 +21,10 @@
 #include <cstdio>
 #include <stdint.h>
 #include <immintrin.h>
-#include <x86intrin.h>
 
+#ifndef _MSC_VER
+#include <x86intrin.h>
+#endif
 
 #ifdef __AVX__
 #define HAVE_AVX
