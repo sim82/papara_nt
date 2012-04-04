@@ -19,10 +19,13 @@
 #include <cstddef>
 #include <cassert>
 #include <stdexcept>
-#include <x86intrin.h>
-#if 1
-
 #include <vector>
+
+
+#ifndef _MSC_VER // deactivated for now, because of *intrin.h chaos on vc
+#include <x86intrin.h>
+
+
 
 template<typename T, const size_t SIZE, const size_t ALIGNMENT=32>
 class aligned_array {
@@ -151,7 +154,7 @@ private:
 #endif
     
 };
-
+#endif
 
 namespace ab_internal_ {
 template<typename T, size_t Talign>
@@ -374,5 +377,5 @@ public:
 //     }
 //     
 // };
-#endif
+
 #endif

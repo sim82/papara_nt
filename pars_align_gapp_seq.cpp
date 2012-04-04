@@ -29,6 +29,7 @@
 
 #include "pars_align_gapp_seq.h"
 
+const pars_align_gapp_seq::score_t pars_align_gapp_seq::LARGE_VALUE = 32000;
 
 pars_align_gapp_seq::pars_align_gapp_seq(const int* seqA, const unsigned char* seqB, size_t n_a, size_t n_b, size_t aStride, const double* gapp, size_t aAuxStride, pars_align_gapp_seq::arrays &arr, const unsigned int *bvtrans, pars_align_gapp_seq::score_t gapOpen, score_t gapExtend, pars_align_gapp_seq::score_t mismatch, pars_align_gapp_seq::score_t matchCGap) : GAP_OPEN(gapOpen),
         GAP_EXTEND(gapExtend),
@@ -122,7 +123,7 @@ void pars_align_gapp_seq::tracebackCompressed(std::vector< uint8_t >& bvec) {
     
     
     if ( m_tbStartA < ptrdiff_t(m_na) - 1 ) {
-        for ( int ba = m_na - 1; ba > m_tbStartA; ba-- ) {
+        for ( ptrdiff_t ba = m_na - 1; ba > m_tbStartA; ba-- ) {
             bvec.push_back(1);
             
         }

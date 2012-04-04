@@ -51,6 +51,10 @@ using sequence_model::tag_aa;
 using sequence_model::tag_dna;
 
 using ivy_mike::apply_lnode;
+using ivy_mike::apply_lnode;
+using ivy_mike::back_insert_ifer;
+using ivy_mike::iterate_lnode;
+using ivy_mike::rooted_bifurcation;
 using ivy_mike::back_insert_ifer;
 using ivy_mike::iterate_lnode;
 using ivy_mike::rooted_bifurcation;

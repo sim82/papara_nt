@@ -242,7 +242,7 @@ public:
         bool inL = false;
 
         if (m_tbStartA < ptrdiff_t(m_na) - 1) {
-            for (int ba = m_na - 1; ba > m_tbStartA; ba--) {
+            for (ptrdiff_t ba = m_na - 1; ba > m_tbStartA; ba--) {
                 bvec.push_back(1);
 
             }

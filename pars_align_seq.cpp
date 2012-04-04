@@ -28,6 +28,7 @@
 
 #include "pars_align_seq.h"
 #include "sequence_model.h"
+
 //pars_align_seq::pars_align_seq(const int* seqA, const unsigned char* seqB,
 //		size_t n_a, size_t n_b, size_t aStride, const unsigned int* aAux,
 //		size_t aAuxStride, pars_align_seq::arrays &arr,
