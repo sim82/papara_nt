@@ -12,7 +12,7 @@
  *  for more details.
  */
 
-
+#include <ivymike/disable_shit.h>
 #define BOOST_UBLAS_NDEBUG 1
 #include <stdexcept>
 #include <iostream>
@@ -94,8 +94,12 @@ struct papara_score_parameters {
     static papara_score_parameters parse_scores( const char *opts) {
         
         int o, e, m, mc;
+#ifndef _MSC_VER
         int n = sscanf( opts, "%d:%d:%d:%d", &o, &e, &m, &mc );
-        
+#else
+        int n = sscanf_s( opts, "%d:%d:%d:%d", &o, &e, &m, &mc );
+#endif
+
         if( n != 4 ) {
             std::cerr <<  "cannot parse user options for papara: '" << opts << "'\nIt should match the following format: <open>:<extend>:<match>:<match cg>\n";
             throw std::runtime_error( "bailing out" );
@@ -923,7 +927,7 @@ private:
 
 
 class scoring_results {
-
+public:
     class candidate {
 
     public:
@@ -1382,6 +1386,7 @@ void calc_scores( size_t n_threads, const references<pvec_t, seq_tag> &refs, con
     }
 
     worker_t w0(&bq, res, qs, 0, sp );
+	
     w0();
 
     tg.join_all();
@@ -1590,9 +1595,9 @@ std::vector<std::vector<uint8_t> > generate_traces( std::ostream &os_quality, st
     std::vector<uint8_t> cand_trace;
 
     for( size_t i = 0; i < qs.size(); i++ ) {
-        int best_edge = res.bestedge_at(i);
+        size_t best_edge = res.bestedge_at(i);
 
-        assert( best_edge >= 0 && size_t(best_edge) < refs.num_pvecs() );
+        assert( size_t(best_edge) < refs.num_pvecs() );
 
         int score = -1;
 
@@ -1858,7 +1863,7 @@ std::string filename( const std::string &run_name, const char *type ) {
 bool file_exists(const char *filename)
 {
     std::ifstream is(filename);
-    return is;
+    return is.good();
 }
 
 
@@ -2118,10 +2123,12 @@ int main( int argc, char *argv[] ) {
         }
     }
 
-    
-    
-    std::cout << t.elapsed() << std::endl;
+	std::cout << t.elapsed() << std::endl;
     lout << "SUCCESS " << t.elapsed() << std::endl;
+
+	
+    
+    
     return 0;
 //     getchar();
 }

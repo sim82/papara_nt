@@ -505,7 +505,7 @@ class papara_nt : public papara_nt_i {
         const unsigned int *auxptrs[VW];
         const double *gapp_ptrs[VW];
         size_t ref_len;
-        int edges[VW];
+        size_t edges[VW];
         int num_valid;
     };
 
@@ -587,7 +587,7 @@ class papara_nt : public papara_nt_i {
 
 
 
-                            if( score_vec[k] < m_pnt.m_qs_bestscore[i] || (score_vec[k] == m_pnt.m_qs_bestscore[i] && block.edges[k] < m_pnt.m_qs_bestedge[i] )) {
+                            if( score_vec[k] < m_pnt.m_qs_bestscore[i] || (score_vec[k] == m_pnt.m_qs_bestscore[i] && block.edges[k] < size_t(m_pnt.m_qs_bestedge[i]) )) {
                                 const bool validate = false;
                                 if( validate ) {
                                     const int *seqptr = block.seqptrs[k];
@@ -604,7 +604,9 @@ class papara_nt : public papara_nt_i {
                                 }
 
                                 m_pnt.m_qs_bestscore[i] = score_vec[k];
-                                m_pnt.m_qs_bestedge[i] = block.edges[k];
+
+								assert( block.edges[k] <= std::numeric_limits<int>::max() );
+                                m_pnt.m_qs_bestedge[i] = int(block.edges[k]); // TODO: dto, maybe change to size_t
                             }
                         }
                     }
@@ -1067,7 +1069,9 @@ public:
 				if( it->res < m_qs_bestscore[it->qs] || (it->res == m_qs_bestscore[it->qs] && int(it->edge) < m_qs_bestedge[it->qs] )) {
 
 					m_qs_bestscore[it->qs] = it->res;
-					m_qs_bestedge[it->qs] = it->edge;
+
+					assert( it->edge <= std::numeric_limits<int>::max() );
+					m_qs_bestedge[it->qs] = int(it->edge); // TODO: review: can m_qs_bestedge become size_t? 
 				}
 
 			}

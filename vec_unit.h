@@ -20,14 +20,18 @@
 #include <cassert>
 #include <cstdio>
 #include <stdint.h>
-#include <immintrin.h>
-#include <x86intrin.h>
 
+#ifndef _MSC_VER
+#include <x86intrin.h>
+#endif
+#include <immintrin.h>
 
 #ifdef __AVX__
 #define HAVE_AVX
 //#include <immintrin.h>
 #endif
+
+const size_t required_alignment = 32;
 
 template<class T, size_t W> 
 struct vector_unit {
@@ -84,7 +88,7 @@ struct vector_unit<short, 8> {
         return _mm_andnot_si128( a, b );
     }
     static inline const vec_t bit_invert( const vec_t &a ) {
-        return _mm_xor_si128( a, set1(0xffff) );
+        return _mm_xor_si128( a, set1(T(0xffff)) );
     }
     
     
@@ -138,7 +142,7 @@ struct vector_unit<short, 8> {
     }
 
     static inline void assert_alignment( T * p ) {
-        assert( size_t(p) % 32 == 0 );
+        assert( size_t(p) % required_alignment == 0 );
     }
     
 };
@@ -202,7 +206,7 @@ struct vector_unit<short, 16> {
         return vec_t( _mm_andnot_si128( a.l, b.l ), _mm_andnot_si128( a.h, b.h ) );
     }
     static inline const vec_t bit_invert( const vec_t &a ) {
-        return vec_t( _mm_xor_si128( a.l, _mm_set1_epi16(0xffff) ), _mm_xor_si128( a.h, _mm_set1_epi16(0xffff) ) );
+        return vec_t( _mm_xor_si128( a.l, _mm_set1_epi16(T(0xffff)) ), _mm_xor_si128( a.h, _mm_set1_epi16(T(0xffff)) ) );
     }
 
 
@@ -258,7 +262,7 @@ struct vector_unit<short, 16> {
     }
 
     static inline void assert_alignment( T * p ) {
-        assert( size_t(p) % 32 == 0 );
+        assert( size_t(p) % required_alignment == 0 );
     }
 
 };
@@ -373,7 +377,7 @@ struct vector_unit<int, 4> {
     }
     
     static inline void assert_alignment( T * p ) {
-        assert( size_t(p) % 32 == 0 );
+        assert( size_t(p) % required_alignment == 0 );
     }
 
 };

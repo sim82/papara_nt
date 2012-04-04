@@ -26,7 +26,10 @@ namespace boost { namespace numeric { namespace ublas {
 CholeskyDecomposition::CholeskyDecomposition (const Matrix& A) {
 
      // Initialize.
-      n = A.size1();
+
+	  assert( A.size1() <= std::numeric_limits<int>::max() );
+
+      n = int(A.size1()); // TODO: cast added by me. 
       L = Matrix(n,n);
       isspd = ((int)A.size2() == n);
       // Main loop.
@@ -131,7 +134,8 @@ CholeskyDecomposition::Matrix CholeskyDecomposition::solve (const Matrix& B) con
 
       // Copy right hand side.
       Matrix X(B);
-      int nx = B.size2();
+	  assert( B.size2() < std::numeric_limits<int>::max() );
+      int nx = int(B.size2()); // TODO: cast to int added by me
 
 	      // Solve L*Y = B;
 	      for (int k = 0; k < n; k++) {

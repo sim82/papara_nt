@@ -515,7 +515,7 @@ public:
     //	throw std::runtime_error( "i think there is an error in this function. why v1 in the next line?");
     	v2 *= pgap_model->gap_freq();
 
-    	float v = v1 / (v1 + v2);
+    	float v = float(v1 / (v1 + v2));
 
     	if( v != v ) {
      		std::cerr << "meeeeep: " << v1 << " " << v2 << "\n";

@@ -45,7 +45,10 @@ public:
     const static std::vector<char> inverse_meaning;
 //    const static std::vector<pars_state_t> bit_vector;
 
-    static uint8_t normalize( uint8_t c ) {
+    static uint8_t normalize( size_t xc ) {
+		assert( xc <= 255 );
+
+		int c = int(xc);
         c = std::toupper(c);
 
         switch( c ) {
@@ -61,7 +64,7 @@ public:
     }
 
 
-    static pars_state_t s2p( uint8_t c ) {
+    static pars_state_t s2p( size_t c ) {
         c = normalize(c);
         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
                                    std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
@@ -76,7 +79,7 @@ public:
         return pars_state_t(idx);
     }
 
-    static uint8_t s2c( uint8_t c ) {
+    static uint8_t s2c( size_t c ) {
         c = normalize(c);
         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
                                    std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
@@ -88,10 +91,10 @@ public:
             throw std::runtime_error( "illegal character in DNA/RNA sequence");
         }
 
-        return idx;
+        return uint8_t(idx); // safe because of the check above
     }
 
-    static pars_state_t c2p( uint8_t c ) {
+    static pars_state_t c2p( size_t c ) {
         return pars_state_t(c);
     }
 
@@ -114,7 +117,7 @@ public:
    }
 
     static inline pars_state_t gap_state() {
-        return inverse_meaning.size() - 1;
+        return pars_state_t(inverse_meaning.size() - 1);
     }
 
     static inline size_t num_cstates() {
@@ -137,12 +140,16 @@ public:
     const static std::vector<char> inverse_meaning;
     const static std::vector<unsigned int> bit_vector;
 
-    static inline uint8_t normalize( uint8_t c ) {
+    static inline uint8_t normalize( size_t xc ) {
+		assert( xc <= 255 );
+
+		int c = int(xc);
+
         return std::toupper(c);
     }
 
 
-    static pars_state_t s2p( uint8_t c ) {
+    static pars_state_t s2p( size_t c ) {
         c = normalize(c);
         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
                                    std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
@@ -155,7 +162,7 @@ public:
 
     }
 
-    static uint8_t s2c( uint8_t c ) {
+    static uint8_t s2c( size_t c ) {
         c = normalize(c);
         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
                                    std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
@@ -167,10 +174,10 @@ public:
             throw std::runtime_error( "illegal character in DNA/RNA sequence");
         }
 
-        return idx;
+        return uint8_t(idx);
     }
 
-    static pars_state_t c2p( uint8_t c ) {
+    static pars_state_t c2p( size_t c ) {
         return bit_vector.at(c);
     }
 
@@ -191,14 +198,18 @@ public:
 
 
     static inline bool is_single(pars_state_t ps) {
+  #ifndef _MSC_VER
         return __builtin_popcount(ps) == 1;
+#else
+        return __popcnt(ps) == 1;
+#endif
     }
 
     static inline bool is_gap(pars_state_t ps) {
         return ps == gap_state();
     }
 
-    static inline bool cstate_is_gap( uint8_t cs) {
+    static inline bool cstate_is_gap( size_t cs) {
        return cs == inverse_meaning.size() - 1;
    }
 

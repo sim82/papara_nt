@@ -808,7 +808,7 @@ public:
                 score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_start * W));
                 score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_end * W));
 
-                _mm_prefetch( sm_inc_iter, _MM_HINT_T0 );
+                _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
 
 
                 vec_t last_sdiag = vu::load( &(*block_sdiag_it));
@@ -926,7 +926,7 @@ public:
         }
 
         ticks ticks2 = getticks();
-        ticks_all_ += elapsed(ticks2, ticks1 );
+        ticks_all_ += uint64_t(elapsed(ticks2, ticks1 ));
         //
 
         vu::store( max_score, &(*out_start) );
@@ -1041,8 +1041,8 @@ score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter 
         int bc = *(bstart + ib);
 
         score_t last_sl = SMALL;
-        score_t last_sc = 0.0;
-        score_t last_sdiag = 0.0;
+        score_t last_sc = score_t(0.0);
+        score_t last_sdiag = score_t(0.0);
 
         score_t * __restrict s_iter = arr.s.base();
         score_t * __restrict si_iter = arr.si.base();
@@ -1139,8 +1139,9 @@ score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter 
 //    std::cout << "max score: " << max_score << "\n";
 //    std::cout << "max " << max_a << " " << max_b << "\n";
 
-    int ia = asize - 1;
-    int ib = bsize - 1;
+	
+    ptrdiff_t ia = asize - 1;
+    ptrdiff_t ib = bsize - 1;
 
     assert( ia == max_a || ib == max_b );
 
@@ -1430,8 +1431,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         si.resize( a.size() );
     }
     
-    std::fill( s.begin(), s.end(), 0 );
-    std::fill( si.begin(), si.end(), 0 );
+    std::fill( s.begin(), s.end(), score_t(0) );
+    std::fill( si.begin(), si.end(), score_t(0) );
     const score_t SMALL = -1e8;
 
     score_t max_score = SMALL;
@@ -1549,8 +1550,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     std::vector<uint8_t> a_tb;
     std::vector<uint8_t> b_tb;
     
-    int ia = a.size() - 1;
-    int ib = b.size() - 1;
+    int ia = int(a.size()) - 1;
+    int ib = int(b.size()) - 1;
     
     
     
