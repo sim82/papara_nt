@@ -315,6 +315,8 @@ void do_newview( pvec_t &root_pvec, lnode *n1, lnode *n2, bool incremental ) {
 
 
 //         std::cout << "tip case: " << (*it) << "\n";
+        
+        
         pvec_t::newview(p->get_pvec(), c1->get_pvec(), c2->get_pvec(), it->child1->backLen, it->child2->backLen, it->tc);
 
     }
@@ -618,6 +620,10 @@ public:
 
         visit_lnode( n, tc );
 
+        //boost::dynamic_bitset<> found_tree_taxa( tc.m_nodes.size(), true );
+        
+        
+        
         std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
 
         for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
@@ -647,6 +653,8 @@ public:
                 // additionally, all columns that contain only gaps are removed from the reference sequences.
                 
                 if( it != name_to_lnode.end() ) {
+                    
+                    
                     sptr::shared_ptr< lnode > ln = it->second;
                     //      adata *ad = ln->m_data.get();
 
@@ -664,7 +672,7 @@ public:
                     m_ref_names.back().swap( ref_ma.names[i] );
                     m_ref_seqs.back().swap( ref_ma.data[i] );
 
-                    // mark all non-gap positions of the current reference in bit-vector 'unmaked'
+                    // mark all non-gap positions of the current reference in bit-vector 'unmasked'
                     const std::vector<uint8_t> &seq = m_ref_seqs.back();
                     if( unmasked.empty() ) {
                         unmasked.resize( seq.size() );
@@ -676,11 +684,25 @@ public:
                         unmasked[j] |= !seq_model::is_gap( seq_model::s2p(seq[j]));
                     }
                     
+                    // erase it from the name to lnode* map, so that it can be used to ideantify tree-taxa without corresponding entries in the alignment
+                    name_to_lnode.erase(it);
                     
                 } else {
                     qs->add(ref_ma.names[i], &ref_ma.data[i]);
                 }
             }
+            
+            if( !name_to_lnode.empty() ) {
+                std::cerr << "error: there are " << name_to_lnode.size() << " taxa in the tree with no corresponding sequence in the reference alignment. names:\n";
+                
+                for( std::map< std::string, std::tr1::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
+                    std::cout << it->first << "\n";
+                }
+                
+                throw std::runtime_error( "bailing out due to inconsitent input data\n" );
+                
+            }
+            
             {
                 // remove all 'pure-gap' columns from the ref sequences
                 
