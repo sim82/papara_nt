@@ -27,52 +27,54 @@ set( ALL_HEADERS )
 ENDIF()
 
 
-add_executable(papara_nt main.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
-add_executable(papara papara.cpp  pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp ${ALL_HEADERS})
-add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
+ADD_LIBRARY( papara_core SHARED papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
 
-target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
-target_link_libraries(papara ivymike ublas_jama ${SYSDEP_LIBS} )
-target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
+# add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
+add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
+# add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
+
+# target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
+target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
+# target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 
 
 # more experimental stuff that I don't care to force through microsoft's interpretation of c++...
 # also that stuff externally only depends on boost headers, which removes most windows related P.I.T.A.
-if( NOT WIN32 ) 
-add_executable(tree_similarity tree_similarity.cpp call_main2.cpp)
-add_executable(propara propara.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
-add_executable(smith_waterman smith_waterman.cpp )
-add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp )
-add_executable(stepwise_addition_gapp stepwise_addition_gapp.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp )
-add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp )
-add_executable(epa_extract_qs_covered epa_extract_qs_covered.cpp )
-
-
-add_executable(tbb_test tbb.cpp )
-add_executable(dtw dtw.cpp )
-add_executable(inherit_test inherit_test.cpp )
-add_executable(testbench testbench.cpp pars_align_seq.cpp )
-# add_executable(atlas_test atlas.cpp )
-
-add_executable(test_bitset test_bitset.cpp)
-#add_executable(endian_benchmark endian_benchmark.cpp)
-
-target_link_libraries(tree_similarity ivymike)
-target_link_libraries(propara ivymike ${SYSDEP_LIBS} PocoFoundation ublas_jama ${BOOST_LIBS})
-#target_link_libraries(stepwise_addition ivymike)
-target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
-target_link_libraries(stepwise_addition_gapp ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
-target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
-
-#target_link_libraries( atlas_test ivymike ${BOOST_LIBS} atlas cblas )
-target_link_libraries(tbb_test ublas_jama ivymike )
-target_link_libraries(testbench ${BOOST_LIBS} )
-target_link_libraries(epa_extract_qs_covered ivymike)
-
-target_link_libraries(dtw ivymike)
-target_link_libraries(inherit_test ivymike)
-
-target_link_libraries(test_bitset ivymike)
-#target_link_libraries(endian_benchmark ivymike)
-
-endif()
+# if( NOT WIN32 ) 
+# add_executable(tree_similarity tree_similarity.cpp call_main2.cpp)
+# add_executable(propara propara.cpp pvec.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
+# add_executable(smith_waterman smith_waterman.cpp )
+# add_executable(stepwise_addition stepwise_addition.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp )
+# add_executable(stepwise_addition_gapp stepwise_addition_gapp.cpp pvec.cpp pars_align_seq.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp )
+# add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp )
+# add_executable(epa_extract_qs_covered epa_extract_qs_covered.cpp )
+# 
+# 
+# add_executable(tbb_test tbb.cpp )
+# add_executable(dtw dtw.cpp )
+# add_executable(inherit_test inherit_test.cpp )
+# add_executable(testbench testbench.cpp pars_align_seq.cpp )
+# # add_executable(atlas_test atlas.cpp )
+# 
+# add_executable(test_bitset test_bitset.cpp)
+# #add_executable(endian_benchmark endian_benchmark.cpp)
+# 
+# target_link_libraries(tree_similarity ivymike)
+# target_link_libraries(propara ivymike ${SYSDEP_LIBS} PocoFoundation ublas_jama ${BOOST_LIBS})
+# #target_link_libraries(stepwise_addition ivymike)
+# target_link_libraries(stepwise_addition ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
+# target_link_libraries(stepwise_addition_gapp ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
+# target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
+# 
+# #target_link_libraries( atlas_test ivymike ${BOOST_LIBS} atlas cblas )
+# target_link_libraries(tbb_test ublas_jama ivymike )
+# target_link_libraries(testbench ${BOOST_LIBS} )
+# target_link_libraries(epa_extract_qs_covered ivymike)
+# 
+# target_link_libraries(dtw ivymike)
+# target_link_libraries(inherit_test ivymike)
+# 
+# target_link_libraries(test_bitset ivymike)
+# #target_link_libraries(endian_benchmark ivymike)
+# 
+# endif()

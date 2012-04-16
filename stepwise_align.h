@@ -26,6 +26,8 @@
 #include "fasta.h"
 #include "ivymike/cycle.h"
 
+
+namespace {
 //
 // general: the freeshift version of this type of aligner differs from the
 // implementation used in papara mainly by allowing free gaps also on the reference side
@@ -1628,5 +1630,5 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
 //     std::copy( b.begin(), b.end(), std::ostream_iterator<char>(std::cout) );
 //     std::cout << "\n";
 }
-
+} // end of anonymous namespace
 #endif
