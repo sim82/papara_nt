@@ -1409,6 +1409,9 @@ public:
 
     ref_gap_collector( size_t ref_len ) : ref_gaps_(ref_len + 1) {}
 
+
+    static size_t my_max( size_t a, size_t b ) { return std::max(a,b); }
+
     void add_trace( const std::vector<uint8_t> &gaps ) {
 
         size_t ptr  = ref_gaps_.size() - 1;
@@ -1432,7 +1435,8 @@ public:
         }
 
         // update the _global_ maximum 'gaps-per-ref-position' map
-        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+//        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), my_max ); // FIXME: why?
     }
 
     // TODO: shouldn't it be possible to infer the state_type from oiter?
@@ -1936,7 +1940,7 @@ void print_banner( std::ostream &os ) {
     os << "|  __/ _` |  __/ _` |    // _` |\n";
     os << "| | | (_| | | | (_| | |\\ \\ (_| |\n";
     os << "\\_|  \\__,_\\_|  \\__,_\\_| \\_\\__,_|\n";
-    os << "  Version 2.0\n";
+    os << "  Version 2.4.1.2\n";
 
 }
 
