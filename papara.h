@@ -198,7 +198,7 @@ public:
 
 
 
-static bool g_dump_aux = false;
+extern bool g_dump_aux;
 
 
 

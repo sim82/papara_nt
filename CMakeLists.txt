@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 
 project(papara_nt)
 set( CMAKE_NO_VERBOSE yes )
-add_subdirectory(ivy_mike)
+#add_subdirectory(ivy_mike)
 add_subdirectory(ublasJama-1.0.2.3)
 
-include_directories( ${include_directories} ivy_mike/src . ublasJama-1.0.2.3 )
+include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2.3 )
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)

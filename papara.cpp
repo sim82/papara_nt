@@ -18,6 +18,8 @@ using namespace ivy_mike::tree_parser_ms;
 
 using namespace papara;
 
+bool papara::g_dump_aux = false;
+
 template<typename seq_tag>
 queries<seq_tag>::queries( const std::string &opt_qs_name ) {
 
