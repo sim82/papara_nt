@@ -59,7 +59,6 @@
 //#endif
 
 
-#include <tmmintrin.h>
 
 #ifdef __AVX__
 #define HAVE_AVX
