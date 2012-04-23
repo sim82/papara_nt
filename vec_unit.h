@@ -21,10 +21,45 @@
 #include <cstdio>
 #include <stdint.h>
 
-#ifndef _MSC_VER
-#include <x86intrin.h>
+// the convenient x86intrin.h is not available on ancient gcc/msvc, so pull in the best manually.
+// sse3 is the absolute baseline. sssssssse3 and sse4.666 are nice to have (abs and 32bit min)
+// and AVX is a completely different beast...
+
+#ifdef __SSE3__
+#include <pmmintrin.h>
 #endif
+
+
+#ifdef __SSE4A__
+#include <ammintrin.h>
+#endif
+
+#if defined (__SSE4_2__) || defined (__SSE4_1__)
+#include <smmintrin.h>
+#endif
+
+#ifdef __SSSE3__
+#include <tmmintrin.h>
+#endif
+
+#ifdef __SSE4A__
+#include <ammintrin.h>
+#endif
+
+#if defined (__SSE4_2__) || defined (__SSE4_1__)
+#include <smmintrin.h>
+#endif
+
+#ifdef __AVX__
 #include <immintrin.h>
+#endif
+
+//#ifndef _MSC_VER
+//#include <x86intrin.h>
+//#endif
+
+
+#include <tmmintrin.h>
 
 #ifdef __AVX__
 #define HAVE_AVX
@@ -603,7 +638,7 @@ struct vector_unit<double, 2> {
         //unsigned int SIGN_MASK[4] = {0x7FFFFFFF,0x7FFFFFFF,0x7FFFFFFF,0x7FFFFFFF};
         //unsigned int SIGN_MASK = 0x7FFFFFFF;
 
-        const uint64_t SIGN_MASK_U64x = 0x7fffffffffffffff;
+        const uint64_t SIGN_MASK_U64x = 0x7fffffffffffffffULL;
 
         const double *SIGN_MASK_PTR = (double*)&SIGN_MASK_U64x;
         double SIGN_MASK = *SIGN_MASK_PTR;

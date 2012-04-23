@@ -21,8 +21,8 @@
 #include <stdexcept>
 #include <vector>
 
-
-#ifndef _MSC_VER // deactivated for now, because of *intrin.h chaos on vc
+#if 0 // deactivated in oldgcc branch
+//#ifndef _MSC_VER // deactivated for now, because of *intrin.h chaos on vc
 #include <x86intrin.h>
 
 
