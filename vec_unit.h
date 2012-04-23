@@ -20,7 +20,6 @@
 #include <cassert>
 #include <cstdio>
 #include <stdint.h>
-#include "compiler_support.h"
 
 // the convenient x86intrin.h is not available on ancient gcc/msvc, so pull in the best manually.
 // sse3 is the absolute baseline. sssssssse3 and sse4.666 are nice to have (abs and 32bit min)
