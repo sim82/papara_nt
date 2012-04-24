@@ -79,6 +79,7 @@ int main( int argc, char *argv[] ) {
     
     if( argc < 2 ) {
         std::cerr << "missing random seed/inout files" << std::endl;
+		return -1;
     }
     
     unsigned int seed = atoi( argv[1] );
