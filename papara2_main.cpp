@@ -95,7 +95,7 @@ void print_help( std::ostream &os ) {
 }
 
 template<typename pvec_t, typename seq_tag>
-void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps, const papara_score_parameters &sp ) {
+void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps, const papara_score_parameters &sp, bool write_fasta ) {
 
     ivy_mike::perf_timer t1;
 
@@ -135,8 +135,8 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     size_t pad = 1 + std::max(qs.max_name_length(), refs.max_name_length());
 
-    std::ofstream os( score_file.c_str() );
-    assert( os.good() );
+//     std::ofstream os( score_file.c_str() );
+//     assert( os.good() );
 
     std::ofstream os_qual( quality_file.c_str() );
     assert( os_qual.good() );
@@ -150,9 +150,17 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
 
 
+    std::auto_ptr<papara::output_alignment> oa;
+    if( write_fasta ) {
+        oa.reset( new papara::output_alignment_fasta( score_file.c_str() ));
+    } else {
+        oa.reset( new papara::output_alignment_phylip( score_file.c_str() ));
+    }
+    
     //refs.write_seqs(os, pad);
-    driver<pvec_t,seq_tag>::align_best_scores( os, os_qual, os_cands, qs, refs, res, pad, ref_gaps, sp );
-
+    //     driver<pvec_t,seq_tag>::align_best_scores( os, os_qual, os_cands, qs, refs, res, pad, ref_gaps, sp );
+    driver<pvec_t,seq_tag>::align_best_scores_oa( oa.get(), qs, refs, res, pad, ref_gaps, sp );
+    
 }
 
 int main( int argc, char *argv[] ) {
@@ -178,6 +186,7 @@ int main( int argc, char *argv[] ) {
     bool opt_aa;
     bool opt_no_ref_gaps;
     bool opt_print_help;
+    bool opt_write_fasta;
     
     igp.add_opt( 't', igo::value<std::string>(opt_tree_name) );
     igp.add_opt( 's', igo::value<std::string>(opt_alignment_name) );
@@ -191,6 +200,7 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'r', igo::value<bool>(opt_no_ref_gaps, true).set_default(false) );
     igp.add_opt( 'p', igo::value<std::string>(opt_user_parameters).set_default("") );
     igp.add_opt( 'h', igo::value<bool>(opt_print_help, true).set_default(false) );
+    igp.add_opt( 'g', igo::value<bool>(opt_write_fasta, true).set_default(false) );
     
     igp.parse(argc,argv);
 
@@ -250,15 +260,15 @@ int main( int argc, char *argv[] ) {
     if( opt_use_cgap ) {
 
         if( opt_aa ) {
-            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
+            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
         } else {
-            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
+            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
         }
     } else {
         if( opt_aa ) {
-            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
+            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
         } else {
-            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp );
+            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
         }
     }
 
