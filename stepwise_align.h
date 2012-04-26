@@ -806,7 +806,7 @@ public:
                 score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
                 score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
                 score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_start * W));
-                _mm_prefetch( sm_inc_iter, _MM_HINT_T0 );
+               // _mm_prefetch( sm_inc_iter, _MM_HINT_T0 );
 
 
                 vec_t last_sdiag = vu::load( &(*block_sdiag_it));

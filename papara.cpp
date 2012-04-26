@@ -12,7 +12,7 @@
  *  for more details.
  */
 
-
+#include <boost/shared_ptr.hpp>
 #define BOOST_UBLAS_NDEBUG 1
 #include <stdexcept>
 #include <iostream>
