@@ -1,5 +1,7 @@
 #ifndef __tree_similarity_h
 #define __tree_similarity_h
+#if 0
+
 #include <vector>
 #include <boost/dynamic_bitset_fwd.hpp>
 
@@ -17,6 +19,6 @@ double compare_trees( ivy_mike::tree_parser_ms::lnode *t1, ivy_mike::tree_parser
 
 void get_all_splits( ivy_mike::tree_parser_ms::lnode *t, std::vector< std::pair< ivy_mike::tree_parser_ms::lnode*, ivy_mike::tree_parser_ms::lnode* > > &edges, std::vector<boost::dynamic_bitset<> > &splits, std::vector<ivy_mike::tree_parser_ms::lnode *> &sorted_tips );
 
-
+#endif
 
 #endif

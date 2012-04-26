@@ -7,7 +7,7 @@
 
 
 namespace align_utils {
-void trace_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > *map) {
+static void trace_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > *map) {
 
 	int seq_ptr = 0;
 
@@ -28,7 +28,7 @@ void trace_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int
 }
 
 
-uint8_t decode_dna( int s ) {
+static uint8_t decode_dna( int s ) {
 	assert( s >= 0 && s < 4 );
 	const static uint8_t map[4] = {'A','C','G','T'};
 
@@ -36,7 +36,7 @@ uint8_t decode_dna( int s ) {
 }
 
 
-void realize_trace( const std::vector<uint8_t> &seq, const std::vector<uint8_t> &tb, std::vector<uint8_t> *out ) {
+static void realize_trace( const std::vector<uint8_t> &seq, const std::vector<uint8_t> &tb, std::vector<uint8_t> *out ) {
 	assert( out != 0 );
 
 	std::vector<uint8_t>::const_reverse_iterator tb_it;

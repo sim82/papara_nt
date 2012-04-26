@@ -31,9 +31,11 @@ LUDecomposition::LUDecomposition (const Matrix& A) {
 
    // Use a "left-looking", dot-product, Crout/Doolittle algorithm.
 
+      assert( A.size1() < size_t(std::numeric_limits<int>::max()) && A.size2() < size_t(std::numeric_limits<int>::max()));
+
       LU = A;
-      m = A.size1();
-      n = A.size2();
+      m = int(A.size1());
+      n = int(A.size2()); // TODO: cast to int
       piv = PivotVector(m);
       for (int i = 0; i < m; i++) {
          piv(i) = i;
@@ -80,7 +82,9 @@ LUDecomposition::LUDecomposition (const Matrix& A) {
             for (int k = 0; k < n; k++) {
                double t = LU(p,k); LU(p,k) = LU(j,k); LU(j,k) = t;
             }
-            int k = piv(p); piv(p) = piv(j); piv(j) = k;
+            size_t k = piv(p);  // TODO: SIM: fixed 32 bit sloppyness: this was an int...
+			piv(p) = piv(j); 
+			piv(j) = k;
             pivsign = -pivsign;
          }
          // Compute multipliers.
@@ -209,7 +213,8 @@ LUDecomposition::Matrix LUDecomposition::solve (const Matrix& B) const {
       BOOST_UBLAS_CHECK(isNonsingular(), singular("Matrix is singular."));
 
       // Copy right hand side with pivoting
-      int nx = B.size2();
+	  assert( B.size2() < size_t(std::numeric_limits<int>::max()));
+      int nx = int(B.size2()); // TODO: cast to int
       Matrix X(m,nx);
       for (int i = 0; i < m; i++) {
           row(X,i) = row(B, piv(i));

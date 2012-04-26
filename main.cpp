@@ -505,7 +505,7 @@ class papara_nt : public papara_nt_i {
         const unsigned int *auxptrs[VW];
         const double *gapp_ptrs[VW];
         size_t ref_len;
-        int edges[VW];
+        size_t edges[VW];
         int num_valid;
     };
 
@@ -587,7 +587,7 @@ class papara_nt : public papara_nt_i {
 
 
 
-                            if( score_vec[k] < m_pnt.m_qs_bestscore[i] || (score_vec[k] == m_pnt.m_qs_bestscore[i] && block.edges[k] < m_pnt.m_qs_bestedge[i] )) {
+                            if( score_vec[k] < m_pnt.m_qs_bestscore[i] || (score_vec[k] == m_pnt.m_qs_bestscore[i] && block.edges[k] < size_t(m_pnt.m_qs_bestedge[i]) )) {
                                 const bool validate = false;
                                 if( validate ) {
                                     const int *seqptr = block.seqptrs[k];
@@ -604,7 +604,9 @@ class papara_nt : public papara_nt_i {
                                 }
 
                                 m_pnt.m_qs_bestscore[i] = score_vec[k];
-                                m_pnt.m_qs_bestedge[i] = block.edges[k];
+
+								assert( block.edges[k] <= size_t(std::numeric_limits<int>::max()) );
+                                m_pnt.m_qs_bestedge[i] = int(block.edges[k]); // TODO: dto, maybe change to size_t
                             }
                         }
                     }
@@ -1067,7 +1069,9 @@ public:
 				if( it->res < m_qs_bestscore[it->qs] || (it->res == m_qs_bestscore[it->qs] && int(it->edge) < m_qs_bestedge[it->qs] )) {
 
 					m_qs_bestscore[it->qs] = it->res;
-					m_qs_bestedge[it->qs] = it->edge;
+
+					assert( it->edge <= size_t(std::numeric_limits<int>::max()) );
+					m_qs_bestedge[it->qs] = int(it->edge); // TODO: review: can m_qs_bestedge become size_t? 
 				}
 
 			}
@@ -1186,6 +1190,8 @@ public:
         double mean_quality = 0.0;
         double n_quality = 0.0;
 
+        const size_t pad = max_name_len() + 1;
+
         for( unsigned int i = 0; i < m_qs_names.size(); i++ ) {
             int best_edge = m_qs_bestedge[i];
 
@@ -1236,7 +1242,7 @@ public:
 
             std::transform( out_qs.begin(), out_qs.end(), out_qs.begin(), dna_parsimony_mapping::p2d );
 
-            os << m_qs_names[i] << "\t";
+            os << std::setw(pad) << std::left << m_qs_names[i];
             std::copy( out_qs.begin(), out_qs.end(), std::ostream_iterator<char>(os));
             os << "\n";
 
@@ -1299,14 +1305,32 @@ public:
         std::cout << t2.elapsed() << std::endl;
 
     }
+
+    size_t max_name_len() {
+        size_t ml = 0;
+
+        for( size_t i = 0; i < m_ref_names.size(); i++ ) {
+            ml = std::max( ml, m_ref_names[i].size() );
+        }
+
+
+        for( size_t i = 0; i < m_qs_names.size(); i++ ) {
+            ml = std::max( ml, m_qs_names[i].size() );
+        }
+
+        return ml;
+    }
+
     void dump_ref_seqs ( std::ostream &os ) {
+        const size_t pad = max_name_len() + 1;
+
         for( size_t i = 0; i < m_ref_seqs.size(); i++ ) {
             std::string outs;
             outs.resize(m_ref_seqs[i].size() );
 
             std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), outs.begin(), normalize_dna );
 
-            os << m_ref_names[i] << "\t" << outs << "\n";
+            os << std::setw(pad) << std::left << m_ref_names[i] << outs << "\n";
         }
     }
 
@@ -1373,7 +1397,7 @@ std::string filename( const std::string &run_name, const char *type ) {
 bool file_exists(const char *filename)
 {
   std::ifstream is(filename);
-  return is;
+  return is.good();
 }
 
 

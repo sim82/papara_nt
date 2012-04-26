@@ -98,8 +98,8 @@ struct worker {
 template <size_t W, typename seq_char_t, typename score_t, typename sscore_t>
 struct lworker {
     typedef db_block<W, seq_char_t> block_t;
-    const int m_nthreads;
-    const int m_rank;
+    const size_t m_nthreads;
+    const size_t m_rank;
     block_queue<block_t> &m_queue;
     const scoring_matrix &m_sm;
     const std::vector< std::vector<uint8_t> > &m_seq1;
@@ -110,12 +110,12 @@ struct lworker {
     
     pw_score_matrix &m_outscore;
     const bool m_half_matrix;
-    lworker( int nthreads, int rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq1_, const std::vector< std::vector<uint8_t> > &seq2_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore, bool half_matrix, size_t block_size ) 
+    lworker( size_t nthreads, size_t rank, block_queue<block_t>&q, const scoring_matrix &sm, const std::vector< std::vector<uint8_t> > &seq1_, const std::vector< std::vector<uint8_t> > &seq2_, const sscore_t gap_open_, const sscore_t gap_extend_,pw_score_matrix &outscore, bool half_matrix, size_t block_size ) 
     : m_nthreads(nthreads), m_rank(rank), m_queue(q), m_sm(sm), m_seq1(seq1_), m_seq2(seq2_), gap_open(gap_open_), gap_extend(gap_extend_), m_block_size(block_size), m_outscore(outscore), m_half_matrix( half_matrix ) 
     {
         if( m_half_matrix ) {
             if( m_seq1.size() != m_seq2.size() ) {
-                std::runtime_error( "half_matrix mode set with m_seq1.size() != m_seq2.size()." );
+                throw std::runtime_error( "half_matrix mode set with m_seq1.size() != m_seq2.size()." );
             }
         }
     }
@@ -324,7 +324,7 @@ struct lworker {
 // WARNING: the sequences are expected to be transformed to 'compressed states' (= 0, 1, 2 ...) rather than characters.
 // The state mapping must be consistent with the supplied scoring matrix and its compressed form.
 // Sequences containing numbers >= sm.num_states() will likely blow up the aligner, as there are no checks after this point!
-PSD_DECLARE_INLINE bool pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq1, const std::vector< std::vector<uint8_t> > &seq2, bool identical, pw_score_matrix &out_scores, scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread, const size_t block_size ) {
+PSD_DECLARE_INLINE bool pairwise_seq_distance( const std::vector< std::vector<uint8_t> > &seq1, const std::vector< std::vector<uint8_t> > &seq2, bool identical, pw_score_matrix &out_scores, const scoring_matrix &sm, const int gap_open, const int gap_extend, const size_t n_thread, const size_t block_size ) {
 #if 1
     const int W = 8;
     typedef short score_t;

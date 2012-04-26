@@ -8,7 +8,7 @@ class pars_align_gapp_seq {
 	typedef unsigned int pars_state_t;
 
     typedef double score_t;
-    const static score_t LARGE_VALUE = 32000; //  score_t must be able to keep LARGE_VALUE + GAP_OPEN + GAP_EXTEND without overflowing!. waiting for c++0x to be able to use std::numeric_limits at compile-time...
+    const static score_t LARGE_VALUE; // = 32000; //  score_t must be able to keep LARGE_VALUE + GAP_OPEN + GAP_EXTEND without overflowing!. waiting for c++0x to be able to use std::numeric_limits at compile-time...
     const score_t GAP_OPEN; //= 1;
     const score_t GAP_EXTEND; // = 1;
     const score_t GAP_OPEN_EXTEND;
@@ -313,7 +313,7 @@ public:
 
 
 
-			return m_arr.score[saddr ( m_tbStartA, m_tbStartB ) ];
+			return int(m_arr.score[saddr ( m_tbStartA, m_tbStartB ) ]);
 
         } else {
         	// back-port to sequential from align_pvec_vec.h
@@ -377,7 +377,7 @@ public:
 				minscore = std::min( minscore, sp[i]);
 			}
 
-			return minscore;
+			return int(minscore);
 //			for ( size_t ib = 0; ib < m_nb; ib++ ) {
 //				pars_state_t cb;// = m_b[ib];
 //

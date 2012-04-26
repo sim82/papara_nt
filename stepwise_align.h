@@ -26,6 +26,8 @@
 #include "fasta.h"
 #include "ivymike/cycle.h"
 
+
+namespace {
 //
 // general: the freeshift version of this type of aligner differs from the
 // implementation used in papara mainly by allowing free gaps also on the reference side
@@ -784,7 +786,7 @@ public:
 
             for( ; it_b != b_end; ++it_b, block_sl_it += W, block_sc_it += W, block_sdiag_it += W ) {
 
-                assert(*it_b >= 0);
+                //assert(*it_b >= 0);
                 assert(*it_b < num_cstates_);
 
 
@@ -803,10 +805,12 @@ public:
 
                 score_t * __restrict s_iter = s_.base();
                 score_t * __restrict si_iter = si_.base();
-                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
-                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
+//                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
+//                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
                 score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_start * W));
-               // _mm_prefetch( sm_inc_iter, _MM_HINT_T0 );
+                score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_end * W));
+
+                _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
 
 
                 vec_t last_sdiag = vu::load( &(*block_sdiag_it));
@@ -815,7 +819,7 @@ public:
 
 
 
-                for(; a_aux_prof_iter != a_aux_prof_end; sm_inc_iter += W, a_aux_prof_iter += W, s_iter += W, si_iter += W ) {
+                for(; sm_inc_iter != sm_inc_end; sm_inc_iter += W/*, a_aux_prof_iter += W*/, s_iter += W, si_iter += W ) {
                     // some 'lessions learned' about instruction ordering when using sse intrinsics:
                     // 1. assigning values that are read/written only once to (const) variables is ok, to improve
                     //    readability, if the assignment is near the use. (rule: don't force the compiler to waste
@@ -827,6 +831,20 @@ public:
                     // The code is written in a kind of static single assignment form to make manual analysis easier:
                     // The basic optimization rule is: place operations so that the number of 'active' values that 'cross'
                     // the operation is minimal. A value is active between its initialization and it's last read-access.
+                    //
+                    // The influence of the compiler is quite large:
+                    // (1) When optimizing for corei7 instead of amdfam10, gcc will order add and andnot instructions differently
+                    //     (andnot add andnot add vs. andnot andnot add add). This gives a 5% advantage on nehalem (but not
+                    //     sandy bridge or barcelona)
+                    // (2) When optimizing for corei7-avx, gcc will automatically use the new 3-operand versions of the 128bit
+                    //     vector instructions, which shortens the inner-loop by around 20% (with corresponding performance increase)
+                    // (3) gcc always uses SIB (scaled index basis) addressing fir the loads/stores. This gains very compact
+                    //     code but has a negative influence on AMD cpus (at least) barcelona. Supposingly the SIB addressing
+                    //     uses multiple micro-ops on amd, which seem to clog-up the pipeline (the throughput is not much more than
+                    //     2ops/cycle.). Clang (as of late 2011) calculates addresses 'by-hand' and uses non SIP addressing. This
+                    //     increses the size of the inner-loop, which in turn runs a bit slower on intel but about 10% faster on AMD.
+                    // (4) MSVC (2011 dev. preview) mixes SIB and manual address calculation (for no apparent reason), and is
+                    //     about 20% slower than gcc on sandy-bridge (might be on par with clang).
 
 
                     //const vec_t cgap = vu::load( a_aux_prof_iter );
@@ -910,7 +928,7 @@ public:
         }
 
         ticks ticks2 = getticks();
-        ticks_all_ += elapsed(ticks2, ticks1 );
+        ticks_all_ += uint64_t(elapsed(ticks2, ticks1 ));
         //
 
         vu::store( max_score, &(*out_start) );
@@ -1025,8 +1043,8 @@ score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter 
         int bc = *(bstart + ib);
 
         score_t last_sl = SMALL;
-        score_t last_sc = 0.0;
-        score_t last_sdiag = 0.0;
+        score_t last_sc = score_t(0.0);
+        score_t last_sdiag = score_t(0.0);
 
         score_t * __restrict s_iter = arr.s.base();
         score_t * __restrict si_iter = arr.si.base();
@@ -1123,8 +1141,9 @@ score_t align_freeshift_pvec( aiter astart, aiter aend, auxiter auxstart, biter 
 //    std::cout << "max score: " << max_score << "\n";
 //    std::cout << "max " << max_a << " " << max_b << "\n";
 
-    int ia = asize - 1;
-    int ib = bsize - 1;
+	
+    ptrdiff_t ia = asize - 1;
+    ptrdiff_t ib = bsize - 1;
 
     assert( ia == max_a || ib == max_b );
 
@@ -1399,7 +1418,7 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
 }
 
 
-void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend ) {
+float align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
 
  
     typedef float score_t;
@@ -1414,8 +1433,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         si.resize( a.size() );
     }
     
-    std::fill( s.begin(), s.end(), 0 );
-    std::fill( si.begin(), si.end(), 0 );
+    std::fill( s.begin(), s.end(), score_t(0) );
+    std::fill( si.begin(), si.end(), score_t(0) );
     const score_t SMALL = -1e8;
 
     score_t max_score = SMALL;
@@ -1525,7 +1544,11 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         }
         
     }
+
     
+    if( !traceback ) {
+        return max_score;
+    }
 //    std::cout << "max score: " << max_score << "\n";
 //    std::cout << "max " << max_a << " " << max_b << "\n";
 //    std::cout << "size " << a.size() << " " << b.size() << "\n";
@@ -1533,8 +1556,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
     std::vector<uint8_t> a_tb;
     std::vector<uint8_t> b_tb;
     
-    int ia = a.size() - 1;
-    int ib = b.size() - 1;
+    int ia = int(a.size()) - 1;
+    int ib = int(b.size()) - 1;
     
     
     
@@ -1610,6 +1633,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
 //     std::cout << "\n";
 //     std::copy( b.begin(), b.end(), std::ostream_iterator<char>(std::cout) );
 //     std::cout << "\n";
+    
+    return max_score;
 }
-
+} // end of anonymous namespace
 #endif

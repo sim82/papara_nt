@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2011 Simon A. Berger
+ *
+ *  This program is free software; you may redistribute it and/or modify its
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the License, or (at your option)
+ *  any later version.
+ *
+ *  This program is distributed in the hope that it will be useful, but
+ *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ *  for more details.
+ */
+
+
 #define BOOST_UBLAS_NDEBUG 1
 
 
@@ -33,7 +48,7 @@
 #include "raxml_interface.h"
 
 #include "math_approx.h"
-
+#include "ivymike/tree_traversal_utils.h"
 #include "ivymike/multiple_alignment.h"
 
 #include "ivymike/tree_parser.h"
@@ -47,6 +62,12 @@
 using ivy_mike::tree_parser_ms::lnode;
 using ivy_mike::tree_parser_ms::ln_pool;
 using ivy_mike::tree_parser_ms::node_data_factory;
+
+using ivy_mike::back_insert_ifer;
+using ivy_mike::rooted_bifurcation;
+using ivy_mike::apply_lnode;
+using ivy_mike::iterate_lnode;
+
 
 namespace ublas = boost::numeric::ublas;
 

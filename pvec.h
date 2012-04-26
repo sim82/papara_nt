@@ -19,13 +19,17 @@ extern "C" {
 }
 #endif
 
-#include "tree_utils.h"
+#include "ivymike/tree_traversal_utils.h"
 #include "parsimony.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
 #include "sequence_model.h"
 namespace {
-
+//using ivy_mike::tip_case;
+using ivy_mike::TIP_TIP;
+using ivy_mike::TIP_INNER;
+using ivy_mike::INNER_INNER;
+}
 
 class pvec_cgap {
     //     aligned_buffer<parsimony_state> v;
@@ -76,7 +80,7 @@ public:
         return auxv;
     }
 
-    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, tip_case tc ) {
+    static void newview( pvec_cgap &p, pvec_cgap &c1, pvec_cgap &c2, double /*z1*/, double /*z2*/, ivy_mike::tip_case tc ) {
 
     	if( c1.v.size() != c2.v.size() ) {
     		std::cout << "size2: " << c1.size() << " " << c2.size() << "\n";
@@ -252,13 +256,15 @@ public:
     	namespace ublas = boost::numeric::ublas;
 
     	m_gap_freq = gap_freq;
-		double f[2] = {1-m_gap_freq, m_gap_freq};
-
+		double f[2] = {m_gap_freq, 1-m_gap_freq};
+    	        //double f[2] = {1-m_gap_freq, m_gap_freq};
 		ublas::matrix<double> rate_matrix(2,2);
 		rate_matrix(0,0) = -f[0];
 		rate_matrix(0,1) = f[0];
 		rate_matrix(1,0) = f[1];
 		rate_matrix(1,1) = -f[1];
+
+		std::cout << "rate matrix: " << rate_matrix << "\n";
 
 		ublas::EigenvalueDecomposition ed(rate_matrix);
 
@@ -382,15 +388,21 @@ public:
     }
 
 
-    void newview( const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
+    void newview( const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, ivy_mike::tip_case tc ) {
     	newview( *this, c1, c2, z1, z2, tc );
 
     	//std::cout << "newview: " << gap_prob.size1() << "\n";
     }
 
-    static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, tip_case tc ) {
-    	namespace ublas = boost::numeric::ublas;
-    	assert( c1.v.size() == c2.v.size() );
+    static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, ivy_mike::tip_case tc ) {
+        namespace ublas = boost::numeric::ublas;
+            
+        assert( c1.v.size() == c2.v.size() );
+
+        if( c1.v.size() != c2.v.size() ) {
+            std::cerr << "not equal: " << c1.size() << " " << c2.size() << "\n";
+            throw std::runtime_error( "newview: vectors have different lengths (illegal incremetal newview on modified data?)" );
+        }
 
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
@@ -487,7 +499,7 @@ public:
         }
     }
 
-    inline size_t size() {
+    inline size_t size() const {
         return v.size();
     }
     
@@ -510,7 +522,7 @@ public:
     //	throw std::runtime_error( "i think there is an error in this function. why v1 in the next line?");
     	v2 *= pgap_model->gap_freq();
 
-    	float v = v1 / (v1 + v2);
+    	float v = float(v1 / (v1 + v2));
 
     	if( v != v ) {
      		std::cerr << "meeeeep: " << v1 << " " << v2 << "\n";
@@ -688,6 +700,6 @@ public:
 
 
 };
-ivy_mike::stupid_ptr<probgap_model> pvec_pgap::pgap_model;
-}
+
+
 #endif

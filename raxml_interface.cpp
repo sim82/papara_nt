@@ -23,13 +23,16 @@
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/lexical_cast.hpp>
 #include "raxml_interface.h"
-#include "tree_utils.h"
-#include "tree_similarity.h"
+#include "ivymike/tree_traversal_utils.h"
+#include "ivymike/tree_split_utils.h"
 
 
 using ivy_mike::tree_parser_ms::lnode;
 using ivy_mike::tree_parser_ms::adata;
 using ivy_mike::tree_parser_ms::ln_pool;
+
+using ivy_mike::tip_collector_dumb;
+using ivy_mike::visit_lnode;
 
 namespace {
 
@@ -136,8 +139,9 @@ void optimize_branch_lengths( ivy_mike::tree_parser_ms::lnode *tree, const std::
 
 
 
-	get_all_splits( tree, edges, splits, sorted_tips );
+	ivy_mike::get_all_splits( tree, edges, splits, sorted_tips );
 
+    
 //	for( std::vector<boost::dynamic_bitset<> >::iterator it = splits.begin(); it != splits.end(); ++it ) {
 //		std::cout << "split: " << (*it) << "\n";
 //	}
@@ -246,7 +250,7 @@ void optimize_branch_lengths( ivy_mike::tree_parser_ms::lnode *tree, const std::
 		std::vector<boost::dynamic_bitset<> > rax_splits;
 		std::vector<ivy_mike::tree_parser_ms::lnode *> rax_sorted_tips;
 
-		get_all_splits( rax_tree, rax_edges, rax_splits, rax_sorted_tips );
+		ivy_mike::get_all_splits( rax_tree, rax_edges, rax_splits, rax_sorted_tips );
 
 //		for( std::vector<lnode*>::iterator it = rax_sorted_tips.begin(); it != rax_sorted_tips.end(); ++it ) {
 //			//(*it)->m_data->print(std::cout);
@@ -580,7 +584,7 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 	}
 
 
-	if( !have_files ) {
+	if( true || !have_files ) {
 		Poco::Pipe raxout_pipe;
 
 		args.push_back("-w");
@@ -595,6 +599,9 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 		pipe_into_deque( raxout_pipe, raxbuf );
 
 		std::cout << "raxml wrote " << raxbuf.size() << "\n";
+
+		std::copy( raxbuf.begin(), raxbuf.end(), std::ostream_iterator<char>(std::cout));
+		std::cout << "\n";
 
 		proc.wait();
 	}

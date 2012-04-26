@@ -34,13 +34,14 @@
 #include "ivymike/tdmatrix.h"
 #include "ivymike/algorithm.h"
 // #include "ivymike/cycle.h"
-#include "tree_utils.h"
+
 #include "parsimony.h"
 #include "pvec.h"
 #include "fasta.h"
 #include "ivymike/tree_parser.h"
+#include "ivymike/tree_traversal_utils.h"
 #include "pars_align_seq.h"
-#include "tree_similarity.h"
+#include "ivymike/tree_split_utils.h"
 #include "ivymike/time.h"
 #include "ivymike/getopt.h"
 #include "ivymike/multiple_alignment.h"
@@ -58,6 +59,15 @@ using std::ios_base;
 using std::ifstream;
 using std::ofstream;
 
+using ivy_mike::back_insert_ifer;
+using ivy_mike::rooted_bifurcation;
+using ivy_mike::apply_lnode;
+using ivy_mike::iterate_lnode;
+using ivy_mike::tip_collector_dumb;
+using ivy_mike::tip_collector;
+using ivy_mike::node_level_assignment;
+using ivy_mike::visit_edges;
+using ivy_mike::edge_collector;
 
 using namespace ivy_mike::tree_parser_ms;
 
@@ -292,7 +302,7 @@ public:
     }
 };
 
-
+#if 0
 
 class lnode_newview_background_racy {
 
@@ -599,7 +609,7 @@ public:
 
 };
 
-
+#endif
 
 class lnode_newview_background {
 
@@ -637,7 +647,7 @@ class lnode_newview_background {
 
 
 
-				tip_case tc;
+				ivy_mike::tip_case tc;
 				if( c1->m_data->isTip && c2->m_data->isTip ) {
 					tc = TIP_TIP;
 				} else if( c1->m_data->isTip && !c2->m_data->isTip ) {
@@ -1016,7 +1026,7 @@ class step_add {
                     }
                 } else {
 
-                    tip_case tc;
+                    ivy_mike::tip_case tc;
                     if( c1->m_data->isTip && c2->m_data->isTip ) {
                         tc = TIP_TIP;
                     } else if( c1->m_data->isTip && !c2->m_data->isTip ) {
@@ -1072,7 +1082,7 @@ class step_add {
 
 
 
-                tip_case tc;
+                ivy_mike::tip_case tc;
                 if( c1->m_data->isTip && c2->m_data->isTip ) {
                     tc = TIP_TIP;
                 } else if( c1->m_data->isTip && !c2->m_data->isTip ) {
@@ -2359,7 +2369,7 @@ int main( int argc, char **argv ) {
     }
 
 
-    std::vector<split_set_t> split_history;
+    std::vector<ivy_mike::split_set_t> split_history;
 
     for( int i = 0; i < 100; ++i )
     {
@@ -2401,13 +2411,13 @@ int main( int argc, char **argv ) {
 
         lnode *tree2 = sa.get_tree();
 
-        split_history.push_back( split_set_t() );
-        double v = compare_trees( last_tree, tree2, split_history.back() );
+        split_history.push_back( ivy_mike::split_set_t() );
+        double v = ivy_mike::compare_trees( last_tree, tree2, split_history.back() );
 
         size_t period = size_t(-1);
 
-        for( std::vector<split_set_t>::reverse_iterator it = split_history.rbegin() + 1; it != split_history.rend(); ++it ) {
-            if( split_sets_equal( split_history.back(), *it ) ) {
+        for( std::vector<ivy_mike::split_set_t>::reverse_iterator it = split_history.rbegin() + 1; it != split_history.rend(); ++it ) {
+            if( ivy_mike::split_sets_equal( split_history.back(), *it ) ) {
                 period = it - split_history.rbegin();
 
                 std::cout << "found cycle: " << period << "\n";

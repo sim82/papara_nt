@@ -19,10 +19,142 @@
 #include <cstddef>
 #include <cassert>
 #include <stdexcept>
-
-#if 1
-
 #include <vector>
+
+#if 0 // deactivated in oldgcc branch
+//#ifndef _MSC_VER // deactivated for now, because of *intrin.h chaos on vc
+#include <x86intrin.h>
+
+
+
+template<typename T, const size_t SIZE, const size_t ALIGNMENT=32>
+class aligned_array {
+public:
+    typedef T* iterator;
+    typedef std::reverse_iterator<iterator> reverse_iterator;
+    typedef const T* const_iterator;
+    typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+    
+    
+    typedef T& reference;
+    typedef T value_type;
+    typedef size_t size_type;
+    
+    aligned_array() {}
+    
+    
+    template<typename iiter>
+    void assign( iiter first, iiter last ) {
+        //assert( std::distance( start, end ) == SIZE );
+        
+        // TODO: should different sizes really be silently ignored? 
+        iterator dfirst = begin();
+        const iterator dlast = end();
+        for( ; first != last && dfirst != dlast; ++first, ++dfirst ) {
+            *dfirst = *first;
+        }
+        
+    }
+    template<typename iiter>
+    aligned_array( iiter first, iiter last ) {
+        assign( first, last );
+    }
+    
+    size_type size() const {
+        return SIZE;
+    }
+    
+    iterator begin() {
+        return iterator(&arr_[0]);
+    }
+    
+    iterator end() {
+        return iterator(&arr_[SIZE]);
+    }
+    
+    const_iterator begin() const {
+        return const_iterator(&arr_[0]);
+    }
+    const_iterator end() const {
+        return const_iterator(&arr_[SIZE]);
+    }
+    
+    reverse_iterator rbegin() {
+        return reverse_iterator(end());
+    }
+    
+    reverse_iterator rend() {
+        return reverse_iterator(begin());
+    }
+    
+    const_reverse_iterator rbegin() const {
+        return const_reverse_iterator(end());
+    }
+    const_reverse_iterator rend() const {
+        return const_iterator(begin());
+    }
+    
+    reference operator[](ptrdiff_t off) {
+        return arr_[off];
+    }
+    
+    value_type operator[](ptrdiff_t off) const {
+        return arr_[off];
+    }
+    
+    const T* base() const {
+        return arr_;
+    }
+    T* base() {
+        return arr_;
+    }
+    
+#ifdef __SSE__
+    operator __m128i *() {
+        return reinterpret_cast<__m128i*>(arr_);
+    }
+    
+    operator __m128 *() {
+        return reinterpret_cast<__m128*>(arr_);
+    }
+    operator const __m128i *() const {
+        return reinterpret_cast<const __m128i*>(arr_);
+    }
+    
+    operator const __m128 *() const {
+        return reinterpret_cast<const __m128*>(arr_);
+    }
+#endif
+
+// #ifdef __AVX__
+//     
+// 
+// #endif
+    
+//     operator T *() {
+//         return arr_;
+//     }
+//     
+//     operator const T*() const {
+//         return arr_;
+//     }
+   
+    
+private:
+    aligned_array( const aligned_array<T,SIZE,ALIGNMENT> & ) {}
+    const aligned_array<T,SIZE,ALIGNMENT> operator=( const aligned_array<T,SIZE,ALIGNMENT> & ) { return *this; }
+    const aligned_array<T,SIZE,ALIGNMENT> swap( aligned_array<T,SIZE,ALIGNMENT> & ) { return *this; }
+    
+#if defined(__GNUC__)
+    T arr_[SIZE] __attribute__ ((aligned (ALIGNMENT)));
+#elif defined(_MSC_VER)
+    __declspec(align(32)) T arr_[SIZE]
+#else
+#error "unsupported compiler"
+#endif
+    
+};
+#endif
 
 namespace ab_internal_ {
 template<typename T, size_t Talign>
@@ -244,5 +376,5 @@ public:
 //     }
 //     
 // };
-#endif
+
 #endif

@@ -47,7 +47,7 @@ void write_phylip_distmatrix( const ivy_mike::tdmatrix<int> &ma, const std::vect
             // three modes for normalizing: min, max and mean
             //const float norm = std::min( ma[i][i], ma[j][j] );
 //             const float norm = std::max( ma[i][i], ma[j][j] );
-            const float norm = (ma[i][i] + ma[j][j]) * 0.5;
+            const float norm = float(ma[i][i] + ma[j][j]) * 0.5f;
             
             
             int mae;
@@ -59,7 +59,7 @@ void write_phylip_distmatrix( const ivy_mike::tdmatrix<int> &ma, const std::vect
 
             }
             
-            const float dist = 1.0 - (mae / norm);
+            const float dist = 1.0f - (mae / norm);
             
             os << dist << "\t";
         }
@@ -82,7 +82,6 @@ public:
 
 // #define XSIZE(x) (sizeof(x) / sizeof(*x))
 int main( int argc, char *argv[] ) {
-
 
     
 //     tdmatrix<int> tdm( 10, 10 );

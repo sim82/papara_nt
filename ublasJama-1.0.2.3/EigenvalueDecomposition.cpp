@@ -847,7 +847,8 @@ void EigenvalueDecomposition::hqr2 () {
 
 EigenvalueDecomposition::EigenvalueDecomposition (const Matrix& A) {
       BOOST_UBLAS_CHECK(A.size1() == A.size2(), bad_size());
-      n = A.size2();
+	  assert( A.size2() < size_t(std::numeric_limits<int>::max()) );
+	  n = int(A.size2()); // TODO: cast to int
       V = Matrix(n,n);
       d = Vector(n);
       e = Vector(n);
