@@ -41,9 +41,9 @@ inline size_t popcount( unsigned int v ) {
 	return __popcnt(v);
 }
 
-inline size_t popcount( unsigned __int64 v ) {
-	return __popcnt64(v);
-}
+//inline size_t popcount( unsigned __int64 v ) {
+//	return __popcnt64(v);
+//}
 
 
 #endif

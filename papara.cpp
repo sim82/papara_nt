@@ -285,7 +285,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
         if( !name_to_lnode.empty() ) {
             std::cerr << "error: there are " << name_to_lnode.size() << " taxa in the tree with no corresponding sequence in the reference alignment. names:\n";
 
-            for( std::map< std::string, std::tr1::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
+            for( std::map< std::string, sptr::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
                 std::cout << it->first << "\n";
             }
 

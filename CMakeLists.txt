@@ -27,7 +27,7 @@ set( ALL_HEADERS )
 ENDIF()
 
 
-ADD_LIBRARY( papara_core SHARED papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
+ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
 add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
