@@ -1418,7 +1418,7 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
 }
 
 
-void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend ) {
+float align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
 
  
     typedef float score_t;
@@ -1544,7 +1544,11 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
         }
         
     }
+
     
+    if( !traceback ) {
+        return max_score;
+    }
 //    std::cout << "max score: " << max_score << "\n";
 //    std::cout << "max " << max_a << " " << max_b << "\n";
 //    std::cout << "size " << a.size() << " " << b.size() << "\n";
@@ -1629,6 +1633,8 @@ void align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::ve
 //     std::cout << "\n";
 //     std::copy( b.begin(), b.end(), std::ostream_iterator<char>(std::cout) );
 //     std::cout << "\n";
+    
+    return max_score;
 }
 } // end of anonymous namespace
 #endif

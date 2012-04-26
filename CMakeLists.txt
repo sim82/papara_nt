@@ -31,6 +31,8 @@ ADD_LIBRARY( papara_core SHARED papara.cpp pvec.cpp pars_align_seq.cpp pars_alig
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
 add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
+add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
+add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 # add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
 # target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
