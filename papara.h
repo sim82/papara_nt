@@ -662,6 +662,87 @@ private:
 };
 
 
+class output_alignment {
+public:
+    enum seq_type {
+        type_ref,
+        type_qs
+    };
+    
+    typedef std::vector<char> out_seq;
+    
+    virtual ~output_alignment() {}
+    
+    virtual void push_back( const std::string &name, const out_seq &seq, seq_type t ) = 0;
+    virtual void set_max_name_length( size_t len ) = 0;
+    virtual void set_size( size_t num_rows, size_t num_cols ) = 0;
+    
+};
+
+class output_alignment_phylip : public output_alignment {
+    
+    
+public:
+    
+    
+    
+    output_alignment_phylip( const char *filename ) : num_rows_(0), num_cols_(0), max_name_len_(0), header_flushed_(false) {
+        os_.open( filename );
+        assert( os_.good() );
+    }
+    
+    void set_size( size_t num_rows, size_t num_cols ) {
+        num_rows_ = num_rows;
+        num_cols_ = num_cols;
+    }
+    
+    void write_seq_phylip( const std::string &name, const out_seq &seq ) ;
+    
+    void push_back( const std::string &name, const out_seq &seq, seq_type t ) ;
+    
+    void set_max_name_length( size_t len ) {
+        max_name_len_ = len;
+    }
+private:
+    std::ofstream os_;
+    size_t num_rows_;
+    size_t num_cols_;
+    
+    size_t max_name_len_; // that's a bad name. already includes the space.
+    
+    bool header_flushed_;
+};
+
+
+class output_alignment_fasta : public output_alignment {
+    
+    
+public:
+    
+    
+    
+    output_alignment_fasta( const char *filename )  {
+        os_.open( filename );
+        assert( os_.good() );
+    }
+    
+    void set_size( size_t num_rows, size_t num_cols ) {
+        
+    }
+    
+    
+    
+    void push_back( const std::string &name, const out_seq &seq, seq_type t ) ;
+    
+    void set_max_name_length( size_t len ) {
+        
+    }
+private:
+    std::ofstream os_;
+    
+};
+
+
 template<typename pvec_t, typename seq_tag>
 class driver {
 public:
@@ -685,7 +766,8 @@ public:
     
     static void align_best_scores( std::ostream &os, std::ostream &os_quality, std::ostream &os_cands, const my_queries &qs, const my_references &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp ) ;
     
-    
+    static void align_best_scores_oa( output_alignment *os, const my_queries &qs, const my_references &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp );
+            
 };
 
 

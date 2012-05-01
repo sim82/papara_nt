@@ -9,8 +9,8 @@ include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)
-include_directories( ${include_directories} C:\\src\\boost_1_47_0)
-#LINK_DIRECTORIES( ${LINK_DIRECTORIES} C:\\src\\boost_1_46_1\\stage\\lib)
+include_directories( ${include_directories} E:\\src\\boost_1_48_0)
+LINK_DIRECTORIES( ${LINK_DIRECTORIES} E:\\src\\boost_1_48_0\\stage\\lib)
 set( BOOST_LIBS )
 set( SYSDEP_LIBS )
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_SCL_SECURE_NO_WARNINGS") # as long as there is no support for std::array, these warnings are plain stupid!
@@ -27,10 +27,12 @@ set( ALL_HEADERS )
 ENDIF()
 
 
-ADD_LIBRARY( papara_core SHARED papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
+ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
 add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
+add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
+add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 # add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
 # target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )

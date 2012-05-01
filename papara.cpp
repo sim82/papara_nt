@@ -11,7 +11,7 @@
 #include <iomanip>
 #include <boost/bind.hpp>
 #include <boost/dynamic_bitset.hpp>
-
+#include <iterator>
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
@@ -287,7 +287,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
         if( !name_to_lnode.empty() ) {
             std::cerr << "error: there are " << name_to_lnode.size() << " taxa in the tree with no corresponding sequence in the reference alignment. names:\n";
 
-            for( std::map< std::string, std::tr1::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
+            for( std::map< std::string, sptr::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
                 std::cout << it->first << "\n";
             }
 
@@ -1106,9 +1106,149 @@ void driver<pvec_t,seq_tag>::align_best_scores(std::ostream& os, std::ostream& o
     lout << "mean quality: " << mean_quality / n_quality << "\n";
 
 }
+
+template <typename pvec_t,typename seq_tag>
+void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const my_queries &qs, const my_references &refs, const scoring_results &res, size_t pad, const bool ref_gaps, const papara_score_parameters &sp ) {
+    typedef typename queries<seq_tag>::pars_state_t pars_state_t;
+    typedef model<seq_tag> seq_model;
+
+
+    //     lout << "generating best scoring alignments\n";
+    //     ivy_mike::timer t1;
+
+
+
+    double mean_quality = 0.0;
+    double n_quality = 0.0;
+    //
+
+
+    std::vector<pars_state_t> out_qs_ps;
+
+    
+
+    // supply non-open ofstreams to keep it quiet. This is actually quite a bad interface...
+    std::ofstream os_quality;
+    std::ofstream os_cands;
+    
+    
+    // create the best alignment traces per qs
+    std::vector<std::vector<uint8_t> > qs_traces = generate_traces(os_quality, os_cands, qs, refs, res, sp );
+
+
+    // collect ref gaps introduiced by qs
+    ref_gap_collector rgc( refs.pvec_size() );
+    for( std::vector<std::vector<uint8_t> >::iterator it = qs_traces.begin(); it != qs_traces.end(); ++it ) {
+        rgc.add_trace(*it);
+    }
+
+
+
+
+    if( ref_gaps ) {
+        oa->set_size(refs.num_seqs() + qs.size(), rgc.transformed_ref_len());
+    } else {
+        oa->set_size(refs.num_seqs() + qs.size(), refs.pvec_size());
+    }
+    oa->set_max_name_length( pad );
+    
+    // write refs (and apply the ref gaps)
+
+    std::vector<char> tmp;
+    for( size_t i = 0; i < refs.num_seqs(); i++ ) {
+        tmp.clear();
+        
+        
+
+        if( ref_gaps ) {
+            rgc.transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::back_inserter(tmp), '-' );
+        } else {
+            std::transform( refs.seq_at(i).begin(), refs.seq_at(i).end(), std::back_inserter(tmp), seq_model::normalize);
+        }
+
+        oa->push_back( refs.name_at(i), tmp, output_alignment::type_ref );
+        //std::transform( m_ref_seqs[i].begin(), m_ref_seqs[i].end(), std::ostream_iterator<char>(os), seq_model::normalize );
+        
+    }
+
+
+
+    for( size_t i = 0; i < qs.size(); i++ ) {
+        tmp.clear();
+        const std::vector<pars_state_t> &qp = qs.pvec_at(i);
+
+        out_qs_ps.clear();
+
+        if( ref_gaps ) {
+            gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state(), rgc);
+        } else {
+            gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state() );
+        }
+
+        //os << std::setw(pad) << std::left << qs.name_at(i);
+        std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::back_inserter(tmp), seq_model::p2s );
+        
+        oa->push_back( qs.name_at(i), tmp, output_alignment::type_qs );
+
+
+
+
+
+        if( os_quality.good() && qs.seq_at(i).size() == refs.pvec_size()) {
+
+
+            std::vector<int> map_ref;
+            std::vector<int> map_aligned;
+            seq_to_position_map( qs.seq_at(i), map_ref );
+            align_utils::trace_to_position_map( qs_traces[i], &map_aligned );
+
+
+            if( map_ref.size() != map_aligned.size() ) {
+                throw std::runtime_error( "alignment quirk: map_ref.size() != map_aligned.size()" );
+            }
+
+            size_t num_equal = ivy_mike::count_equal( map_ref.begin(), map_ref.end(), map_aligned.begin() );
+
+            //std::cout << "size: " << map_ref.size() << " " << map_aligned.size() << " " << m_qs_seqs[i].size() << "\n";
+            //std::cout << num_equal << " equal of " << map_ref.size() << "\n";
+
+            double score = num_equal / double(map_ref.size());
+            //double score = alignment_quality( out_qs, m_qs_seqs[i], debug );
+
+            os_quality << qs.name_at(i) << " " << score << "\n";
+
+            mean_quality += score;
+            n_quality += 1;
+        }
+
+
+    }
+}
+void output_alignment_phylip::write_seq_phylip(const std::string& name, const out_seq& seq) {
+    size_t pad = std::max( max_name_len_, name.size() + 1 );
+
+    os_ << std::setw(pad) << std::left << name;
+
+    std::copy( seq.begin(), seq.end(), std::ostream_iterator<char>(os_) );
+    os_ << "\n";
+}
+void output_alignment_phylip::push_back(const std::string& name, const out_seq& seq, output_alignment::seq_type t) {
+    if( !header_flushed_ ) {
+        os_ << num_rows_ << " " << num_cols_ << "\n";
+        header_flushed_ = true;
+    }
+    
+    write_seq_phylip( name, seq );
 }
 
+void output_alignment_fasta::push_back(const std::string& name, const out_seq& seq, output_alignment::seq_type t) {
+    os_ << ">" << name << "\n";
+    
+    std::copy( seq.begin(), seq.end(), std::ostream_iterator<char>(os_) );
+    os_ << "\n";
+}
 
+}
 
 
 
