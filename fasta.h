@@ -95,6 +95,7 @@
 // };
 #ifndef WIN32
 #include <sys/mman.h>
+#include <unistd.h>
 
 class mapped_file {
     int m_fd;
