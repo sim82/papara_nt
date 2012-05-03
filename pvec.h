@@ -399,8 +399,14 @@ public:
     }
 
     static void newview( pvec_pgap &p, const pvec_pgap &c1, const pvec_pgap &c2, double z1, double z2, ivy_mike::tip_case tc ) {
-    	namespace ublas = boost::numeric::ublas;
-    	assert( c1.v.size() == c2.v.size() );
+        namespace ublas = boost::numeric::ublas;
+            
+        assert( c1.v.size() == c2.v.size() );
+
+        if( c1.v.size() != c2.v.size() ) {
+            std::cerr << "not equal: " << c1.size() << " " << c2.size() << "\n";
+            throw std::runtime_error( "newview: vectors have different lengths (illegal incremetal newview on modified data?)" );
+        }
 
 //         p.v.resize(0);
         p.v.resize(c1.v.size());
@@ -497,7 +503,7 @@ public:
         }
     }
 
-    inline size_t size() {
+    inline size_t size() const {
         return v.size();
     }
     

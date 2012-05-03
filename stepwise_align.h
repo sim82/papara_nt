@@ -784,7 +784,7 @@ public:
 
             for( ; it_b != b_end; ++it_b, block_sl_it += W, block_sc_it += W, block_sdiag_it += W ) {
 
-                assert(*it_b >= 0);
+                //assert(*it_b >= 0);
                 assert(*it_b < num_cstates_);
 
 
