@@ -694,7 +694,7 @@ public:
 
 
         const size_t block_width = 512;
-        assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
+//         assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
 
         const size_t av_minsize = std::max(av_size, block_width * W);
 

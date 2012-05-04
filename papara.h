@@ -680,12 +680,7 @@ public:
 };
 
 class output_alignment_phylip : public output_alignment {
-    
-    
 public:
-    
-    
-    
     output_alignment_phylip( const char *filename ) : num_rows_(0), num_cols_(0), max_name_len_(0), header_flushed_(false) {
         os_.open( filename );
         assert( os_.good() );
