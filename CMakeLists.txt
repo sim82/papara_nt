@@ -14,8 +14,12 @@ include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)
-include_directories( ${include_directories} E:\\src\\boost_1_48_0)
-LINK_DIRECTORIES( ${LINK_DIRECTORIES} E:\\src\\boost_1_48_0\\stage\\lib)
+IF( NOT BOOST_ROOT)
+set(BOOST_ROOT C:\\src\\boost_1_48_0)
+ENDIF()
+
+include_directories( ${BOOST_ROOT} )
+LINK_DIRECTORIES( ${LINK_DIRECTORIES} ${BOOST_ROOT}\\stage\\lib)
 set( BOOST_LIBS )
 set( SYSDEP_LIBS )
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_SCL_SECURE_NO_WARNINGS") # as long as there is no support for std::array, these warnings are plain stupid!
