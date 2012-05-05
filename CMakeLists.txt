@@ -5,6 +5,11 @@ set( CMAKE_NO_VERBOSE yes )
 #add_subdirectory(ivy_mike)
 add_subdirectory(ublasJama-1.0.2.3)
 
+
+IF( NOT IVYMIKE_INCLUDE )
+SET( IVYMIKE_INCLUDE ./ivy_mike )
+ENDIF()
+
 include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2.3 )
 
 # handle the stupid autolinking shit of visualc++
