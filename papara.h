@@ -119,10 +119,22 @@ struct papara_score_parameters {
        match_cgap( match_cg_ )
     {}
     
+    void print( std::ostream &os ) const {
+        os << "scoring parameters: " << gap_open << " " << gap_extend << " " << match << " " << match_cgap << "\n";
+    }
+    
     int gap_open;
     int gap_extend;
     int match;
     int match_cgap;
+    
+    bool operator==(const papara_score_parameters &other ) {
+        return gap_open == other.gap_open && gap_extend == other.gap_extend && match == other.match && match_cgap == other.match_cgap;
+    }
+    
+    bool operator!=( const papara_score_parameters &other ) {
+        return !operator==(other);
+    }
     
 };
 
