@@ -29,6 +29,7 @@ namespace {
 using ivy_mike::TIP_TIP;
 using ivy_mike::TIP_INNER;
 using ivy_mike::INNER_INNER;
+}
 
 class pvec_cgap {
     //     aligned_buffer<parsimony_state> v;
@@ -699,6 +700,6 @@ public:
 
 
 };
-ivy_mike::stupid_ptr<probgap_model> pvec_pgap::pgap_model;
-}
+
+
 #endif

@@ -279,8 +279,11 @@ class inc_fasta {
     const StateMap &m_state_map;
     
 public:
-    inc_fasta( input &inp, const StateMap &state_map ) : m_input(inp), m_state_map(state_map) {
-        reset(); 
+    inc_fasta( input &inp, const StateMap &state_map, bool do_reset = true ) : m_input(inp), m_state_map(state_map) {
+        
+        if( do_reset ) {
+            reset();  // why the hell is this in here? completely blows up when reading from a pipe...
+        }
      
     }
     
@@ -290,10 +293,15 @@ public:
     }
     
     bool next_seq( std::string &name, std::vector<uint8_t> &seq ) {
-        while( !m_input.eof() && m_input.get() != '>' ) {}
+        
+        
+        while( m_input.good() && m_input.get() != '>' ) {}
 
-        if( m_input.eof() ) {
+        if( !m_input.good() ) {
+//             std::cerr << "not good\n";
             return false;
+        } else {
+//             std::cerr << "good\n";
         }
 
         int c;
@@ -306,7 +314,7 @@ public:
         while( true ) {
             c = m_input.get();
             
-            if( xisspace(c) || m_input.eof() ) {
+            if( xisspace(c) || !m_input.good() ) {
                 break;   
             }
             name.push_back(c); 
@@ -324,7 +332,7 @@ public:
         while( true ) {
             c = m_input.get();
             
-            if( m_input.eof() ) {
+            if( !m_input.good() ) {
                 break;
             }
             
@@ -358,13 +366,15 @@ struct null_backmap {
 }
 
 template<class input>
-static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data ) {
+static void read_fasta( input &is, std::vector<std::string> &names, std::vector<std::vector<uint8_t> > &data, bool do_reset = true ) {
     
     // optionally read_fasta can take a state-map object (i.e., normally a scoring_matrix object).
     // use 'neutral' mapping if none explicitely given
     waiting_for_N1427::null_backmap nb;
     
-    inc_fasta<input,waiting_for_N1427::null_backmap> f(is, nb );
+    inc_fasta<input,waiting_for_N1427::null_backmap> f(is, nb, do_reset );
+    
+//     std::cerr << "goodx: " << is.good() << std::endl;
     
     while( true ) {
         names.push_back(std::string());
