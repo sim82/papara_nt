@@ -683,7 +683,7 @@ public:
     
     typedef std::vector<char> out_seq;
     
-    virtual ~output_alignment() {}
+    virtual ~output_alignment() ;
     
     virtual void push_back( const std::string &name, const out_seq &seq, seq_type t ) = 0;
     virtual void set_max_name_length( size_t len ) = 0;

@@ -1247,6 +1247,7 @@ void output_alignment_fasta::push_back(const std::string& name, const out_seq& s
     std::copy( seq.begin(), seq.end(), std::ostream_iterator<char>(os_) );
     os_ << "\n";
 }
+output_alignment::~output_alignment() {}
 
 }
 
