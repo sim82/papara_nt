@@ -164,7 +164,10 @@ void queries<seq_tag>::normalize_name(std::string& str) {
 
         if( std::isspace(*it) ) {
             if( !in_ws_run ) {
-                ns.push_back( '_' );
+
+                if( (*it) != '\r' ) { // just ignore stupid windows line ends
+                    ns.push_back( '_' );
+                }
                 in_ws_run = true;
             }
         } else {
