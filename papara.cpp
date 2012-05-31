@@ -1,3 +1,23 @@
+/*
+ * Copyright (C) 2009-2012 Simon A. Berger
+ * 
+ * This file is part of papara.
+ * 
+ *  papara is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  papara is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
 #include "papara.h"
 #include "fasta.h"
 #include "vec_unit.h"
@@ -206,7 +226,12 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
     tree_parser_ms::parser tp( opt_tree_name, pool );
     tree_parser_ms::lnode * n = tp.parse();
 
+    
+    
     n = towards_tree( n );
+    
+    tree_ = sptr::shared_ptr<im_tree_parser::lnode>(n->get_smart_ptr());
+    
     //
     // create map from tip names to tip nodes
     //
