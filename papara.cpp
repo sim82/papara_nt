@@ -226,7 +226,12 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
     tree_parser_ms::parser tp( opt_tree_name, pool );
     tree_parser_ms::lnode * n = tp.parse();
 
+    
+    
     n = towards_tree( n );
+    
+    tree_ = sptr::shared_ptr<im_tree_parser::lnode>(n->get_smart_ptr());
+    
     //
     // create map from tip names to tip nodes
     //

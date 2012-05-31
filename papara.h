@@ -427,12 +427,18 @@ public:
 //            os << "\n";
 //        }
 //    }
+    
+    sptr::shared_ptr<im_tree_parser::lnode> tree() const {
+        return tree_;
+    }
 private:
     std::vector <std::string > m_ref_names;
     std::vector <std::vector<uint8_t> > m_ref_seqs;
     std::auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
     edge_collector<im_tree_parser::lnode> m_ec;
-
+    sptr::shared_ptr<im_tree_parser::lnode> tree_;
+    
+    
     std::vector<std::vector <int> > m_ref_pvecs;
     std::vector<std::vector <unsigned int> > m_ref_aux;
     std::vector<std::vector <double> > m_ref_gapp;
