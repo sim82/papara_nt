@@ -72,9 +72,9 @@
 #include <immintrin.h>
 #endif
 
-//#ifndef _MSC_VER
+#ifndef _MSC_VER
 #include <x86intrin.h>
-//#endif
+#endif
 
 
 
