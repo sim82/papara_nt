@@ -466,7 +466,7 @@ public:
 //
 //    }
 
-    bool get_block( block_t *block ) {
+    bool get_block( block_t *block, size_t *queue_size = 0 ) {
         ivy_mike::lock_guard<ivy_mike::mutex> lock( m_qmtx );
 
         if( m_blockqueue.empty() ) {
@@ -476,6 +476,10 @@ public:
         *block = m_blockqueue.front();
         m_blockqueue.pop_front();
 
+        if( queue_size != 0 ) {
+            *queue_size = m_blockqueue.size();
+        }
+        
         return true;
 
     }

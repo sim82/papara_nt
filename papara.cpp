@@ -557,14 +557,21 @@ public:
         align_vec_arrays<vu_scalar_t> arrays;
         aligned_buffer<vu_scalar_t> out_scores(VW);
         aligned_buffer<vu_scalar_t> out_scores2(VW);
-
+        
+        size_t queue_size;
+        size_t init_queue_size = -1;
+        
         while( true ) {
             block_t block;
 
-            if( !block_queue_.get_block(&block)) {
+            if( !block_queue_.get_block(&block, &queue_size)) {
                 break;
             }
 
+            if( init_queue_size == size_t(-1) ) {
+                init_queue_size = queue_size;
+            }
+            
             if( cups_per_ref == uint64_t(-1) ) {
                 cups_per_ref = qs_.calc_cups_per_ref(block.ref_len );
             }
@@ -619,7 +626,11 @@ public:
             if( rank_ == 0 &&  tprint.elapsed() > 10 ) {
 
                 //std::cout << "thread " << rank_ << " " << ncup << " in " << tstatus.elapsed() << " : "
-                std::cout << ncup / (tstatus.elapsed() * 1e9) << " gncup/s, " << ticks_all / double(inner_iters) << " tpili (short: " << ncup_short / (tprint.elapsed() * 1e9) << ", " << ticks_all_short / double(inner_iters_short) << ")\n";
+                
+                float fdone = (init_queue_size - queue_size) / float(init_queue_size);
+                
+                lout << fdone * 100 << "% done. ";
+                lout << ncup / (tstatus.elapsed() * 1e9) << " gncup/s, " << ticks_all / double(inner_iters) << " tpili (short: " << ncup_short / (tprint.elapsed() * 1e9) << ", " << ticks_all_short / double(inner_iters_short) << ")" << std::endl;
 
                 ncup_short = 0;
                 ticks_all_short = 0;
@@ -680,7 +691,7 @@ public:
 #endif
         {
             ivy_mike::lock_guard<ivy_mike::mutex> lock( *block_queue_.hack_mutex() );
-            std::cout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
+            lout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s" << std::endl;
         }
     }
 };
