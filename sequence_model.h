@@ -196,7 +196,7 @@ public:
 
         if( size_t(idx) >= inverse_meaning.size() ) {
             std::cerr << "illegal character: " << int(c) << "\n";
-            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+            throw std::runtime_error( "illegal character in protein sequence");
         }
 
         return uint8_t(idx);

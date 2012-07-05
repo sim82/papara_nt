@@ -22,11 +22,11 @@ using sequence_model::tag_dna;
 
 namespace raxml_aa_meaning {
 // is it officially legal to initialize const static members in the header? I guess c++ removes redundant definitions during linking...
-const static char inverse[23] = {'A','R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V', 'B', 'Z', '-'};
-const static unsigned int bitVector[23] = {1, 2, 4, 8, 16, 32, 64, 128,
+const static char inverse[24] = {'A','R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V', 'B', 'Z', '-', 'X'};
+const static unsigned int bitVector[24] = {1, 2, 4, 8, 16, 32, 64, 128,
                                       256, 512, 1024, 2048, 4096,
                                       8192, 16384, 32768, 65536, 131072, 262144,
-                                      524288, 12 /* N | D */, 96 /*Q | E*/, 1048575 /* - */};
+                                      524288, 12 /* N | D */, 96 /*Q | E*/, 1048575 /* - */, 1048575 /* X */};
 }
 
 const std::vector<char> model<tag_aa>::inverse_meaning(raxml_aa_meaning::inverse, raxml_aa_meaning::inverse + ivy_mike::arrlen(raxml_aa_meaning::inverse));
