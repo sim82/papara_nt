@@ -74,6 +74,10 @@ void queries<seq_tag>::preprocess() {
     m_qs_pvecs.resize(m_qs_seqs.size());
     m_qs_cseqs.resize(m_qs_seqs.size());
 
+    std::vector<bool> bad_characters( 256, false );
+    
+    
+    
     for( size_t i = 0; i < m_qs_seqs.size(); i++ ) {
 //            seq_to_nongappy_pvec( m_qs_seqs[i], m_qs_pvecs[i] );
         //          static void seq_to_nongappy_pvec( std::vector<uint8_t> &seq, std::vector<uint8_t> &pvec ) {
@@ -81,16 +85,37 @@ void queries<seq_tag>::preprocess() {
         // the following line means: transform sequence to pvec using seq_model::s2p as mapping
         // function and only append the mapped character into pvec, if it corresponds to a single (=non gap)
         // character.
-
+        
+        std::vector<uint8_t> qs_tmp;
+        qs_tmp.reserve( m_qs_seqs[i].size() );
+        bool bad_char = false;
+        for( std::vector<uint8_t>::iterator it = m_qs_seqs[i].begin(), e = m_qs_seqs[i].end(); it != e; ++it ) {
+            if( !seq_model::is_known_sstate( *it ) ) {
+                bad_characters.at( *it ) = true;
+                bad_char = true;
+            } else {
+                qs_tmp.push_back( *it );
+            }
+        }
+        if( bad_char ) {
+            m_qs_seqs[i].swap( qs_tmp );
+        }
 
         std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
-                        back_insert_ifer(m_qs_cseqs[i], std::not1( std::ptr_fun(seq_model::cstate_is_gap) )),
+                        back_insert_ifer(m_qs_cseqs[i], seq_model::cstate_is_single),
                         seq_model::s2c );
 
         std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
-                        back_insert_ifer(m_qs_pvecs[i], seq_model::is_single),
+                        back_insert_ifer(m_qs_pvecs[i], seq_model::pstate_is_single),
                         seq_model::s2p );
 
+//         std::cout << "preprocess: " << i << " " << m_qs_cseqs[i].size() << " " << m_qs_pvecs[i].size() << "\n";
+        
+        if( m_qs_cseqs[i].size() != m_qs_pvecs[i].size() ) {
+            // check for quirks related to the p-state vs c-state representation
+            throw std::runtime_error( "mismatch between lengths of c-state and p-state representations of query sequence." );
+        }
+        
 //            for( unsigned int i = 0; i < seq.size(); i++ ) {
 //                seq_model::pars_state_t ps = seq_model::s2p(seq[i]);
 //
@@ -104,6 +129,19 @@ void queries<seq_tag>::preprocess() {
 
     }
 
+    // print warnings about deleted characters
+    bool warn_header = false;
+    for( std::vector<bool>::iterator it = bad_characters.begin(), e = bad_characters.end(); it != e; ++it ) {
+        if( *it ) {
+            if( !warn_header ) {
+                std::cout << "WARNING: there were unsupported characters in the query sequences. They will be deleted:\n";
+                warn_header = true;
+            }
+            
+            std::cout << "deleted character: '" << uint8_t(std::distance( bad_characters.begin(), it )) << "'\n";
+        }
+    }
+    
 //        if( write_testbench ) {
 //
 //            write_qs_pvecs( "qs.bin" );
@@ -273,7 +311,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
 
 
                 for( size_t j = 0, e = seq.size(); j != e; ++j ) {
-                    unmasked[j] |= !seq_model::is_gap( seq_model::s2p(seq[j]));
+                    unmasked[j] |= !seq_model::pstate_is_gap( seq_model::s2p(seq[j]));
                 }
 
                 // erase it from the name to lnode* map, so that it can be used to ideantify tree-taxa without corresponding entries in the alignment
@@ -399,7 +437,7 @@ void references<pvec_t,seq_tag>::build_ref_vecs() {
 
     }
 
-    std::cout << "pvecs created: " << t1.elapsed() << "\n";
+//     std::cout << "pvecs created: " << t1.elapsed() << "\n";
 
 }
 
@@ -862,7 +900,7 @@ void driver<pvec_t,seq_tag>::seq_to_position_map(const std::vector< uint8_t >& s
     typedef model<seq_tag> seq_model;
 
     for( size_t i = 0; i < seq.size(); ++i ) {
-        if( seq_model::is_single(seq_model::s2p(seq[i]))) {
+        if( seq_model::pstate_is_single(seq_model::s2p(seq[i]))) {
             map.push_back(int(i));
         }
     }
@@ -916,8 +954,11 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
                 );
 
 
+//         std::cout << "scores: " << score << " " << res.bestscore_at(i) << "\n";
+        
         if( score != res.bestscore_at(i) ) {
             std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
+            throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels.");
         }
 
 
@@ -952,7 +993,7 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
 
                 if( it == unique_traces.end() || *it != cand_trace ) {
 
-                    gapstream_to_alignment_no_ref_gaps(cand_trace, qp, &out_qs_ps, seq_model::gap_state() );
+                    gapstream_to_alignment_no_ref_gaps(cand_trace, qp, &out_qs_ps, seq_model::gap_pstate() );
 
                     unique_traces.insert(it, cand_trace);
                     os_cands << i << " " << cand.ref() << " " << cand.score() << "\t";
@@ -987,10 +1028,10 @@ void driver<pvec_t,seq_tag>::align_best_scores2(std::ostream& os, std::ostream& 
         out_qs_ps.clear();
 
 
-        gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state() );
+        gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate() );
         //boost::dynamic_bitset<> bs( out_qs_ps.size() );
         std::vector<bool> bs( out_qs_ps.size() );
-        std::transform( out_qs_ps.begin(), out_qs_ps.end(), bs.begin(), seq_model::is_gap );
+        std::transform( out_qs_ps.begin(), out_qs_ps.end(), bs.begin(), seq_model::pstate_is_gap );
     }
 
 
@@ -1060,9 +1101,9 @@ void driver<pvec_t,seq_tag>::align_best_scores(std::ostream& os, std::ostream& o
         out_qs_ps.clear();
 
         if( ref_gaps ) {
-            gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state(), rgc);
+            gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate(), rgc);
         } else {
-            gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state() );
+            gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate() );
         }
 
         os << std::setw(pad) << std::left << qs.name_at(i);
@@ -1180,9 +1221,9 @@ void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const m
         out_qs_ps.clear();
 
         if( ref_gaps ) {
-            gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state(), rgc);
+            gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate(), rgc);
         } else {
-            gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_state() );
+            gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate() );
         }
 
         //os << std::setw(pad) << std::left << qs.name_at(i);

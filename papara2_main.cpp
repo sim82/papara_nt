@@ -117,7 +117,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
     t1.add_int();
 
-    t1.print();
+//     t1.print();
 
     const size_t num_candidates = 0;
 

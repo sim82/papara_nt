@@ -87,7 +87,9 @@ public:
         }
 
     }
-
+    static bool is_known_sstate( size_t c ) {
+        return std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) != inverse_meaning.end();
+    }
 
     static pars_state_t s2p( size_t c ) {
         c = normalize(c);
@@ -129,22 +131,26 @@ public:
     }
 
 
-    static inline bool is_single(pars_state_t ps) {
-        return !is_gap(ps) && ps != 0;
+    static inline bool pstate_is_single(pars_state_t ps) {
+        return !pstate_is_gap(ps) && ps != 0;
     }
 
-    static inline bool is_gap(pars_state_t ps) {
-        return ps == gap_state();
+    static inline bool pstate_is_gap(pars_state_t ps) {
+        return ps == gap_pstate();
     }
 
     static inline bool cstate_is_gap( uint8_t cs) {
-       return cs == inverse_meaning.size() - 1;
-   }
-
-    static inline pars_state_t gap_state() {
+        return pstate_is_gap(c2p(cs));
+    }
+    
+    static inline bool cstate_is_single( size_t cs) {
+        return pstate_is_single(c2p(cs));
+    }
+    
+    static inline pars_state_t gap_pstate() {
         return pars_state_t(inverse_meaning.size() - 1);
     }
-
+    
     static inline size_t num_cstates() {
         return inverse_meaning.size();
     }
@@ -173,7 +179,10 @@ public:
         return std::toupper(c);
     }
 
-
+    static bool is_known_sstate( size_t c ) {
+        return std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) != inverse_meaning.end();
+    }
+    
     static pars_state_t s2p( size_t c ) {
         c = normalize(c);
         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
@@ -222,23 +231,27 @@ public:
     }
 
 
-    static inline bool is_single(pars_state_t ps) {
+    static inline bool pstate_is_single(pars_state_t ps) {
         return popcount(ps) == 1;
     }
 
-    static inline bool is_gap(pars_state_t ps) {
-        return ps == gap_state();
+    static inline bool pstate_is_gap(pars_state_t ps) {
+        return ps == gap_pstate();
     }
 
     static inline bool cstate_is_gap( size_t cs) {
-       return cs == inverse_meaning.size() - 1;
-   }
-
-
-    static inline pars_state_t gap_state() {
+        
+        return pstate_is_gap(c2p(cs));
+//         return cs == inverse_meaning.size() - 1;
+    }
+    
+    static inline bool cstate_is_single( size_t cs) {
+       return pstate_is_single(c2p(cs));
+    }
+    static inline pars_state_t gap_pstate() {
         return bit_vector.back(); // by convention the last element of bit_vector is the gap state
     }
-
+    
     static inline size_t num_cstates() {
         return inverse_meaning.size();
     }
