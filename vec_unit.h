@@ -21,10 +21,44 @@
 #include <cstdio>
 #include <stdint.h>
 
-#ifndef _MSC_VER
-#include <x86intrin.h>
+// the convenient x86intrin.h is not available on ancient gcc/msvc, so pull in the best manually.
+// sse3 is the absolute baseline. sssssssse3 and sse4.666 are nice to have (abs and 32bit min)
+// and AVX is a completely different beast...
+
+#ifdef __SSE3__
+#include <pmmintrin.h>
 #endif
+
+
+#ifdef __SSE4A__
+#include <ammintrin.h>
+#endif
+
+#if defined (__SSE4_2__) || defined (__SSE4_1__)
+#include <smmintrin.h>
+#endif
+
+#ifdef __SSSE3__
+#include <tmmintrin.h>
+#endif
+
+#ifdef __SSE4A__
+#include <ammintrin.h>
+#endif
+
+#if defined (__SSE4_2__) || defined (__SSE4_1__)
+#include <smmintrin.h>
+#endif
+
+#ifdef __AVX__
 #include <immintrin.h>
+#endif
+
+//#ifndef _MSC_VER
+//#include <x86intrin.h>
+//#endif
+
+
 
 #ifdef __AVX__
 #define HAVE_AVX
@@ -346,9 +380,8 @@ struct vector_unit<int, 4> {
 #ifdef __SSE4_1__
         return _mm_min_epi32( a, b );
 #else
-        throw std::runtime_error( "missing sse4.1" );
-        
-// #error missing SSE4.1, find some workaround...
+        const vec_t ma = _mm_cmplt_epi32( a, b );
+        return _mm_or_si128( _mm_and_si128( ma, a ), _mm_andnot_si128( ma, b ) );
 #endif
         
     }
@@ -357,8 +390,8 @@ struct vector_unit<int, 4> {
 #ifdef __SSE4_1__
         return _mm_max_epi32( a, b );
 #else      
-        throw std::runtime_error( "missing sse4.1" );
-// #error missing SSE4.1, find some workaround...
+        const vec_t ma = _mm_cmpgt_epi32( a, b );
+        return _mm_or_si128( _mm_and_si128( ma, a ), _mm_andnot_si128( ma, b ) );
 #endif
     }
     
@@ -603,7 +636,7 @@ struct vector_unit<double, 2> {
         //unsigned int SIGN_MASK[4] = {0x7FFFFFFF,0x7FFFFFFF,0x7FFFFFFF,0x7FFFFFFF};
         //unsigned int SIGN_MASK = 0x7FFFFFFF;
 
-        const uint64_t SIGN_MASK_U64x = 0x7fffffffffffffff;
+        const uint64_t SIGN_MASK_U64x = 0x7fffffffffffffffULL;
 
         const double *SIGN_MASK_PTR = (double*)&SIGN_MASK_U64x;
         double SIGN_MASK = *SIGN_MASK_PTR;

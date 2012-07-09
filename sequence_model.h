@@ -21,8 +21,33 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 #include "ivymike/algorithm.h"
+
+#ifndef _MSC_VER
+template<typename T>
+size_t popcount( T v ) {
+	return __builtin_popcount(v);
+}
+#else
+#include <intrin.h>
+
+inline size_t popcount( unsigned short v ) {
+	return __popcnt16(v);
+}
+
+inline size_t popcount( unsigned int v ) {
+	return __popcnt(v);
+}
+
+//inline size_t popcount( unsigned __int64 v ) {
+//	return __popcnt64(v);
+//}
+
+
+#endif
+
 
 namespace sequence_model {
 
@@ -171,7 +196,7 @@ public:
 
         if( size_t(idx) >= inverse_meaning.size() ) {
             std::cerr << "illegal character: " << int(c) << "\n";
-            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+            throw std::runtime_error( "illegal character in protein sequence");
         }
 
         return uint8_t(idx);
@@ -198,11 +223,7 @@ public:
 
 
     static inline bool is_single(pars_state_t ps) {
-  #ifndef _MSC_VER
-        return __builtin_popcount(ps) == 1;
-#else
-        return __popcnt(ps) == 1;
-#endif
+        return popcount(ps) == 1;
     }
 
     static inline bool is_gap(pars_state_t ps) {
