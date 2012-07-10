@@ -42,10 +42,12 @@ ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_alig
 add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
+add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp ${ALL_HEADERS} )
 # add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
 # target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
 target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
+target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
 # target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 
 

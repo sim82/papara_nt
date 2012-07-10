@@ -21,6 +21,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <iterator>
 
 #define BOOST_UBLAS_NDEBUG
 
@@ -41,6 +42,8 @@
 #include "ivymike/tdmatrix.h"
 #include "ivymike/algorithm.h"
 #include "ivymike/tree_traversal_utils.h"
+#include "ivymike/tree_split_utils.h"
+#include "ivymike/flat_map.h"
 
 namespace tree_parser = ivy_mike::tree_parser_ms;
 
@@ -671,6 +674,76 @@ typedef sequence_model::model<tag_dna> seq_model;
 typedef my_adata_gen<pvec_pgap,tag_dna> my_adata;
 }
 
+template<typename iiter> 
+bool is_sorted( iiter start, iiter end ) {
+    if( std::distance(start,end) < 2 ) {
+        return true;
+    }
+    
+    while( start != end - 1) {
+        if( start > start++ ) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+class tree_deconstructor {
+public:
+    tree_deconstructor( lnode *t, const std::vector<std::string> &addition_order ) {
+        remove_order_.assign( addition_order.rbegin(), addition_order.rend() );
+        
+        
+        ivy_mike::flat_map<std::string,size_t> tip_name_map;
+
+        std::vector<lnode*> edges;
+        std::vector<boost::dynamic_bitset<> > splits;
+        std::vector<lnode *> sorted_tips;
+        ivy_mike::get_all_splits_by_node( t,  edges, splits, sorted_tips );
+        
+        for( size_t i = 0; i < sorted_tips.size(); ++i ) {
+            
+            
+            tip_name_map.put_fast( sorted_tips[i]->m_data->tipName, i );
+        }
+        tip_name_map.sort();
+        
+        assert( remove_order_.size() > 2 );
+        
+        for( size_t i = 0; i < remove_order_.size(); ++i ) {
+            auto name = remove_order_.at(i);
+            
+            const size_t * idx_ptr = tip_name_map.get(name);
+            
+            assert( idx_ptr != nullptr );
+            lnode *tip = sorted_tips.at(*idx_ptr);
+            // CONTINUE HERE
+            
+            if( !tip->m_data->isTip ) {
+                tip = tip->back;
+            }
+            
+            assert( tip->m_data->isTip );
+            
+            lnode *remove_node = tip->back;
+            
+            pwr_stack_.emplace_back(remove_node);
+            
+        }
+    }
+    ~tree_deconstructor() {
+        while( !pwr_stack_.empty() ) {
+            pwr_stack_.pop_back();
+        }
+    }
+  
+private:
+    
+    std::vector<ivy_mike::tree_parser_ms::prune_with_rollback> pwr_stack_;
+    std::vector<std::string> remove_order_;
+};
+
 
 class addition_order {
 public:
@@ -1082,10 +1155,13 @@ static bool has_node_label( lnode *n ) {
 class tree_builder {
 public:
 
-    tree_builder( sequences * const seqs, addition_order * const order, ln_pool * const pool )
+    tree_builder( sequences * const seqs, addition_order * const order, ln_pool * const pool, lnode *destiny_tree )
      : seqs_(*seqs),
        order_(order),
-       pool_(pool)
+       pool_(pool),
+       destiny_tree_(destiny_tree),
+       destiny_tree_pin_( destiny_tree_, *pool_ ),
+       clones_pruned_(false)
     {
         // build the initial tree. This is mostly based on black magic.
 
@@ -1163,6 +1239,22 @@ public:
         
         tree_ = nx;
         
+        {
+            std::vector<lnode *> dt;
+            
+            ivy_mike::iterate_lnode( destiny_tree, ivy_mike::back_insert_ifer(dt, ivy_mike::is_tip));
+            
+            for( lnode *n : dt ) {
+                //    destiny_tree_tips_.push_back
+                
+                assert( n->m_data->isTip );
+                destiny_tree_tips_.put_fast( n->m_data->tipName, n );
+            
+            }
+            
+            destiny_tree_tips_.sort();
+        }
+        
 
     }
     double calc_gap_freq () {
@@ -1232,6 +1324,349 @@ public:
     }
 
 
+    
+    bool insertion_step_destiny() {
+        
+                
+        
+        std::vector<ublas::matrix<double> > pvecs;
+        write_ali_and_tree_for_raxml();
+
+        
+        // generate anc state pvecs using external raxml, and replace the current 'main-tree' with the one 
+        // from raxml.
+        tree_ = generate_marginal_ancestral_state_pvecs( *pool_, "sa_tree", "sa_ali", &pvecs );
+        init_tree_sequences();
+        
+        double gap_freq = calc_gap_freq();
+        
+        size_t cand_id = order_->find_next_candidate();
+        std::cout << "cand_id: " << cand_id << "\n";
+        
+        if( cand_id == size_t(-1) ) { 
+            return false;
+            
+        }
+
+        
+        const auto &cand_seq = seqs_.seq_at(cand_id);
+        const auto &cand_mapped_seq = seqs_.mapped_seq_at(cand_id);
+        
+        lnode *insertion_edge = nullptr;
+        
+        {        
+            // find insertion position of cand_seq, according to destiny tree
+            
+            
+            std::vector<lnode*> edges;
+            std::vector<boost::dynamic_bitset<> > splits;
+            std::vector<lnode *> sorted_tips;
+            ivy_mike::get_all_splits_by_node( tree_,  edges, splits, sorted_tips );
+            
+            std::vector<std::string> tip_names;
+            
+            // transform the tips in sorted_tips into (sorted) list of taxon names
+            std::transform( sorted_tips.begin(), sorted_tips.end(), std::back_inserter( tip_names ), [](lnode *n){ return n->m_data->tipName; } );
+            std::sort( tip_names.begin(), tip_names.end() );
+            
+            
+            if( !clones_pruned_ ) {
+                // delete the 'cloned' nodes of the two initial taxa.
+                delete_cloned_nodes( splits, sorted_tips );
+            }
+            
+            const auto &cand_name = seqs_.name_at(cand_id);
+            
+            // look up the tip in the destiny tree, which corresponds to cand_name
+            lnode * const * dnode_ptr = destiny_tree_tips_.get( cand_name );
+            assert( dnode_ptr != 0 );
+            lnode *dnode = *dnode_ptr;
+            
+            // the node to be (temporarily) pruned from the destiny tree
+            lnode *pnode = dnode->back;
+            
+            assert( pnode != 0 );
+            assert( !pnode->m_data->isTip );
+            
+            ivy_mike::tree_parser_ms::prune_with_rollback pwr( pnode );
+            
+            
+            // generate split set from the destiny tree
+            std::vector<std::string> split_set = ivy_mike::get_split_set_by_edge(pwr.get_save_node());
+            
+           
+            
+#if 1
+            // remove taxon names from the (destiny tree) split set which are not (yet) 
+            // contained in the constructed tree
+            
+            // functor that returns true if a tip name is not contained in sorted_tips
+            auto is_not_in_tree = [&](const std::string &s){ return !std::binary_search( tip_names.begin(), tip_names.end(), s); };
+            
+            // remove all tip names from split_set (filter by is_not_in_tree)
+   
+            split_set.erase( std::remove_if( split_set.begin(), split_set.end(), is_not_in_tree ), split_set.end() );
+            
+//             std::sort( split_set.begin(), spit_set.end() );
+#endif
+
+            std::cout << "cand name: " << cand_name << "\n";
+            
+            std::cout << "destiny tree split: ";
+            std::copy( split_set.begin(), split_set.end(), std::ostream_iterator<std::string>(std::cout, " " ));
+            std::cout << "\n";
+            
+            // find the split in the constructed three that corresponds to the split from the destiny tree
+            std::sort( split_set.begin(), split_set.end() );
+            
+            
+            auto bs_size = splits.front().size();
+            boost::dynamic_bitset<> bsplit_set;
+            
+            for( size_t i = 0; i < bs_size; ++i ) {
+                std::string tip_name = sorted_tips.at(i)->m_data->tipName;
+                
+                bool do_set = std::binary_search( split_set.begin(), split_set.end(), tip_name );
+                bsplit_set.push_back(do_set);
+            }
+            auto bsplit_set_comp = bsplit_set;
+            bsplit_set_comp.flip();
+            
+            // now (hopefully) one of the splits in 'splits' should be equal to bsplit_set or its complement
+            
+            auto sit = splits.begin();
+            for( auto e = splits.end(); sit != e; ++sit ) {
+                if( bsplit_set == *sit || bsplit_set_comp == *sit ) {
+                    break;
+                }
+            }
+            
+            assert( sit != splits.end() );
+            assert( splits.size() == edges.size() );
+            insertion_edge = edges.at( std::distance( splits.begin(), sit ));
+        }
+        
+        
+        probgap_model gpm(gap_freq);
+        ivy_mike::stupid_ptr_guard<probgap_model> spg( pvec_pgap::pgap_model, &gpm );
+        
+        
+        std::cout << "pvecs: " << pvecs.size() << "\n";
+
+//         std::cout << n->backLabel << " " << n->next->backLabel << " " << n->next->next->backLabel << "\n";
+
+
+//        std::deque<rooted_bifurcation<lnode> > to;
+//        rooted_traveral_order_rec(n->next, to, false );
+//
+//        for( std::deque<rooted_bifurcation<lnode> >::iterator it = to.begin(); it != to.end(); ++it ) {
+//            std::cout << *it << "\n";
+//        }
+
+
+//         for( auto it = pvecs.begin(); it != pvecs.end(); ++it ) {
+//             std::cout << "vec:\n";
+//             
+//             
+//             
+//             for( auto it1 = it->begin2(); it1 != it->end2(); ++it1 ) {
+//                 std::transform( it1.begin(), it1.end(), std::ostream_iterator<double>( std::cout, "\t" ), [](double x) {return x; /*std::max(1.0,-log(x));*/});
+//                 std::cout << "\n";
+//             }
+//             
+//         }
+        
+        
+        std::vector<lnode *> labelled_nodes;
+        iterate_lnode(tree_, back_insert_ifer( labelled_nodes, has_node_label ));
+
+        
+        
+        std::cout << "num labelled: " << labelled_nodes.size() << "\n";
+
+        std::sort( labelled_nodes.begin(), labelled_nodes.end(), [](lnode *n1, lnode *n2){return n1->m_data->nodeLabel < n2->m_data->nodeLabel;} ); 
+        
+        
+        lnode *virtual_root = lnode::create( *pool_ );
+        
+        
+//         bool incremental = false;
+        
+        double best_score = -std::numeric_limits<double>::infinity();
+        std::vector<uint8_t> best_tb;
+        lnode *best_np = nullptr;
+        
+        
+        //for( lnode *np : labelled_nodes ) {
+        {
+            lnode *np = nullptr;
+            
+            if( has_node_label(insertion_edge)) {
+                np = insertion_edge;
+            } else if( has_node_label( insertion_edge->back ) ) {
+                np = insertion_edge->back;
+            }
+            
+            assert( np != nullptr );
+            
+             
+            // splice virtual root into current insertion edge.
+            // NOTE: splice_with_rollback will automatically undo the insertion on scope-exit
+            ivy_mike::tree_parser_ms::splice_with_rollback swr( np, virtual_root );
+            
+            
+            std::deque<rooted_bifurcation<lnode>> rto;
+            rooted_traveral_order_rec( virtual_root, rto, false );
+//             incremental = true;
+            for( auto it = rto.begin(); it != rto.end(); ++it ) {
+                my_adata *p = it->parent->m_data->get_as<my_adata>();
+                my_adata *c1 = it->child1->m_data->get_as<my_adata>();
+                my_adata *c2 = it->child2->m_data->get_as<my_adata>();
+//                  std::cout << "newview: " << *it << " " << p << " " << it->parent << "\n";
+                //         std::cout << "tip case: " << (*it) << "\n";
+                 
+                auto z1 = it->child1->backLen;
+                auto z2 = it->child2->backLen;
+                 
+//                 z1 = 0.0001;
+//                 z2 = 0.0001;
+                
+                pvec_pgap::newview(p->pvec(), c1->pvec(), c2->pvec(), z1, z2, it->tc);
+                
+            }
+            
+            const bool verbose_scoring = false;
+            if( verbose_scoring ) {
+                std::cout << "vr: " << *virtual_root->m_data << " " << virtual_root << "\n";
+            }
+            const pvec_pgap &rpp = virtual_root->m_data->get_as<my_adata>()->pvec();
+            const boost::numeric::ublas::matrix< double > &pm = rpp.get_gap_prob();
+            const auto &anc_gap = virtual_root->m_data->get_as<my_adata>()->calculate_anc_gap_probs();
+            
+            if( verbose_scoring ) {
+                std::cerr << pm.size1() << " " << pm.size2() << "\n";
+            }
+//             for( auto it1 = pm.begin2(); it1 != pm.end2(); ++it1 ) {
+//                 std::transform( it1.begin(), it1.end(), std::ostream_iterator<double>( std::cerr, "\t" ), [](double x) {return x; /*std::max(1.0,-log(x));*/});
+//                 std::cerr << "\n";
+//             }
+//             std::cerr << "===============\n";
+//             for( auto it1 = anc_gap.begin2(); it1 != anc_gap.end2(); ++it1 ) {
+//                 std::transform( it1.begin(), it1.end(), std::ostream_iterator<double>( std::cerr, "\t" ), [](double x) {return x; /*std::max(1.0,-log(x));*/});
+//                 std::cerr << "\n";
+//             }
+//             std::cerr << "node label: " << np->m_data->nodeLabel << "\n";
+            size_t node_label = size_t(-1);
+            {
+                std::stringstream ss( np->m_data->nodeLabel );
+                ss >> node_label;
+            }
+            assert( node_label != size_t(-1) );
+            
+            
+            if( verbose_scoring ) {
+                std::cerr << "node label: " << node_label << "\n";
+            }
+            auto const & anc_state = pvecs.at( node_label );
+            
+            
+            boost::array<double,4> bg_state{0.25, 0.25, 0.25, 0.25};
+            log_odds_viterbi lov(anc_state, anc_gap, bg_state );
+            auto score = lov.align(cand_mapped_seq);
+            
+            std::cerr << "cand:\n";
+            std::copy( cand_seq.begin(), cand_seq.end(), std::ostream_iterator<char>(std::cerr));
+            std::cerr << "\n";
+            
+            if( verbose_scoring ) {
+                std::cerr << "score: " << score << "\n";
+            }
+            
+            
+            auto tb = lov.traceback();
+            auto qs_ali = gapstream_to_alignment(tb, cand_seq, '-', false );
+            std::copy( tb.begin(), tb.end(), std::ostream_iterator<int>( std::cerr, " " ) );
+            std::cerr << std::endl;
+//            
+//             dump_ref_seqs( std::cout, tb );
+//             
+//             std::copy( qs_ali.begin(), qs_ali.end(), std::ostream_iterator<char>( std::cout ) );
+//             std::cout << "\n";
+            
+            if( score > best_score ) {
+                best_score = score;
+                best_tb = lov.traceback();
+                best_np = np;
+            }
+            
+//             std::cout << np->m_data->nodeLabel << " " << np->m_data->isTip << "\n";
+//             
+//             
+//             tree_parser::print_newick( np, std::cout, false );
+//             std::cout << "\n";
+        }
+        
+        {
+
+            assert( best_np != nullptr );
+            
+            ivy_mike::tree_parser_ms::splice_with_rollback swr( best_np, virtual_root );
+            swr.commit();
+            virtual_root->back = lnode::create(*pool_);
+            virtual_root->back->m_data->setTipName( seqs_.name_at(cand_id));
+            virtual_root->back->m_data->isTip = true;
+            
+            auto qs_ali = gapstream_to_alignment(best_tb, cand_seq, '-', false );
+//             std::copy( tb.begin(), tb.end(), std::ostream_iterator<int>( std::cout, " " ) );
+//             std::cout << "\n";
+           
+            align_ref_seqs( std::cout, best_tb );
+            
+//             std::copy( qs_ali.begin(), qs_ali.end(), std::ostream_iterator<char>( std::cout ) );
+//             std::cout << "\n";
+            
+            aligned_seqs_.at(cand_id) = std::move(qs_ali);
+            
+            
+            
+        }
+        
+        // officially add cand_id to the set of completed sequences.
+        used_seqs_[cand_id] = true;
+        
+        // write aligned seqeuences
+        {
+            if( !inc_log_.good() ) {
+                inc_log_.open("inc_log" );
+                
+            }
+            
+            inc_log_ << cand_id << "\n\n";
+            size_t idx = used_seqs_.find_first();
+            
+            while( idx != used_seqs_.npos ) {
+                
+                const sequence &seq = aligned_seqs_.at(idx);
+                
+                inc_log_ << seqs_.name_at(idx) << " ";
+                std::copy( seq.begin(), seq.end(), std::ostream_iterator<char>(inc_log_) );                
+                inc_log_ << "\n";
+                
+                idx = used_seqs_.find_next(idx);
+            }
+            inc_log_.flush();
+            
+        }
+        
+
+        pool_->clear();
+        pool_->mark(tree_);
+        pool_->sweep();
+        
+        return true;
+        
+    }
+    
     bool insertion_step() {
 
         std::vector<ublas::matrix<double> > pvecs;
@@ -1481,8 +1916,8 @@ public:
 
         size_t pos = used_seqs_.find_first();
 
-        
-        if( pad ) {
+        const bool write_clones = !pad && !clones_pruned_;
+        if( !write_clones ) {
             os << (used_seqs_.count() - cloned_names_.size()) << " " << aligned_seqs_.at(pos).size() << "\n";
         } else {
             os << used_seqs_.count() << " " << aligned_seqs_.at(pos).size() << "\n";
@@ -1498,7 +1933,14 @@ public:
             
 //             std::cerr << "name: " << name << " " << std::binary_search( cloned_names_.begin(), cloned_names_.begin(), name ) << "\n";
             // FIXME: kind of hack: don't print out cloned seqs when pad is set (=on final printout)
-            if( !pad || !std::binary_search( cloned_names_.begin(), cloned_names_.end(), name )) {
+            
+            const bool is_clone = std::binary_search( cloned_names_.begin(), cloned_names_.end(), name );
+            
+            
+            
+           
+               // smart-ass: material implication: is_clone -> write_clones
+               if( !is_clone || write_clones ) {
                 assert( pos < aligned_seqs_.size() );
                 
                 os << name;
@@ -1546,6 +1988,57 @@ public:
             tree_ = pwr.get_save_node();
         }
         
+        clones_pruned_ = true;
+        
+        
+    }
+    void delete_cloned_nodes(std::vector< boost::dynamic_bitset<> > &splits, std::vector< lnode* > &sorted_tips) {
+        ivy_mike::flat_map<std::string,size_t> tip_name_map;
+        
+        for( size_t i = 0; i < sorted_tips.size(); ++i ) {
+            
+            
+            tip_name_map.put_fast( sorted_tips[i]->m_data->tipName, i );
+        }
+        tip_name_map.sort();
+        
+        
+        std::vector<size_t> delete_idx;
+        
+        for( const auto &cn : cloned_names_ ) {
+            const size_t *idx = tip_name_map.get(cn);
+            
+            assert( idx != 0 );
+            
+            delete_idx.push_back(*idx);
+        }
+        
+        std::sort( delete_idx.begin(), delete_idx.end() );
+        
+        
+        for( auto &split : splits ) {
+            boost::dynamic_bitset<> out_split;
+            
+            size_t l = split.size();
+            
+            for( size_t i = 0; i < l; ++i ) {
+                if( !binary_search( delete_idx.begin(), delete_idx.end(), i )) {
+                    out_split.push_back( split[i] );
+                }
+            }
+            split.swap( out_split );
+            
+        }
+        
+        for( size_t i = 0; i < delete_idx.size(); ++i ) {
+            size_t di = delete_idx[i];
+            std::cerr << "di: " << di << std::endl;
+            auto dit = sorted_tips.begin() + di - i;
+            
+            sorted_tips.erase(dit); 
+        }
+        
+        
         
     }
     
@@ -1588,11 +2081,16 @@ private:
     ln_pool * const pool_;
     boost::dynamic_bitset<> used_seqs_;
     lnode * tree_;
-
+    lnode * destiny_tree_;
+    
+    ivy_mike::tree_parser_ms::ln_pool_pin destiny_tree_pin_;
+    ivy_mike::flat_map<std::string, lnode *> destiny_tree_tips_;
+    
     std::vector<sequence> aligned_seqs_;
 
     std::ofstream inc_log_;
     std::vector<std::string> cloned_names_;
+    bool clones_pruned_;
 };
 
 //void insertion_loop( sequences *seqs, addition_order *order, ln_pool * const pool ) {
@@ -1766,14 +2264,69 @@ int main( int argc, char *argv[] ) {
 
     addition_order order( seqs.pw_scoring_matrix(), seqs.mapped_seqs() );
 
+    
+        
+    lnode *destiny_tree;
+    
+    {
+        const char * destiny_name = "RAxML_randomTree.rnd_150";
+        
+        ivy_mike::tree_parser_ms::parser p( destiny_name, pool );
+        
+        destiny_tree = p.parse();
+        
+    }
+    
+    assert( destiny_tree != 0 );
+    
+    
+    std::vector<std::string> insert_order;
+    
+    while( true ) {
+        size_t cand = order.find_next_candidate();
+        
+        
+        
+        if( cand == size_t(-1) ) {
+            break;
+        }
+        
+        insert_order.push_back( seqs.name_at(cand) );
+    }
+    
+    tree_deconstructor td( destiny_tree, insert_order );
+    
+    
+    return 0;
+    
 //    insertion_loop( &seqs, &order, &pool );
-    tree_builder builder( &seqs, &order, &pool );
+    tree_builder builder( &seqs, &order, &pool, destiny_tree );
 
 
-
-
+    
+    size_t step = 0;
     while(true) {
-        bool valid = builder.insertion_step();
+        bool valid = builder.insertion_step_destiny();
+        
+        {
+            std::stringstream ss;
+            ss << std::setfill('0') << std::setw(3) << std::right << step;
+            
+            std::string tree_name( "sa_tree_inc_" );
+            tree_name += ss.str();
+            
+            std::string ali_name( "sa_ali_inc_" );
+            ali_name += ss.str();
+            
+            builder.write_ali_and_tree( tree_name.c_str(), ali_name.c_str() );
+            ++step;
+            
+            if( step == 2 ) {
+                builder.prune_cloned_nodes();
+                
+            }
+        }
+        
         if( !valid ) {
             break;
         }

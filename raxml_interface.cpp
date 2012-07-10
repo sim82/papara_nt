@@ -330,7 +330,7 @@ void optimize_branch_lengths( ivy_mike::tree_parser_ms::lnode *tree, const std::
 	perf_timer.print();
 }
 
-
+#if 0
 lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const std::map<std::string, const std::vector<uint8_t> * const> &name_to_seq, ln_pool &pool ) {
 	ivy_mike::perf_timer perf_timer(!true);
 
@@ -481,7 +481,7 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	assert( ret_node->back->back != 0 );
 	return ret_node;
 }
-
+#endif
 //size_t file_size( const char *name ) {
 //	std::ifstream is(name);
 //

@@ -626,7 +626,9 @@ public:
         }
 
         // update the _global_ maximum 'gaps-per-ref-position' map
-        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+       // std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+       // std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+       std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), [](size_t a, size_t b){return std::max(a,b);} );
     }
 
     // TODO: shouldn't it be possible to infer the state_type from oiter?
