@@ -354,7 +354,7 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	std::map<std::string, sptr::shared_ptr<lnode> > tip_map;
 
 	for( std::vector<lnode *>::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-		tip_map.insert( std::make_pair( (*it)->m_data->tipName, (*it)->get_smart_ptr() ) );
+		tip_map.insert( std::make_pair( (*it)->m_data->tipName, (*it)->get_smart_ptr().lock() ) );
 	}
 
 

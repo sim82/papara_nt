@@ -166,7 +166,7 @@ private:
     const double bg_prob_;
 };
 
-
+#if 0
 
 
 class log_odds_aligner_score_only {
@@ -381,7 +381,7 @@ public:
     double max_score_;
 
 };
-
+#endif
 
 class odds {
 public:
@@ -448,7 +448,7 @@ public:
 
 
     void precalc_log_odds() {
-        ref_state_lo_.resize( ref_state_prob_.size2(), ref_state_prob_.size1() );
+        ref_state_lo_.resize( ref_state_prob_.size1(), ref_state_prob_.size2() );
 
         for( size_t i = 0; i < 4; ++i ) {
             const ublas::matrix_row<dmat> pcol( ref_state_prob_, i );
@@ -1472,8 +1472,8 @@ struct scoring_results {
 
         os_ << qs << " " << ref << " " << score_ali << " " << score_vit << "\n";
 
-        //const double score = score_vit;
-        const double score = score_ali;
+        const double score = score_vit;
+//         const double score = score_ali;
         if( best_score_.at(qs) < score || (delta_equal(best_score_.at(qs), score) && ref < best_ref_.at(qs))) {
             best_score_[qs] = score;
             best_ref_.at(qs) = ref;
@@ -1552,10 +1552,10 @@ public:
                 //double score2 = ali.align(b);
                 double score = ali_score.align(b);
 
-                double score_vit = 0;//vit.align(b);
+                double score_vit = vit.align(b);
 
                 
-                std::cout << "score: " << score << "\n";
+                std::cout << "score: " << score << " " << score_vit << "\n";
                
                 if ( false ) {
                     tb_tmp.clear();
