@@ -529,15 +529,15 @@ public:
     }
 private:
     ublas::matrix<short> traceback_;
-    static const short tb_i_to_i = 0x1;
-    static const short tb_i_to_m = 0x2;
-    static const short tb_d_to_d = 0x4;
-    static const short tb_d_to_m = 0x8;
-    static const short tb_m_to_m = 0x10;
-    static const short tb_m_to_i = 0x20;
-    static const short tb_m_to_d = 0x40;
-    static const short tb_i_to_d = 0x80;
-    static const short tb_d_to_i = 0x100;
+    static const short tb_i_to_i;// = 0x1;
+    static const short tb_i_to_m;// = 0x2;
+    static const short tb_d_to_d;// = 0x4;
+    static const short tb_d_to_m;// = 0x8;
+    static const short tb_m_to_m;// = 0x10;
+    static const short tb_m_to_i;// = 0x20;
+    static const short tb_m_to_d;// = 0x40;
+    static const short tb_i_to_d;// = 0x80;
+    static const short tb_d_to_i;// = 0x100;
     
     dmat ref_state_prob_;
     dmat ref_gap_prob_;
@@ -575,7 +575,15 @@ private:
 
 };
 
-
+const short log_odds_viterbi::tb_i_to_i = 0x1;
+const short log_odds_viterbi::tb_i_to_m = 0x2;
+const short log_odds_viterbi::tb_d_to_d = 0x4;
+const short log_odds_viterbi::tb_d_to_m = 0x8;
+const short log_odds_viterbi::tb_m_to_m = 0x10;
+const short log_odds_viterbi::tb_m_to_i = 0x20;
+const short log_odds_viterbi::tb_m_to_d = 0x40;
+const short log_odds_viterbi::tb_i_to_d = 0x80;
+const short log_odds_viterbi::tb_d_to_i = 0x100;
 
 namespace {
 
@@ -718,7 +726,7 @@ public:
             
             assert( idx_ptr != nullptr );
             lnode *tip = sorted_tips.at(*idx_ptr);
-            // CONTINUE HERE
+            
             
             if( !tip->m_data->isTip ) {
                 tip = tip->back;
@@ -737,6 +745,27 @@ public:
             pwr_stack_.pop_back();
         }
     }
+    
+    
+    lnode *get_save_node() const {
+        // return node from the current tree
+        return pwr_stack_.back().get_save_node();
+    }
+    
+    void pop() {
+        
+        assert( !pwr_stack_.empty() );
+        pwr_stack_.pop_back();
+    }
+    bool empty() const {
+        return pwr_stack_.empty();
+    }
+    
+    size_t size() const {
+        return pwr_stack_.size();
+    }
+        
+  
   
 private:
     
@@ -1325,7 +1354,7 @@ public:
 
 
     
-    bool insertion_step_destiny() {
+    bool insertion_step_destiny( const size_t cand_id, const std::vector<std::string> &insertion_pos ) {
         
                 
         
@@ -1340,7 +1369,7 @@ public:
         
         double gap_freq = calc_gap_freq();
         
-        size_t cand_id = order_->find_next_candidate();
+//         size_t cand_id = order_->find_next_candidate();
         std::cout << "cand_id: " << cand_id << "\n";
         
         if( cand_id == size_t(-1) ) { 
@@ -1376,7 +1405,7 @@ public:
             }
             
             const auto &cand_name = seqs_.name_at(cand_id);
-            
+#if 0                   
             // look up the tip in the destiny tree, which corresponds to cand_name
             lnode * const * dnode_ptr = destiny_tree_tips_.get( cand_name );
             assert( dnode_ptr != 0 );
@@ -1395,7 +1424,7 @@ public:
             std::vector<std::string> split_set = ivy_mike::get_split_set_by_edge(pwr.get_save_node());
             
            
-            
+     
 #if 1
             // remove taxon names from the (destiny tree) split set which are not (yet) 
             // contained in the constructed tree
@@ -1418,6 +1447,15 @@ public:
             
             // find the split in the constructed three that corresponds to the split from the destiny tree
             std::sort( split_set.begin(), split_set.end() );
+#else
+            auto split_set = insertion_pos;
+            std::sort( split_set.begin(), split_set.end() );
+#endif
+            std::cout << "cand name: " << cand_name << "\n";
+            
+            std::cout << "destiny tree split: ";
+            std::copy( split_set.begin(), split_set.end(), std::ostream_iterator<std::string>(std::cout, " " ));
+            std::cout << "\n";
             
             
             auto bs_size = splits.front().size();
@@ -1425,17 +1463,31 @@ public:
             
             for( size_t i = 0; i < bs_size; ++i ) {
                 std::string tip_name = sorted_tips.at(i)->m_data->tipName;
-                
+                std::cout << "tip name: " << tip_name << "\n";
                 bool do_set = std::binary_search( split_set.begin(), split_set.end(), tip_name );
                 bsplit_set.push_back(do_set);
             }
             auto bsplit_set_comp = bsplit_set;
             bsplit_set_comp.flip();
             
+            for( size_t i = 0; i < bsplit_set.size(); ++i ) {
+                std::cout << bsplit_set[i] << " ";
+            }
+            
+            
+            std::cout << "\n";
+            
             // now (hopefully) one of the splits in 'splits' should be equal to bsplit_set or its complement
             
             auto sit = splits.begin();
             for( auto e = splits.end(); sit != e; ++sit ) {
+//                 for( size_t i = 0; i < bsplit_set.size(); ++i ) {
+//                     std::cout << (*sit)[i] << " ";
+//                 }
+//                 
+//                 
+//                 std::cout << "\n";
+                
                 if( bsplit_set == *sit || bsplit_set_comp == *sit ) {
                     break;
                 }
@@ -1659,9 +1711,9 @@ public:
         }
         
 
-        pool_->clear();
-        pool_->mark(tree_);
-        pool_->sweep();
+        //pool_->clear();
+        //pool_->mark(tree_);
+        //pool_->sweep();
         
         return true;
         
@@ -2269,7 +2321,7 @@ int main( int argc, char *argv[] ) {
     lnode *destiny_tree;
     
     {
-        const char * destiny_name = "RAxML_randomTree.rnd_150";
+        const char * destiny_name = "RAxML_randomTree.rnd_150_ss";
         
         ivy_mike::tree_parser_ms::parser p( destiny_name, pool );
         
@@ -2279,7 +2331,7 @@ int main( int argc, char *argv[] ) {
     
     assert( destiny_tree != 0 );
     
-    
+    std::vector<size_t> insert_id_order;
     std::vector<std::string> insert_order;
     
     while( true ) {
@@ -2291,14 +2343,56 @@ int main( int argc, char *argv[] ) {
             break;
         }
         
+        insert_id_order.push_back(cand);
         insert_order.push_back( seqs.name_at(cand) );
     }
     
+    
+    tree_builder builder( &seqs, &order, &pool, destiny_tree );
     tree_deconstructor td( destiny_tree, insert_order );
     
+    auto cand_it = insert_id_order.begin();
+    size_t step = 0;
     
-    return 0;
+    while( !td.empty() ) {
+        lnode *t = td.get_save_node();
+        
+        assert( cand_it != insert_id_order.end() );
+        
+        
+        // t = ivy_mike::tree_parser_ms::next_non_tip(t);
+        auto ss = ivy_mike::get_split_set_by_edge(t);
+        auto cand_id = *cand_it++;
+        
+        builder.insertion_step_destiny(cand_id, ss);
+        
+        std::cout << td.size() << " ";
+        std::copy( ss.begin(), ss.end(), std::ostream_iterator<std::string>(std::cout, " " ) );
+        std::cout << "\n";
+            
+        {
+            std::stringstream ss;
+            ss << std::setfill('0') << std::setw(3) << std::right << step;
+            
+            std::string tree_name( "sa_tree_inc_" );
+            tree_name += ss.str();
+            
+            std::string ali_name( "sa_ali_inc_" );
+            ali_name += ss.str();
+            
+            builder.write_ali_and_tree( tree_name.c_str(), ali_name.c_str() );
+            ++step;
+        }
+        
+        
+        td.pop();
+    }
     
+    
+//     return 0;
+
+    
+#if 0
 //    insertion_loop( &seqs, &order, &pool );
     tree_builder builder( &seqs, &order, &pool, destiny_tree );
 
@@ -2331,6 +2425,7 @@ int main( int argc, char *argv[] ) {
             break;
         }
     }
+#endif
     builder.prune_cloned_nodes();
     builder.write_ali_and_tree( "sa_tree_end", "sa_ali_end" );
     
