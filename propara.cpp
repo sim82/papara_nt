@@ -1470,8 +1470,9 @@ struct scoring_results {
     bool offer( size_t qs, size_t ref, double score_ali, double score_vit ) {
         boost::lock_guard<boost::mutex> lock(mtx_);
 
-        os_ << qs << " " << ref << " " << score_ali << " " << score_vit << "\n";
-
+        if( qs == 0 ) {
+            os_ << qs << " " << ref << " " << score_ali << " " << score_vit << "\n";
+        }
         const double score = score_vit;
 //         const double score = score_ali;
         if( best_score_.at(qs) < score || (delta_equal(best_score_.at(qs), score) && ref < best_ref_.at(qs))) {
@@ -1756,48 +1757,7 @@ int main( int argc, char *argv[] ) {
         }
     }
 
-#if 0
-    // write out the qs in their original order
-    std::vector<uint8_t> rtb;
-    
-    for( size_t j = 0; j < qs.size(); ++j ) {
-        const std::vector<uint8_t> &b = qs.get_recoded(j);
-        rtb.clear();
-        align_utils::realize_trace( b, qs_traces.at(j), &rtb );
-        
-        os << std::setw(max_name_len+1) << std::left << qs.get_name(j);
-        std::copy( rtb.begin(), rtb.end(), std::ostream_iterator<char>(os));
-        os << "\n";
-        
 
-        
-        {
-            std::vector<int> map_ref;
-            std::vector<int> map_aligned;
-            queries::seq_to_position_map( qs.get_raw(j), &map_ref );
-            align_utils::trace_to_position_map( qs_traces.at(j), &map_aligned );
-            
-            if( map_ref.size() != map_aligned.size() ) {
-                throw std::runtime_error( "alignment quirk: map_ref.size() != map_aligned.size()" );
-            }
-            
-            size_t num_equal = ivy_mike::count_equal( map_ref.begin(), map_ref.end(), map_aligned.begin() );
-            
-            //std::cout << "size: " << map_ref.size() << " " << map_aligned.size() << " " << m_qs_seqs[i].size() << "\n";
-            //std::cout << num_equal << " equal of " << map_ref.size() << "\n";
-
-            double qscore = num_equal / double(map_ref.size());
-            //std::cout << "score: " << qscore << "\n";
-            qual += qscore;
-            ++num_qual;
-            
-            
-            os_qual << qs.get_name(j) << " " << qscore << " " << qs_scores.at(j) << "\n";
-        }
-   
-        
-    }
-#else
 
 
     papara::output_alignment_phylip oa( "propara_alignment.phy" );
@@ -1902,7 +1862,6 @@ int main( int argc, char *argv[] ) {
 #endif
 
     }
-#endif
 
     std::cout << t.elapsed() << std::endl;
     lout << "SUCCESS " << t.elapsed() << std::endl;
