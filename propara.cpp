@@ -488,8 +488,11 @@ public:
         assert( m_.size() == ref_len_ + 1 );
 
 
-        const bool verbose = !true;
-//         std::cout << "viterbi:\n";
+        const bool verbose = false;
+        if( verbose ) {
+            std::cout << "viterbi:\n";
+        }
+        
         for( size_t i = 1; i < qlen + 1; ++i ) {
             const int b = qs[i-1];
             //          std::cout << "b: " << b << "\n";
@@ -553,7 +556,7 @@ public:
                 diag_m = *m0;
                 *m0 = m_log_sum + match_log_odds;
                 if( verbose ) {
-                    std::cout << std::setw(10) << *m0;
+                    std::cout << std::setw(10) << *m0 << std::setw(10) << diag_d << std::setw(10) << diag_i << ";";
                     //                     std::cout << std::setw(10) << match_log_odds;
                 }
 
@@ -796,8 +799,14 @@ public:
 
         //dmat ref_state_trans = trans(ref_state_prob_);
 
-        const bool verbose = !true;
-//         std::cout << "max:\n";
+        const bool verbose = false;
+
+        if( verbose ) {
+            std::cout << "align\n";
+        }
+        
+        //auto m_row = m_.begin1();
+        
         for( size_t i = 1; i < qlen + 1; ++i ) {
             const int b = qs[i-1];
             //			std::cout << "b: " << b << "\n";
@@ -809,6 +818,19 @@ public:
             //			const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
             //			const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
 
+            auto m_11 = m_.find2(0,i-1,0);
+            auto d_11 = d_.find2(0,i-1,0);
+            auto i_11 = i_.find2(0,i-1,0);
+            
+            auto m_00 = m_.find2(0,i,1);
+            auto i_00 = i_.find2(0,i,1);
+            
+            auto m_01 = m_.find2(0,i,0);
+            auto d_01 = d_.find2(0,i,0);
+            
+//             auto d_11 = d_.find2(i-1,0);
+//             auto i_11 = i_.find2(i-1,0);
+            
             for( size_t j = 1; j < ref_len_ + 1; ++j ) {
                 //ublas::matrix_row<dmat> a_state(ref_state_prob_, j-1 );
                 //ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
@@ -818,6 +840,111 @@ public:
 
                 if( match_log_odds < -100 ) {
                     //	std::cout << "odd: " << match_log_odds << b_state[j-1] << " " << b_freq << " " << b << "\n";
+                    match_log_odds = -100;
+                }
+
+                lof_t gap_log_odds = ref_gap_lo_[j-1];
+                lof_t ngap_log_odds = ref_ngap_lo_[j-1];
+                lof_t m_max = max3(
+                        *m_11 + ngap_log_odds,
+                        *d_11 + gap_log_odds,
+                        *i_11 + gap_log_odds
+                );
+
+                *m_00 = m_max + match_log_odds;
+
+#if 0
+                std::cout << i << " " << j << " " << m_(i,j) << " : " << m_(i-1, j-1) + ngap_log_odds
+                        << " " << d_(i-1, j-1) + gap_log_odds << " " << i_(i-1, j-1) + gap_log_odds << " " << match_log_odds << " " << gap_log_odds << " " << ngap_log_odds << " max: " << m_max << "\n";
+#endif
+                        
+                auto m_10 = ++m_11;
+                auto i_10 = ++i_11;
+                if( verbose ) {
+                    std::cout << std::setw(10) << m_(i,j);
+//                     std::cout << std::setw(10) << match_log_odds;
+                }
+                lof_t i_max = std::max(
+                        *m_10 + delta_log_,
+                        *i_10 + epsilon_log_
+                );
+                *i_00 = i_max;
+
+                lof_t d_max = std::max(
+                        *m_01 + delta_log_,
+                        *d_01 + epsilon_log_
+                );
+
+                auto d_00 = ++d_01;
+                *d_00 = d_max;
+                
+                ++d_11;
+                ++m_00;
+                ++i_00;
+                ++m_01;
+                
+
+            }
+            if( verbose ) {
+                std::cout << "\n";
+            }
+        }
+        {
+
+            ublas::matrix_row<lomat> m_last(m_, qlen);
+            ublas::matrix_row<lomat>::iterator max_it;
+            
+            
+            // start point for searching the maximum in the last row
+            // this is either qlen (=intersection of last row and diagonal) or the last
+            // column (if qlen > reflen).
+            size_t lr_start = std::min( qlen, m_last.size() - 1 ); 
+            
+            max_it = std::max_element( m_last.begin() + lr_start, m_last.end() );
+            max_col_ = std::distance(m_last.begin(), max_it);
+            max_row_ = qlen;
+            max_score_ = *max_it;
+
+
+
+            return max_score_;
+        }
+    }
+
+
+    double align2( const std::vector<uint8_t> &qs ) {
+        const size_t qlen = qs.size();
+
+        setup( qlen );
+
+        //dmat ref_state_trans = trans(ref_state_prob_);
+
+        const bool verbose = false;
+
+        if( verbose ) {
+            std::cout << "align\n";
+        }
+        
+        for( size_t i = 1; i < qlen + 1; ++i ) {
+            const int b = qs[i-1];
+            //          std::cout << "b: " << b << "\n";
+
+            //const double b_freq = state_freq_.at(b);
+            //const ublas::matrix_column<dmat> b_state( ref_state_prob_, b );
+            const ublas::matrix_row<lomat> b_state_lo( ref_state_lo_, b );
+
+            //          const ublas::matrix_column<dmat> ngap_prob( ref_gap_prob_, 0 );
+            //          const ublas::matrix_column<dmat> gap_prob( ref_gap_prob_, 1 );
+
+            for( size_t j = 1; j < ref_len_ + 1; ++j ) {
+                //ublas::matrix_row<dmat> a_state(ref_state_prob_, j-1 );
+                //ublas::matrix_row<dmat> a_gap(ref_gap_prob_, j-1 );
+
+                //double match_log_odds = log( b_state[j-1] / b_freq );
+                lof_t match_log_odds = b_state_lo[j-1];
+
+                if( match_log_odds < -100 ) {
+                    //  std::cout << "odd: " << match_log_odds << b_state[j-1] << " " << b_freq << " " << b << "\n";
                     match_log_odds = -100;
                 }
 
@@ -880,8 +1007,7 @@ public:
             return max_score_;
         }
     }
-
-
+    
     void traceback( std::vector<uint8_t> *tb ) {
         assert( tb != 0 );
 
@@ -1634,7 +1760,7 @@ public:
                     std::cout << "\n";
                 }
                 //assert( score == score2 );
-                //std::cout << "score: " << j << " " << i << " " << score << "\n";
+//                 std::cout << "score: " << j << " " << i << " " << score << "\n";
                 
                 
                 
