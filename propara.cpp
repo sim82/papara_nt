@@ -488,8 +488,8 @@ public:
         assert( m_.size() == ref_len_ + 1 );
 
 
-
-
+        const bool verbose = !true;
+//         std::cout << "viterbi:\n";
         for( size_t i = 1; i < qlen + 1; ++i ) {
             const int b = qs[i-1];
             //          std::cout << "b: " << b << "\n";
@@ -539,6 +539,9 @@ public:
                          + exp(diag_d) * gap_odds
                          + exp(diag_i) * gap_odds
                 );
+                              
+//                 std::cout << m_log_sum << " " << m_log_sum2 << "\n";
+                
 #else
                 lof_t m_log_sum = diag_m + math_approx::log(
                            ngap_odds
@@ -549,7 +552,12 @@ public:
 
                 diag_m = *m0;
                 *m0 = m_log_sum + match_log_odds;
+                if( verbose ) {
+                    std::cout << std::setw(10) << *m0;
+                    //                     std::cout << std::setw(10) << match_log_odds;
+                }
 
+                assert( std::isfinite(*m0) );
 #if 0
                 std::cout << i << " " << j << " " << m_(i,j) << " : " << m_(i-1, j-1) + ngap_log_odds
                         << " " << d_(i-1, j-1) + gap_log_odds << " " << i_(i-1, j-1) + gap_log_odds << " " << match_log_odds << " " << gap_log_odds << " " << ngap_log_odds << " max: " << m_max << "\n";
@@ -589,6 +597,10 @@ public:
 
                 //lof_t old_m = m_[j];
 
+            }
+            
+            if( verbose ) {
+                std::cout << "\n";
             }
         }
 
@@ -784,8 +796,8 @@ public:
 
         //dmat ref_state_trans = trans(ref_state_prob_);
 
-        const bool verbose = false;
-
+        const bool verbose = !true;
+//         std::cout << "max:\n";
         for( size_t i = 1; i < qlen + 1; ++i ) {
             const int b = qs[i-1];
             //			std::cout << "b: " << b << "\n";
@@ -826,8 +838,8 @@ public:
                         
                         
                 if( verbose ) {
-                    //                 std::cout << std::setw(10) << m_(i,j);
-                    std::cout << std::setw(10) << match_log_odds;
+                    std::cout << std::setw(10) << m_(i,j);
+//                     std::cout << std::setw(10) << match_log_odds;
                 }
                 lof_t i_max = std::max(
                         m_(i-1,j) + delta_log_,
