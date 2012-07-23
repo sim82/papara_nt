@@ -592,7 +592,31 @@ public:
             }
         }
 
-        return m_.back();
+        
+        float max_score = 0;
+        {
+            size_t lr_start = std::min( qlen, m_.size() - 1 ); 
+            //auto max_it = std::max_element( m_.begin() + lr_start, m_.end() );
+            
+            for( size_t i = lr_start; i != m_.size(); ++i ) {
+                max_score = max_score + log( 1 + exp( m_[i] - max_score ));
+            }
+            
+            if( max_score == 0 ) {
+                std::cout << "meeeep\n";
+                
+                std::copy( m_.begin() + lr_start, m_.end(), std::ostream_iterator<float>( std::cout, " " ));
+                std::cout << "\n";
+                getchar();
+                
+            }
+            
+//             assert( max_it != m_.end() );
+//             max_score = *max_it;
+            
+        }
+        return max_score;
+//         return m_.back();
     }
 
     dmat ref_state_prob_;
@@ -1453,9 +1477,8 @@ struct scoring_results {
 
     scoring_results( size_t num_qs )
     : best_score_(num_qs, -std::numeric_limits<double>::infinity()),
-      best_ref_(num_qs, size_t(-1)),
-      best_tb_(num_qs),
-      os_("scores.txt")
+      best_ref_(num_qs, size_t(-1))
+//       os_("scores.txt")
     {}
 
 
@@ -1468,13 +1491,13 @@ struct scoring_results {
     // if offer return true, this means that the qs/ref pair is currently best-scoring
     // the thread can crate the traceback and set it later with 'set_trace'
     bool offer( size_t qs, size_t ref, double score_ali, double score_vit ) {
-        boost::lock_guard<boost::mutex> lock(mtx_);
+//         boost::lock_guard<boost::mutex> lock(mtx_);
 
         if( qs == 0 ) {
             os_ << qs << " " << ref << " " << score_ali << " " << score_vit << "\n";
         }
-        const double score = score_vit;
-//         const double score = score_ali;
+//         const double score = score_vit;
+        const double score = score_ali;
         if( best_score_.at(qs) < score || (delta_equal(best_score_.at(qs), score) && ref < best_ref_.at(qs))) {
             best_score_[qs] = score;
             best_ref_.at(qs) = ref;
@@ -1484,26 +1507,54 @@ struct scoring_results {
         return false;
     }
 
-    // offer a traceback for a qs/ref pair. It is declined if it is no longer the best scoring pair
-    void set_trace( size_t qs, size_t ref, std::vector<uint8_t> *trace ) {
+//     // offer a traceback for a qs/ref pair. It is declined if it is no longer the best scoring pair
+//     void set_trace( size_t qs, size_t ref, std::vector<uint8_t> *trace ) {
+//         boost::lock_guard<boost::mutex> lock(mtx_);
+// 
+//         if( best_ref_.at(qs) == ref ) {
+//             best_tb_.at(qs).swap(*trace);
+//         } else {
+//             std::cerr << "declined stale traceback\n";
+//         }
+//     }
+
+    void merge( const scoring_results &other ) {
         boost::lock_guard<boost::mutex> lock(mtx_);
-
-        if( best_ref_.at(qs) == ref ) {
-            best_tb_.at(qs).swap(*trace);
-        } else {
-            std::cerr << "declined stale traceback\n";
+        
+        const size_t size = best_score_.size();
+        assert( size == best_ref_.size() );
+        
+        assert( other.best_score_.size() == other.best_ref_.size() ); // make sure that other is sane itself.
+        
+        if( size != other.best_score_.size() ) {
+            throw std::runtime_error( "inconsistent sizes in scoring_result::merge" );
+            
         }
+        
+        for( size_t i = 0; i < best_score_.size(); ++i ) {
+            float other_score = other.best_score_[i];
+            size_t other_ref = other.best_ref_[i];
+            
+            if( best_score_[i] < other_score || (delta_equal(best_score_[i], other_score) && other_ref < best_ref_[i])) {
+                best_score_[i] = other_score;
+                best_ref_[i] = other_ref;
+            }
+        }
+        
     }
-
+    
     std::vector<double> best_score_;
     std::vector<size_t> best_ref_;
-    std::vector<std::vector<uint8_t> > best_tb_;
+//     std::vector<std::vector<uint8_t> > best_tb_;
 
     std::ofstream os_;
 
     boost::mutex mtx_;
 
 };
+
+
+
 
 
 class scoring_worker {
@@ -1527,6 +1578,8 @@ public:
 
 
 
+        scoring_results local_res( res_->best_score_.size() );
+        
         for( size_t i = rank_; i < refs_.node_size(); i+=num_workers_ ) {
             const lnode *a = refs_.get_node(i);
             assert( a->towards_root );
@@ -1534,7 +1587,7 @@ public:
 
             const my_adata *ma = dynamic_cast<const my_adata *>(a->m_data.get());
 
-            log_odds_viterbi vit( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
+//             log_odds_viterbi vit( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
             log_odds_aligner ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs(), refs_.per_column_gap_freq() );
             //log_odds_aligner_score_only ali_score( ma->state_probs(), ma->gap_probs(), refs_.base_freqs() );
 
@@ -1553,10 +1606,10 @@ public:
                 //double score2 = ali.align(b);
                 double score = ali_score.align(b);
 
-                double score_vit = vit.align(b);
-
+//                 double score_vit = vit.align(b);
+                double score_vit = 0;
                 
-                std::cout << "score: " << score << " " << score_vit << "\n";
+//                 std::cout << "score: " << score << " " << score_vit << "\n";
                
                 if ( false ) {
                     tb_tmp.clear();
@@ -1573,7 +1626,7 @@ public:
                 
                 
                 
-                if( res_->offer(j, i, score, score_vit ) ) {
+                if( local_res.offer(j, i, score, score_vit ) ) {
                     //tb_tmp.clear();
                     //	ali.traceback(&tb_tmp);
 
@@ -1592,6 +1645,8 @@ public:
             //std::cout << "score: " << score << "\n";
 
         }
+        
+        res_->merge(local_res);
         std::cout << "time: " << t1.elapsed() << " " << cups / (t1.elapsed()*1e9) << " gncup/s\n";
     }
 
