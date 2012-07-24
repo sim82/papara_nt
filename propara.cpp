@@ -1205,6 +1205,8 @@ class my_fact : public ivy_mike::tree_parser_ms::node_data_factory {
 
 class queries {
 public:
+    typedef sequence_model::model<sequence_model::tag_dna4> seq_model;
+    
     void load_fasta( const char *name ) {
         std::ifstream is( name );
         assert( is.good() );
@@ -1230,10 +1232,23 @@ public:
             // recode non-gap characters in raw_seq into seq
             // once again i'm starting doubt that it's a good idea to do _everyting_
             // with stl algorithms *g*.
-
-            std::transform( raw_seqs_[i].begin(), raw_seqs_[i].end(),
-                    back_insert_ifer(seqs_[i], std::bind2nd(std::less_equal<uint8_t>(), 3 ) ),
-                    encode_dna );
+            
+            std::for_each( raw_seqs_[i].begin(), raw_seqs_[i].end(),
+                           [&]( uint8_t rc ) {
+                               uint8_t cc = seq_model::s2c(rc);
+                               if( !seq_model::cstate_is_gap(cc) ) {
+                                   seqs_[i].push_back(cc);
+                               }
+                               
+                           });
+                            
+            
+//             std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
+//                             back_insert_ifer(m_qs_cseqs[i], std::not1( std::ptr_fun(seq_model::cstate_is_gap) )),
+//                             seq_model::s2c );
+//             std::transform( raw_seqs_[i].begin(), raw_seqs_[i].end(),
+//                     back_insert_ifer(seqs_[i], std::bind2nd(std::less_equal<uint8_t>(), 3 ) ),
+//                     encode_dna );
 
         }
     }
@@ -1739,7 +1754,7 @@ public:
                 const std::vector<uint8_t> &b = qs_.get_recoded(j);
 
 
-                cups += ma->state_probs().size1() * b.size();
+                cups += ma->state_probs().size2() * b.size();
 
                 //double score2 = ali.align(b);
                 double score = ali_score.align(b);
@@ -1955,7 +1970,7 @@ int main( int argc, char *argv[] ) {
 
     papara::output_alignment_phylip oa( "propara_alignment.phy" );
 
-    typedef sequence_model::model<sequence_model::tag_dna> seq_model;
+    typedef sequence_model::model<sequence_model::tag_dna4> seq_model;
     
     // collect ref gaps introduiced by qs
     const size_t pad = max_name_len + 1;
@@ -1998,18 +2013,22 @@ int main( int argc, char *argv[] ) {
 
 
 
-    std::vector<uint8_t>out_qs;
+    std::vector<uint8_t>out_qs_cstate;
     std::vector<char>out_qs_char;
     for( size_t i = 0; i < qs.size(); i++ ) {
         tmp.clear();
-        const std::vector<uint8_t> &qp = qs.get_raw(i);
+        const std::vector<uint8_t> &qp = qs.get_recoded(i);
 
-        out_qs.clear();
+        out_qs_cstate.clear();
 
+        // realize+write the tracebacks. this is done in cstate (=canonical state) space of the dna4 model (=the
+        // sequences don't contain gaps/ambiguous states)
+        
+        
         if( ref_gaps ) {
-            papara::gapstream_to_alignment(qs_traces.at(i), qp, &out_qs, uint8_t('-'), rgc);
+            papara::gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_cstate, seq_model::gap_cstate(), rgc);
         } else {
-            papara::gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs, uint8_t('-') );
+            papara::gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_cstate, seq_model::gap_cstate() );
         }
 
         //os << std::setw(pad) << std::left << qs.name_at(i);
@@ -2018,7 +2037,12 @@ int main( int argc, char *argv[] ) {
         
         // FIXME: this looks like a design quirk: why is papara::output_alignment based on char sequences while
         // everywhere else uint8_t seqeunces?
-        out_qs_char.assign( out_qs.begin(), out_qs.end() );
+        //out_qs_char.assign( out_qs.begin(), out_qs.end() );
+        
+        // transform from canonical state space into (ascii) sequence space
+        
+        out_qs_char.clear();
+        std::transform( out_qs_cstate.begin(), out_qs_cstate.end(), std::back_inserter(out_qs_char), seq_model::c2s );
         
         oa.push_back( qs.get_name(i), out_qs_char, papara::output_alignment::type_qs );
 

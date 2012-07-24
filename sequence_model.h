@@ -52,7 +52,9 @@ inline size_t popcount( unsigned int v ) {
 namespace sequence_model {
 
 
+
 class tag_dna;
+class tag_dna4;
 class tag_aa;
 
 
@@ -144,6 +146,82 @@ public:
     static inline pars_state_t gap_state() {
         return pars_state_t(inverse_meaning.size() - 1);
     }
+
+    static inline size_t num_cstates() {
+        return inverse_meaning.size();
+    }
+
+};
+
+
+
+template<>
+class model<tag_dna4>  {
+public:
+
+    typedef uint8_t pars_state_t;
+
+    const static std::vector<char> inverse_meaning;
+//    const static std::vector<pars_state_t> bit_vector;
+
+    static uint8_t normalize( size_t xc ) {
+                assert( xc <= 255 );
+
+                int c = int(xc);
+        c = std::toupper(c);
+
+        switch( c ) {
+        case 'U':
+            return 'T';
+        case 'N':
+        case '?':
+            return '-';
+        default:
+            return c;
+        }
+
+    }
+
+    
+    
+
+    static uint8_t s2c( size_t c ) {
+        c = normalize(c);
+        ptrdiff_t idx = std::distance(inverse_meaning.begin(),
+                                   std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
+
+        assert( idx >= 0 );
+
+        if( size_t(idx) >= inverse_meaning.size() ) {
+            std::cerr << "illegal character: " << int(c) << "\n";
+            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+        }
+
+        return uint8_t(idx); // safe because of the check above
+    }
+
+    static uint8_t c2s( size_t c ) {
+        return inverse_meaning.at(c);
+    }
+    
+//     static inline bool cstate_is_character( uint8_t cs ) {
+//         cs = normalize(c);
+//         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
+//                                    std::find(inverse_meaning.begin(), inverse_meaning.end(), cs ) );
+//         
+//         return cs >= 0 && cs < gap_cstate();
+//    
+//     }
+    
+    static inline uint8_t gap_cstate() {
+        return inverse_meaning.size() - 1;
+    }
+    
+    static inline bool cstate_is_gap( uint8_t cs) {
+        return cs == gap_cstate();
+    }
+
+    
 
     static inline size_t num_cstates() {
         return inverse_meaning.size();
