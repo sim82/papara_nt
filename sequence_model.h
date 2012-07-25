@@ -183,7 +183,15 @@ public:
     }
 
     
-    
+    static bool sstate_is_character( uint8_t c ) {
+        c = normalize(c);
+        ptrdiff_t idx = std::distance(inverse_meaning.begin(),
+                                   std::find(inverse_meaning.begin(), inverse_meaning.end(), c ) );
+        
+        return idx >= 0 && idx <= gap_cstate();
+        
+        
+    }
 
     static uint8_t s2c( size_t c ) {
         c = normalize(c);
@@ -204,14 +212,7 @@ public:
         return inverse_meaning.at(c);
     }
     
-//     static inline bool cstate_is_character( uint8_t cs ) {
-//         cs = normalize(c);
-//         ptrdiff_t idx = std::distance(inverse_meaning.begin(),
-//                                    std::find(inverse_meaning.begin(), inverse_meaning.end(), cs ) );
-//         
-//         return cs >= 0 && cs < gap_cstate();
-//    
-//     }
+
     
     static inline uint8_t gap_cstate() {
         return inverse_meaning.size() - 1;

@@ -735,19 +735,34 @@ public:
     void precalc_log_odds() {
         ref_state_lo_.resize( ref_state_prob_.size1(), ref_state_prob_.size2() );
 
+        const bool print = false;
+        
         for( size_t i = 0; i < 4; ++i ) {
             const ublas::matrix_row<dmat> pcol( ref_state_prob_, i );
             ublas::matrix_row<lomat> lorow( ref_state_lo_, i );
             std::transform( pcol.begin(), pcol.end(), lorow.begin(), log_odds(state_freq_[i]));
             
-            if( false ) {
+            if( print ) {
                 std::cout << "lo row: " << i << "\n";
-                std::for_each( lorow.begin(), lorow.end(), [&](double v) { std::cout << std::setw(14) << v; });
+                if( i == 0 ) {
+                    size_t j = 0;
+                    std::for_each( lorow.begin(), lorow.end(), [&](double v) { std::cout << std::setw(10) << j++; });
+                    std::cout << "\n";
+                    
+                }
+                
+                std::for_each( lorow.begin(), lorow.end(), [&](double v) { std::cout << std::setw(10) << v; });
                 std::cout << "\n";
+                
+//                 getchar();
+
             }
         }
-
-        //const double gap_freq = 0.83;
+        
+        if( print ) {
+            throw std::runtime_error( "exit" );
+        }
+    //const double gap_freq = 0.83;
 
 
 #if 0
@@ -843,8 +858,17 @@ public:
                     match_log_odds = -100;
                 }
 
+                
+#if 1
                 lof_t gap_log_odds = ref_gap_lo_[j-1];
                 lof_t ngap_log_odds = ref_ngap_lo_[j-1];
+//                 std::cout << gap_log_odds << " " << ngap_log_odds << "\n";
+//                 std::cout << "match: " << match_log_odds << "\n";
+#else
+                lof_t gap_log_odds =  0;
+                lof_t ngap_log_odds = 0;
+#endif
+                
                 lof_t m_max = max3(
                         *m_11 + ngap_log_odds,
                         *d_11 + gap_log_odds,
@@ -1215,10 +1239,11 @@ public:
     }
 
 
-    // WARNING: unsafe move semantics on parameter seq!
-    void add( const std::string &name, std::vector<uint8_t> &seq ) {
+    
+    void add_move( const std::string &name, std::vector<uint8_t> &&seq ) {
         names_.push_back(name);
-        ivy_mike::push_back_swap(raw_seqs_, seq );
+        //ivy_mike::push_back_swap(raw_seqs_, seq );
+        raw_seqs_.emplace_back( seq );
     }
 
 
@@ -1229,9 +1254,8 @@ public:
         for( size_t i = 0; i < raw_seqs_.size(); ++i ) {
             seqs_.at(i).clear();
 
-            // recode non-gap characters in raw_seq into seq
-            // once again i'm starting doubt that it's a good idea to do _everyting_
-            // with stl algorithms *g*.
+            // recode (ascii character to canonical state space) non-gap characters in raw_seq into seq
+            
             
             std::for_each( raw_seqs_[i].begin(), raw_seqs_[i].end(),
                            [&]( uint8_t rc ) {
@@ -1242,7 +1266,8 @@ public:
                                
                            });
                             
-            
+//             std::cout << "qs: " << i << " " << names_.at(i) << "\n";
+           
 //             std::transform( m_qs_seqs[i].begin(), m_qs_seqs[i].end(),
 //                             back_insert_ifer(m_qs_cseqs[i], std::not1( std::ptr_fun(seq_model::cstate_is_gap) )),
 //                             seq_model::s2c );
@@ -1275,6 +1300,7 @@ public:
         return m;
     }
 
+    #if 0
     static void seq_to_position_map( const std::vector<uint8_t> &seq, std::vector<int> *map ) {
         for( size_t i = 0; i < seq.size(); ++i ) {
             if( is_dna(seq[i]) ) {
@@ -1328,6 +1354,7 @@ public:
         }
         return std::numeric_limits<uint8_t>::max();
     }
+#endif
 private:
     std::vector<std::string> names_;
     std::vector<std::vector<uint8_t> > raw_seqs_; // seqs in the source alphabet (e.g. ACGT)
@@ -1340,6 +1367,8 @@ private:
 
 class references {
 public:
+    typedef sequence_model::model<sequence_model::tag_dna4> seq_model;
+    
     references( sptr::shared_ptr<ln_pool> pool, const std::string &tree_name, const std::string &ali_name )
     : pool_(pool), tree_name_(tree_name), ali_name_(ali_name)
     {}
@@ -1380,7 +1409,7 @@ public:
                     ivy_mike::push_back_swap( ref_names_, ref_ma.names[i]);
                     ivy_mike::push_back_swap( ref_seqs_, ref_ma.data[i]);
                 } else {
-                    qs.add( ref_ma.names[i], ref_ma.data[i] );
+                    qs.add_move( ref_ma.names[i], std::move(ref_ma.data[i]) );
                 }
             }
         }
@@ -1572,7 +1601,7 @@ private:
             assert( it->size() == gap_counts.size() );
 
             for( size_t i = 0; i < gap_counts.size(); ++i ) {
-                if( !queries::is_dna((*it)[i]) ) {
+                if( !seq_model::sstate_is_character((*it)[i]) ) {
                     gap_counts[i]++;
                 }
             }
@@ -1587,7 +1616,25 @@ private:
         //		std::cout << "\n";
 
     }
-
+//     static bool is_dna( uint8_t c ) {
+//         switch( c ) {
+//             case 'a':
+//             case 'c':
+//             case 'g':
+//             case 't':
+//             case 'A':
+//             case 'C':
+//             case 'G':
+//             case 'T':
+//             case 'U':
+//             case 'u':
+//                 return true;
+//             default:
+//             {}
+//         }
+//         return false;
+//     }
+    
     sptr::shared_ptr<ln_pool> pool_;
 
     const std::string tree_name_;
@@ -1915,20 +1962,21 @@ int main( int argc, char *argv[] ) {
 
 //     std::vector<uint8_t> tb;
     
-    std::string out_name(filename( opt_run_name, "aligned_qs" ));
-    std::ofstream os( out_name.c_str());
+    std::string out_name(filename( opt_run_name, "alignment" ));
+//     std::ofstream os( out_name.c_str());
 
     std::string qual_name(filename( opt_run_name, "quality" ));
     std::ofstream os_qual( qual_name.c_str());
 
 
 
-    const size_t max_name_len = write_ref_seqs( os, refs, qs.size(), qs.max_name_length() );
+//     const size_t max_name_len = write_ref_seqs( os, refs, qs.size(), qs.max_name_length() );
 
 
     double qual = 0.0;
     int num_qual = 0;
     
+    size_t max_name_len = 0;
     
     std::vector<std::vector<uint8_t> > qs_traces(qs.size());
     std::vector<double > qs_scores(qs.size());
@@ -1947,8 +1995,16 @@ int main( int argc, char *argv[] ) {
         assert( res.best_ref_.size() == qs.size() );
         log_odds_aligner ali( ma->state_probs(), ma->gap_probs(), refs.base_freqs(), refs.per_column_gap_freq() );
 
+        
+        max_name_len = std::max( max_name_len, refs.ref_names().at(i).size() );
+        
         for( size_t j = 0; j < qs.size(); ++j ) {
 
+            if( i == 0 ) {
+                // on the first round through the refs also search for the maximum qs name length
+                max_name_len = std::max( max_name_len, qs.get_name(j).size() );
+            }
+            
             if( res.best_ref_[j] != i ) {
                 continue;
             }
@@ -1968,7 +2024,7 @@ int main( int argc, char *argv[] ) {
 
 
 
-    papara::output_alignment_phylip oa( "propara_alignment.phy" );
+    papara::output_alignment_phylip oa( out_name.c_str() );
 
     typedef sequence_model::model<sequence_model::tag_dna4> seq_model;
     
