@@ -1,3 +1,6 @@
 [submodule "ivy_mike"]
 	path = ivy_mike
 	url = git@github.com:sim82/ivy_mike.git
+[submodule "genassign_blast"]
+	path = genassign_blast
+	url = git@github.com:sim82/genassign_blast.git

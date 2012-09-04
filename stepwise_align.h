@@ -668,40 +668,46 @@ public:
     inline void align( biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start, size_t a_start_idx = -1, size_t a_end_idx = -1 ) {
         typedef typename aligned_buffer<score_t>::iterator aiter;
         
-        aiter a_start, a_end, a_aux_start;
-        
+//         aiter a_start, a_end, a_aux_start;
+//         
+//         if( a_start_idx == size_t(-1) || a_end_idx == size_t(-1) ) {
+//             assert( a_start_idx == a_end_idx );
+//             
+//             a_start = pvec_prof_.begin();
+//             a_end = pvec_prof_.end();
+//             a_aux_start = aux_prof_.begin();    
+//         } else {
+//             assert( a_start_idx != a_end_idx );
+//             a_start = pvec_prof_.begin() + W * a_start_idx;
+//             a_end = pvec_prof_.begin() + W * a_end_idx;
+//             a_aux_start = aux_prof_.begin() + W * a_start_idx;    
+//             
+//         }
+//         
+//         
+// 
+// 
+// 
+//         {
+//             // some basic sanity checks for the input arguments
+// 
+//             aiter xxx;
+//             assert( sizeof(*xxx) == sizeof(score_t));
+// 
+//             vu::assert_alignment( &(*a_start) );
+//             vu::assert_alignment( &(*a_aux_start) );
+//             vu::assert_alignment( &(*out_start) );
+//         }
+
         if( a_start_idx == size_t(-1) || a_end_idx == size_t(-1) ) {
             assert( a_start_idx == a_end_idx );
             
-            a_start = pvec_prof_.begin();
-            a_end = pvec_prof_.end();
-            a_aux_start = aux_prof_.begin();    
-        } else {
-            a_start = pvec_prof_.begin() + W * a_start_idx;
-            a_end = pvec_prof_.begin() + W * a_end_idx;
-            a_aux_start = aux_prof_.begin() + W * a_end_idx;    
-            
-        }
-        
-        
-
-
-
-        {
-            // some basic sanity checks for the input arguments
-
-            aiter xxx;
-            assert( sizeof(*xxx) == sizeof(score_t));
-
-            vu::assert_alignment( &(*a_start) );
-            vu::assert_alignment( &(*a_aux_start) );
-            vu::assert_alignment( &(*out_start) );
+            a_start_idx = 0;
+            a_end_idx = pvec_prof_.size() / W;
         }
 
 
-
-
-        const size_t av_size = std::distance( a_start, a_end );
+        const size_t av_size = (a_end_idx - a_start_idx) * W; 
         const size_t bsize = std::distance( b_start, b_end );
 
         const size_t a_size = av_size / W;
@@ -763,7 +769,10 @@ public:
       //  ptr_block_outer.a_prof_iter = a_start;
         //ptr_block_outer.a_aux_prof_iter = a_aux_start;
         //ptr_block_outer.start = 0;
-        size_t block_start_outer = 0;
+        //size_t block_start_outer;
+        
+        
+        size_t block_start_outer = a_start_idx;
         //ptr_block_outer.s_iter = s_.base();
         //ptr_block_outer.si_iter = si_.base();
 

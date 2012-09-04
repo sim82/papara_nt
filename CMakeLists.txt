@@ -4,7 +4,7 @@ project(papara_nt)
 set( CMAKE_NO_VERBOSE yes )
 add_subdirectory(ivy_mike)
 add_subdirectory(ublasJama-1.0.2.3)
-
+add_subdirectory(genassign_blast)
 
 IF( NOT IVYMIKE_INCLUDE )
 SET( IVYMIKE_INCLUDE ./ivy_mike )

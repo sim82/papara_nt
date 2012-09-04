@@ -132,7 +132,7 @@ std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_
          }
          
          if ( part_idx == -1 ) {
-             std::cerr << "QS cannot be uniquely assigned to a single partition: " << qs_name << "[" << col_start << "-" << col_end << "\n";
+             std::cerr << "QS cannot be uniquely assigned to a single partition: " << qs_name << " [" << col_start << "-" << col_end << "]\n";
              throw std::runtime_error ( "partitons incompatible with blast hits" );
          }
          
