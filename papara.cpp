@@ -149,6 +149,15 @@ void queries<seq_tag>::preprocess() {
 //        }
 
 }
+
+
+// template<typename pvec_t, typename seq_tag>
+// void queries<seq_tag>::init_partition_assignments( partassign::part_assignment &part_assign, references<pvec_t,seq_tag> &refs ) {
+//     
+// }
+
+
+
 template<typename seq_tag>
 void queries<seq_tag>::add(const std::string& name, std::vector< uint8_t >* qs) {
     m_qs_names.push_back(name);
@@ -373,6 +382,9 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
     pm_.reset( m_ref_seqs );
     std::cout << "p: " << pm_.setup_pmatrix(0.1) << "\n";
 
+    // initialize empty non-gap map. It is lazily filled as needed when necessary
+    ref_ng_map_.resize( m_ref_seqs.size() );
+    
     //
     // collect list of edges
     //
@@ -440,6 +452,32 @@ void references<pvec_t,seq_tag>::build_ref_vecs() {
 //     std::cout << "pvecs created: " << t1.elapsed() << "\n";
 
 }
+template<typename pvec_t, typename seq_tag>
+const std::vector<int> &references<pvec_t,seq_tag>::ng_map_at( size_t i ) {
+    std::vector<int> &ng_map = ref_ng_map_.at(i);
+    
+    if( !ng_map.empty() ) {
+        return ng_map;
+    }
+    
+    //std::vector<int> map;
+    
+    std::vector< uint8_t > &seq = m_ref_seqs.at(i);
+    
+    for( size_t i = 0; i < seq.size(); ++i ) {
+        bool is_gap = seq_model::pstate_is_gap( seq_model::s2p(seq[i]));
+        
+        if( !is_gap ) {
+            ng_map.push_back(i);
+        }
+    }
+    
+    //ng_map.shrink_to_fit();
+    std::vector<int>(ng_map).swap(ng_map); // old fashioned shrink_to_fit
+    
+    return ng_map;
+}
+
 
 template<typename pvec_t, typename seq_tag>
 void references<pvec_t,seq_tag>::write_pvecs(const char* name) {
@@ -620,7 +658,9 @@ public:
                 //align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
 
 
-                pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, out_scores.begin() );
+                std::pair<size_t,size_t> bounds = qs_.get_per_qs_bounds( i );
+                // if no bounds are available, get_per_qs_bounds will return [size_t(-1),size_t(-1)], which align is supposed to interpret as 'full range'
+                pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, out_scores.begin(), bounds.first, bounds.second );
 
                 //aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
                 //const vu_scalar_t *score_vec = aligner.get_scores();

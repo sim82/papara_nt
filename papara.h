@@ -40,7 +40,7 @@
 // #include "parsimony.h"
 #include "pvec.h"
 // #include "align_utils.h"
-
+#include "blast_partassign.h"
 
 
 
@@ -295,7 +295,8 @@ class my_fact : public ivy_mike::tree_parser_ms::node_data_factory {
 //}
 
 void pairwise_seq_distance( std::vector< std::vector<uint8_t> > &seq );
-
+// template<typename pvec_t, typename seq_tag>
+// class references;
 
 template<typename seq_tag>
 class queries {
@@ -317,6 +318,8 @@ public:
 
     void preprocess() ;
 
+    //void init_partition_assignments( partassign::part_assignment &part_assign, references<pvec_t,seq_tag> &refs );
+    
 
     size_t size() const {
         return m_qs_seqs.size();
@@ -340,6 +343,27 @@ public:
         return m_qs_cseqs.at(i);
     }
 
+    void set_per_qs_bounds( const std::vector<std::pair<size_t,size_t> > &bounds ) {
+        if( bounds.size() != m_qs_names.size() ) {
+//             std::cerr << m_qs_names.size() << " " << bounds.size() << "\n";
+            throw std::runtime_error( "per_qs_bounds_.size() != m_qs_names.size()" );
+        }
+        
+        per_qs_bounds_ = bounds;
+    }
+    
+    std::pair<size_t,size_t> get_per_qs_bounds( size_t i ) const {
+        //return per_qs_bounds_.at(i);
+        
+        if( i >= per_qs_bounds_.size() ) {
+            return std::make_pair<size_t,size_t>(-1,-1);
+        } else {
+            return per_qs_bounds_[i];
+        }
+        
+    }
+    
+    
     void write_pvecs( const char * name ) ;
 
 
@@ -358,6 +382,7 @@ private:
 
     std::vector<std::vector <pars_state_t> > m_qs_pvecs;
 
+    std::vector<std::pair<size_t,size_t> > per_qs_bounds_;
 };
 
 
@@ -379,6 +404,16 @@ public:
     
     void build_ref_vecs() ;
 
+    const size_t find_name( const std::string &name ) const {
+        // FIXME: linear search
+        std::vector <std::string >::const_iterator it = std::find( m_ref_names.begin(), m_ref_names.end(), name );
+        
+        if( it == m_ref_names.end() ) {
+            return -1;
+        } else {
+            return std::distance( m_ref_names.begin(), it );
+        }
+    }
 
     const std::string &name_at( size_t i ) const {
         return m_ref_names.at(i);
@@ -400,6 +435,8 @@ public:
         return m_ref_aux.at(i);
     }
 
+    const std::vector<int> &ng_map_at( size_t i );
+    
     size_t num_pvecs() const {
         return m_ref_pvecs.size();
     }
@@ -413,6 +450,7 @@ public:
 
 
     size_t max_name_length() const ;
+    
 
 
 //    void write_seqs( std::ostream &os, size_t pad ) {
@@ -431,7 +469,7 @@ private:
     std::vector<std::vector <int> > m_ref_pvecs;
     std::vector<std::vector <unsigned int> > m_ref_aux;
     std::vector<std::vector <double> > m_ref_gapp;
-
+    std::vector<std::vector <int> > ref_ng_map_;
     probgap_model pm_;
     stupid_ptr_guard<probgap_model> spg_;
 

@@ -665,11 +665,25 @@ public:
 
 
     template<typename biter, typename oiter>
-    inline void align(  biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start ) {
+    inline void align( biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start, size_t a_start_idx = -1, size_t a_end_idx = -1 ) {
         typedef typename aligned_buffer<score_t>::iterator aiter;
-        aiter a_start = pvec_prof_.begin();
-        aiter a_end = pvec_prof_.end();
-        aiter a_aux_start = aux_prof_.begin();
+        
+        aiter a_start, a_end, a_aux_start;
+        
+        if( a_start_idx == size_t(-1) || a_end_idx == size_t(-1) ) {
+            assert( a_start_idx == a_end_idx );
+            
+            a_start = pvec_prof_.begin();
+            a_end = pvec_prof_.end();
+            a_aux_start = aux_prof_.begin();    
+        } else {
+            a_start = pvec_prof_.begin() + W * a_start_idx;
+            a_end = pvec_prof_.begin() + W * a_end_idx;
+            a_aux_start = aux_prof_.begin() + W * a_end_idx;    
+            
+        }
+        
+        
 
 
 
