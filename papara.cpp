@@ -678,6 +678,10 @@ public:
                 }
                 //std::cout << "eq: " << eq << "\n";
 #endif
+
+//                 std::cout << "scores: ";
+//                 std::copy( out_scores.begin(), out_scores.end(), std::ostream_iterator<int>(std::cout, "\n" ) );
+//                 std::cout << "\n";
                 results_.offer( i, block.edges, block.edges + block.num_valid, out_scores.begin() );
 
             }

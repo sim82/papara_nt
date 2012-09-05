@@ -112,6 +112,7 @@ std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_
          const std::vector<int> &ng_map = refs.ng_map_at(ref_idx);
          
          if( size_t(hit.ref_start) >= ng_map.size() || size_t(hit.ref_end) >= ng_map.size() ) {
+             std::cerr << hit.ref_start << " " << hit.ref_end << " " << ng_map.size() << "\n";
              throw std::runtime_error( "blast hit region outside of reference sequence" );
          }
          
@@ -131,13 +132,19 @@ std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_
              }
          }
          
+         std::cout << "qs part: " << qs_name << " " << part_idx << "\n";
+        
+        
          if ( part_idx == -1 ) {
              std::cerr << "QS cannot be uniquely assigned to a single partition: " << qs_name << " [" << col_start << "-" << col_end << "]\n";
-             throw std::runtime_error ( "partitons incompatible with blast hits" );
+           //  throw std::runtime_error ( "partitons incompatible with blast hits" );
+             
+             std::cerr << "falling back to full region\n";
+             bounds.push_back( std::make_pair( -1, -1 ));
+         } else {
+         
+             bounds.push_back( std::make_pair( partitions[part_idx].start, partitions[part_idx].end ));
          }
-         
-         bounds.push_back( std::make_pair( partitions[part_idx].start, partitions[part_idx].end ));
-         
     }
 
     

@@ -46,6 +46,12 @@ blast_hit partassign::next_hit( std::istream &is ) {
     
     bool valid = ss >> hit.qs_name >> hit.ref_name >> ident >> len >> mismatch >> gap_open >> hit.qs_start >> hit.qs_end >> hit.ref_start >> hit.ref_end >> evalue >> hit.bit_score;
     
+    // convert indices into proper form
+    hit.ref_start -= 1;
+    hit.ref_end -= 1;
+    hit.qs_start -= 1;
+    hit.qs_end -= 1;
+    
     if( !valid ) {
         std::cerr << "bad line: " << line << "\n";
         throw std::runtime_error( "could not read line in blast output file.\n" );
