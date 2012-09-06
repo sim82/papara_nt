@@ -1,15 +1,20 @@
 /*
- * Copyright (C) 2010 Simon A. Berger
+ * Copyright (C) 2009-2012 Simon A. Berger
+ * 
+ * This file is part of papara.
+ * 
+ *  papara is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
  *
- *  This program is free software; you may redistribute it and/or modify its
- *  under the terms of the GNU General Public License as published by the Free
- *  Software Foundation; either version 2 of the License, or (at your option)
- *  any later version.
+ *  papara is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  This program is distributed in the hope that it will be useful, but
- *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- *  for more details.
+ *  You should have received a copy of the GNU General Public License
+ *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 
@@ -24,6 +29,19 @@
 // the convenient x86intrin.h is not available on ancient gcc/msvc, so pull in the best manually.
 // sse3 is the absolute baseline. sssssssse3 and sse4.666 are nice to have (abs and 32bit min)
 // and AVX is a completely different beast...
+
+#ifdef __MMX__
+#include <mmintrin.h>
+#endif
+
+#ifdef __SSE__
+#include <xmmintrin.h>
+#endif
+
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+
 
 #ifdef __SSE3__
 #include <pmmintrin.h>
@@ -54,9 +72,9 @@
 #include <immintrin.h>
 #endif
 
-//#ifndef _MSC_VER
-//#include <x86intrin.h>
-//#endif
+#ifndef _MSC_VER
+#include <x86intrin.h>
+#endif
 
 
 
