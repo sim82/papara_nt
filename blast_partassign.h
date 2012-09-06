@@ -6,6 +6,17 @@
 #include <vector>
 #include <map>
 
+namespace papara {
+template<typename pvec_t, typename seq_tag>
+class references;
+
+template<typename seq_tag>
+class queries;
+
+
+}
+
+
 namespace partassign {
 
 struct blast_hit {
@@ -56,6 +67,15 @@ private:
     
     
 };
+
+
+
+
+
+
+template<typename pvec_t, typename seq_tag>
+std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( papara::references<pvec_t,seq_tag> &refs, papara::queries<seq_tag> &qs, const partassign::part_assignment &part_assign ); 
+
 
 }
 #endif

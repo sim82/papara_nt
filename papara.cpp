@@ -1456,7 +1456,8 @@ output_alignment::~output_alignment() {}
 }
 
 
-
+// explicit template instantiations of the queries/references classes for the different supported data types and gap models,
+// i.e., controlled combinatorial detonation happens here...
 template class queries<tag_dna>;
 template class queries<tag_aa>;
 

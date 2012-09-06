@@ -10,10 +10,12 @@
 #include <map>
 
 #include "blast_partassign.h"
+#include "papara.h"
 
 using partassign::partition;
 using partassign::blast_hit;
-
+using papara::queries;
+using papara::references;
 
 blast_hit partassign::next_hit( std::istream &is ) {
     std::string line;
@@ -288,4 +290,67 @@ const blast_hit& part_assignment::get_blast_hit ( const std::string& qs_name ) c
 // 
 //     return partitions_.at ( it->second );
 // }
+
+
+template<typename pvec_t, typename seq_tag>
+std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_tag> &refs, queries<seq_tag> &qs, const partassign::part_assignment &part_assign ) {
+    std::vector<std::pair<size_t,size_t> > bounds;
+    
+    for( size_t i = 0; i < qs.size(); ++i ) {
+        const std::string &qs_name = qs.name_at(i);
+        const partassign::blast_hit &hit = part_assign.get_blast_hit( qs_name );
+        
+         size_t ref_idx = refs.find_name( hit.ref_name );
+         
+         if( ref_idx == size_t(-1) ) {
+             throw std::runtime_error( "ref name of blast hit not found" );
+         }
+         const std::vector<int> &ng_map = refs.ng_map_at(ref_idx);
+         
+         if( size_t(hit.ref_start) >= ng_map.size() || size_t(hit.ref_end) >= ng_map.size() ) {
+             std::cerr << hit.ref_start << " " << hit.ref_end << " " << ng_map.size() << "\n";
+             throw std::runtime_error( "blast hit region outside of reference sequence" );
+         }
+         
+         // map position in (non-gappy) ref sequence onto alignment column
+         int col_start = ng_map.at(hit.ref_start);
+         int col_end = ng_map.at(hit.ref_end);
+         
+         int part_idx = -1;
+         
+         std::vector< partassign::partition > partitions = part_assign.partitions();
+         for ( size_t i = 0; i < partitions.size(); ++i ) {
+             const partassign::partition &part = partitions[i];
+             
+             if ( col_start >= part.start && col_end <= part.end ) {
+                 part_idx = int ( i );
+                 break;
+             }
+         }
+         
+         std::cout << "qs part: " << qs_name << " " << part_idx << "\n";
+        
+        
+         if ( part_idx == -1 ) {
+             std::cerr << "QS cannot be uniquely assigned to a single partition: " << qs_name << " [" << col_start << "-" << col_end << "]\n";
+           //  throw std::runtime_error ( "partitons incompatible with blast hits" );
+             
+             std::cerr << "falling back to full region\n";
+             bounds.push_back( std::make_pair( -1, -1 ));
+         } else {
+         
+             bounds.push_back( std::make_pair( partitions[part_idx].start, partitions[part_idx].end ));
+         }
+    }
+
+    
+    return bounds;
+}
+
+// combinatorial explosion hazard ahead... if another function comes along put it into a driver class just like papara::driver.
+
+template std::vector<std::pair<size_t,size_t> > resolve_qs_bounds<pvec_cgap,sequence_model::tag_aa>( references<pvec_cgap,sequence_model::tag_aa> &refs, queries<sequence_model::tag_aa> &qs, const partassign::part_assignment &part_assign );
+template std::vector<std::pair<size_t,size_t> > resolve_qs_bounds<pvec_cgap,sequence_model::tag_dna>( references<pvec_cgap,sequence_model::tag_dna> &refs, queries<sequence_model::tag_dna> &qs, const partassign::part_assignment &part_assign );
+template std::vector<std::pair<size_t,size_t> > resolve_qs_bounds<pvec_pgap,sequence_model::tag_aa>( references<pvec_pgap,sequence_model::tag_aa> &refs, queries<sequence_model::tag_aa> &qs, const partassign::part_assignment &part_assign );
+template std::vector<std::pair<size_t,size_t> > resolve_qs_bounds<pvec_pgap,sequence_model::tag_dna>( references<pvec_pgap,sequence_model::tag_dna> &refs, queries<sequence_model::tag_dna> &qs, const partassign::part_assignment &part_assign );
 }
