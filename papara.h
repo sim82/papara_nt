@@ -1,15 +1,20 @@
 /*
- * Copyright (C) 2011 Simon A. Berger
+ * Copyright (C) 2009-2012 Simon A. Berger
+ * 
+ * This file is part of papara.
+ * 
+ *  papara is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
  *
- *  This program is free software; you may redistribute it and/or modify its
- *  under the terms of the GNU General Public License as published by the Free
- *  Software Foundation; either version 2 of the License, or (at your option)
- *  any later version.
+ *  papara is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
  *
- *  This program is distributed in the hope that it will be useful, but
- *  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
- *  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- *  for more details.
+ *  You should have received a copy of the GNU General Public License
+ *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef __papara_h
@@ -460,12 +465,18 @@ public:
 //            os << "\n";
 //        }
 //    }
+    
+    sptr::shared_ptr<im_tree_parser::lnode> tree() const {
+        return tree_;
+    }
 private:
     std::vector <std::string > m_ref_names;
     std::vector <std::vector<uint8_t> > m_ref_seqs;
     std::auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
     edge_collector<im_tree_parser::lnode> m_ec;
-
+    sptr::shared_ptr<im_tree_parser::lnode> tree_;
+    
+    
     std::vector<std::vector <int> > m_ref_pvecs;
     std::vector<std::vector <unsigned int> > m_ref_aux;
     std::vector<std::vector <double> > m_ref_gapp;
@@ -504,7 +515,7 @@ public:
 //
 //    }
 
-    bool get_block( block_t *block ) {
+    bool get_block( block_t *block, size_t *queue_size = 0 ) {
         ivy_mike::lock_guard<ivy_mike::mutex> lock( m_qmtx );
 
         if( m_blockqueue.empty() ) {
@@ -514,6 +525,10 @@ public:
         *block = m_blockqueue.front();
         m_blockqueue.pop_front();
 
+        if( queue_size != 0 ) {
+            *queue_size = m_blockqueue.size();
+        }
+        
         return true;
 
     }

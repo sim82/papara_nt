@@ -1,3 +1,23 @@
+/*
+ * Copyright (C) 2009-2012 Simon A. Berger
+ * 
+ * This file is part of papara.
+ * 
+ *  papara is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  papara is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+
 #include "papara.h"
 #include "fasta.h"
 #include "vec_unit.h"
@@ -211,7 +231,10 @@ void queries<seq_tag>::normalize_name(std::string& str) {
 
         if( std::isspace(*it) ) {
             if( !in_ws_run ) {
-                ns.push_back( '_' );
+
+                if( (*it) != '\r' ) { // just ignore stupid windows line ends
+                    ns.push_back( '_' );
+                }
                 in_ws_run = true;
             }
         } else {
@@ -250,7 +273,12 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
     tree_parser_ms::parser tp( opt_tree_name, pool );
     tree_parser_ms::lnode * n = tp.parse();
 
+    
+    
     n = towards_tree( n );
+    
+    tree_ = sptr::shared_ptr<im_tree_parser::lnode>(n->get_smart_ptr());
+    
     //
     // create map from tip names to tip nodes
     //
@@ -630,14 +658,21 @@ public:
         align_vec_arrays<vu_scalar_t> arrays;
         aligned_buffer<vu_scalar_t> out_scores(VW);
         aligned_buffer<vu_scalar_t> out_scores2(VW);
-
+        
+        size_t queue_size;
+        size_t init_queue_size = -1;
+        
         while( true ) {
             block_t block;
 
-            if( !block_queue_.get_block(&block)) {
+            if( !block_queue_.get_block(&block, &queue_size)) {
                 break;
             }
 
+            if( init_queue_size == size_t(-1) ) {
+                init_queue_size = queue_size;
+            }
+            
             if( cups_per_ref == uint64_t(-1) ) {
                 cups_per_ref = qs_.calc_cups_per_ref(block.ref_len );
             }
@@ -698,7 +733,11 @@ public:
             if( rank_ == 0 &&  tprint.elapsed() > 10 ) {
 
                 //std::cout << "thread " << rank_ << " " << ncup << " in " << tstatus.elapsed() << " : "
-                std::cout << ncup / (tstatus.elapsed() * 1e9) << " gncup/s, " << ticks_all / double(inner_iters) << " tpili (short: " << ncup_short / (tprint.elapsed() * 1e9) << ", " << ticks_all_short / double(inner_iters_short) << ")\n";
+                
+                float fdone = (init_queue_size - queue_size) / float(init_queue_size);
+                
+                lout << fdone * 100 << "% done. ";
+                lout << ncup / (tstatus.elapsed() * 1e9) << " gncup/s, " << ticks_all / double(inner_iters) << " tpili (short: " << ncup_short / (tprint.elapsed() * 1e9) << ", " << ticks_all_short / double(inner_iters_short) << ")" << std::endl;
 
                 ncup_short = 0;
                 ticks_all_short = 0;
@@ -759,7 +798,7 @@ public:
 #endif
         {
             ivy_mike::lock_guard<ivy_mike::mutex> lock( *block_queue_.hack_mutex() );
-            std::cout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s\n";
+            lout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s" << std::endl;
         }
     }
 };
