@@ -979,6 +979,8 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
 
     std::vector<uint8_t> cand_trace;
 
+    std::deque<size_t> bounded_bad_scores;
+    
     for( size_t i = 0; i < qs.size(); i++ ) {
         size_t best_edge = res.bestedge_at(i);
 
@@ -1000,9 +1002,18 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
 
 //         std::cout << "scores: " << score << " " << res.bestscore_at(i) << "\n";
         
-        if( score != res.bestscore_at(i) ) {
-            std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
-            //throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels.");
+        std::pair<size_t,size_t> bounds = qs.get_per_qs_bounds( i );
+        
+        
+        if( bounds.first == size_t(-1) ) {
+            if( score != res.bestscore_at(i) ) {
+                std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
+                throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels.");
+            }
+        } else {
+            if( score != res.bestscore_at(i) ) {
+                bounded_bad_scores.push_back(i);
+            }
         }
 
 
@@ -1051,7 +1062,25 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
         }
 
     }
-
+    
+    if( !bounded_bad_scores.empty() ) {
+        std::cout << "There were internal problems handling per-gene QS. This is most likely due to overhangs into another partition. The overhangs will be chopped off, but the alignment may be wrong.\n";
+    
+        std::cout << "QS names";
+            
+            if( bounded_bad_scores.size() > 20 ) {
+                std::cout << " (showing only first 20 of " << bounded_bad_scores.size() << " QS names):\n";
+            } else {
+                std::cout << " :\n";
+            }
+            
+            size_t m = std::min( bounded_bad_scores.size(), size_t(20) );
+                        
+            for( size_t i = 0; i < m; ++i ) {
+                std::cout << qs.name_at( bounded_bad_scores[i] ) << "\n";
+            }
+        
+    }
 
 
     return qs_traces;
@@ -1256,7 +1285,7 @@ void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const m
         
     }
 
-
+    std::deque<size_t> overhang_qs;
 
     for( size_t i = 0; i < qs.size(); i++ ) {
         tmp.clear();
@@ -1268,8 +1297,59 @@ void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const m
             gapstream_to_alignment(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate(), rgc);
         } else {
             gapstream_to_alignment_no_ref_gaps(qs_traces.at(i), qp, &out_qs_ps, seq_model::gap_pstate() );
+            
+            
+            
+            // chop off QS parts that hang over into other partition
+            std::pair<size_t,size_t> bounds = qs.get_per_qs_bounds(i);
+            
+            if( bounds.first != size_t(-1) ) {
+                assert( bounds.second != size_t(-1) );
+                
+                assert( bounds.first < out_qs_ps.size() );
+                assert( bounds.second <= out_qs_ps.size() );
+                assert( bounds.first < bounds.second );
+                bool pre_overhang = false;
+                bool post_overhang = false;
+                
+                const typename seq_model::pars_state_t gap_state = seq_model::gap_pstate();
+                for( size_t j = 0; j < bounds.first; ++j ) {
+                    if( out_qs_ps[j] != gap_state ) {
+                        out_qs_ps[j] = gap_state;
+                        pre_overhang = true;
+                    }
+                }
+                
+                for( size_t j = bounds.second + 1; j < out_qs_ps.size(); ++j ) {
+                    if( out_qs_ps[j] != gap_state ) {
+                        out_qs_ps[j] = gap_state;
+                        post_overhang = true;
+                    }
+                }
+                
+                if( pre_overhang || post_overhang ) {
+                    overhang_qs.push_back(i);
+                }
+                
+            }
+            
         }
 
+        if( !overhang_qs.empty() ) {
+            std::cout << "WARNING: per-gene alignment, with overhangs into other partitons. chopped off.\nQS names";
+            
+            if( overhang_qs.size() > 20 ) {
+                std::cout << " (showing only first 20 of " << overhang_qs.size() << " QS names):\n";
+            } else {
+                std::cout << " :\n";
+            }
+            
+            size_t m = std::min( overhang_qs.size(), size_t(20) );
+            for( size_t i = 0; i < m; ++i ) {
+                std::cout << qs.name_at( overhang_qs[i] ) << "\n";
+            }
+        }
+        
         //os << std::setw(pad) << std::left << qs.name_at(i);
         std::transform( out_qs_ps.begin(), out_qs_ps.end(), std::back_inserter(tmp), seq_model::p2s );
         

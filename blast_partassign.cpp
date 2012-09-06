@@ -72,6 +72,17 @@ T from_string( const std::string &str ) {
 //     return !isspace(x); // doing the same with pre-c++11 functional is ridiculus
 // }
 
+template<typename iiter>
+static void part_check_error( iiter it, iiter end, const std::string &line ) {
+    if( it == end ) {
+        std::stringstream ss;
+        ss << "error parsing line of partition file:\n" << line; 
+        
+        throw std::runtime_error( ss.str() );
+    }
+    
+}
+
 partition partassign::next_partition( std::istream &is ) {
     // TODO: there is absolutely no (=ZILCH) error checking in this function
     
@@ -106,17 +117,26 @@ partition partassign::next_partition( std::istream &is ) {
     // parse gene name:
     // it = first non_space character after the ','
     // it_next = first space after the gene name
-    it = std::find_if( it, line.end(), std::not1(std::ptr_fun<int,int>(std::isspace) ) );
+    it = std::find_if( it, line.end(), std::not1(std::ptr_fun<int,int>(std::isspace) ) ); // here we go, scott meyers would be proud of me ;)
+    part_check_error( it, line.end(), line );
+    
     it_next = std::find_if( it, line.end(), std::ptr_fun<int,int>(std::isspace) );
+    part_check_error( it_next, line.end(), line );
     
     std::string gene_name( it, it_next );
 //     std::cout << "gene: '" << gene_name << "'\n";
     
     it = std::find( it_next, line.end(), '=' );
+    part_check_error( it, line.end(), line );
+    
     ++it;
+    part_check_error( it, line.end(), line );
+    
     it = std::find_if( it, line.end(), std::not1(std::ptr_fun<int,int>(std::isspace) ) );
+    part_check_error( it, line.end(), line );
     
     it_next = std::find( it, line.end(), '-' );
+    part_check_error( it, line.end(), line );
     
     std::string start_str( it, it_next );
     it = it_next + 1;

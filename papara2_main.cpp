@@ -17,7 +17,7 @@ void print_banner( std::ostream &os ) {
     os << "|  __/ _` |  __/ _` |    // _` |\n";
     os << "| | | (_| | | | (_| | |\\ \\ (_| |\n";
     os << "\\_|  \\__,_\\_|  \\__,_\\_| \\_\\__,_|\n";
-    os << "  Version 2.2\n";
+    os << "  Version 2.3\n";
 
 }
 
@@ -152,7 +152,7 @@ std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_
 }
 
 template<typename pvec_t, typename seq_tag>
-void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps, const papara_score_parameters &sp, bool write_fasta, partassign::part_assignment *part_assign ) {
+void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, bool ref_gaps, const papara_score_parameters &sp, bool write_fasta, partassign::part_assignment *part_assign ) {
 
     ivy_mike::perf_timer t1;
 
@@ -176,6 +176,12 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     refs.build_ref_vecs();
 
     if( part_assign != 0 ) {
+        if( !ref_gaps ) {
+            std::cout << "REMARK: using per-gene alignment deactivates reference-side gaps!\n";
+            ref_gaps = true;
+        }
+        
+        
         //qs.init_partition_assignments( *part_assign );
         std::vector<std::pair<size_t,size_t> > qs_bounds = resolve_qs_bounds( refs, qs, *part_assign );
         
