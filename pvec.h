@@ -41,7 +41,7 @@ class pvec_cgap {
     public:
         int operator()( parsimony_state c ) {
 
-            if( seq_model::is_gap(c) ) {
+            if( seq_model::pstate_is_gap(c) ) {
                 return AUX_CGAP;
             } else {
                 return 0;
@@ -379,7 +379,7 @@ public:
             // ( 1 ) means gap
 
 
-            if( seq_model::is_gap(v[i]) ) {
+            if( seq_model::pstate_is_gap(v[i]) ) {
                 gap_prob( 0, i ) = 0.0;
                 gap_prob( 1, i ) = 1.0;
             } else {

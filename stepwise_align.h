@@ -665,38 +665,65 @@ public:
 
 
     template<typename biter, typename oiter>
-    inline void align(  biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start ) {
+    inline void align( biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start, size_t a_start_idx = -1, size_t a_end_idx = -1 ) {
         typedef typename aligned_buffer<score_t>::iterator aiter;
-        aiter a_start = pvec_prof_.begin();
-        aiter a_end = pvec_prof_.end();
-        aiter a_aux_start = aux_prof_.begin();
+        
+//         aiter a_start, a_end, a_aux_start;
+//         
+//         if( a_start_idx == size_t(-1) || a_end_idx == size_t(-1) ) {
+//             assert( a_start_idx == a_end_idx );
+//             
+//             a_start = pvec_prof_.begin();
+//             a_end = pvec_prof_.end();
+//             a_aux_start = aux_prof_.begin();    
+//         } else {
+//             assert( a_start_idx != a_end_idx );
+//             a_start = pvec_prof_.begin() + W * a_start_idx;
+//             a_end = pvec_prof_.begin() + W * a_end_idx;
+//             a_aux_start = aux_prof_.begin() + W * a_start_idx;    
+//             
+//         }
+//         
+//         
+// 
+// 
+// 
+//         {
+//             // some basic sanity checks for the input arguments
+// 
+//             aiter xxx;
+//             assert( sizeof(*xxx) == sizeof(score_t));
+// 
+//             vu::assert_alignment( &(*a_start) );
+//             vu::assert_alignment( &(*a_aux_start) );
+//             vu::assert_alignment( &(*out_start) );
+//         }
 
-
-
-        {
-            // some basic sanity checks for the input arguments
-
-            aiter xxx;
-            assert( sizeof(*xxx) == sizeof(score_t));
-
-            vu::assert_alignment( &(*a_start) );
-            vu::assert_alignment( &(*a_aux_start) );
-            vu::assert_alignment( &(*out_start) );
+        // if a_start_idx and a_end_idx == -1, fall back to whole range (=do full alignment)
+        if( a_start_idx == size_t(-1) || a_end_idx == size_t(-1) ) {
+            assert( a_start_idx == a_end_idx );
+            
+            a_start_idx = 0;
+            a_end_idx = pvec_prof_.size() / W;
         }
+   
 
-
-
-
-        const size_t av_size = std::distance( a_start, a_end );
+        
+//         const size_t a_size_bound = av_size_bound / W;
+        
         const size_t bsize = std::distance( b_start, b_end );
 
-        const size_t a_size = av_size / W;
-
-
+        
+        // overall size of a whole row of vectors (=length of 'a' * vector width)
+        const size_t av_size_all = pvec_prof_.size();
+        const size_t a_size_all = av_size_all / W;
         const size_t block_width = 512;
 //         assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
 
-        const size_t av_minsize = std::max(av_size, block_width * W);
+        
+        // actual row length (times vector width) inside the bounded region
+        const size_t av_size_bound = (a_end_idx - a_start_idx) * W; 
+        const size_t av_minsize = std::max(av_size_bound, block_width * W);
 
 
         s_.resize( av_minsize );
@@ -715,6 +742,7 @@ public:
         const score_t SMALL = vu::SMALL_VALUE;
         std::fill( s_.begin(), s_.end(), 0 );
         std::fill( si_.begin(), si_.end(), SMALL );
+//         si_[0] = 0;
 
 
         vec_t max_score = vu::set1(SMALL);
@@ -749,7 +777,10 @@ public:
       //  ptr_block_outer.a_prof_iter = a_start;
         //ptr_block_outer.a_aux_prof_iter = a_aux_start;
         //ptr_block_outer.start = 0;
-        size_t block_start_outer = 0;
+        //size_t block_start_outer;
+        
+        
+        size_t block_start_outer = a_start_idx;
         //ptr_block_outer.s_iter = s_.base();
         //ptr_block_outer.si_iter = si_.base();
 
@@ -759,7 +790,7 @@ public:
         //size_t inner_iters = 0;
         while( !done ) {
 
-
+//             std::cout << "block start outer: " << block_start_outer << "\n";
 
 
             std::fill( s_.begin(), s_.begin() + W * block_width, 0 );
@@ -774,8 +805,8 @@ public:
 
             size_t block_end = block_start_outer + block_width;
 
-            if( block_end > a_size ) {
-                block_end = a_size;
+            if( block_end > a_size_all ) {
+                block_end = a_size_all;
             }
 
 
@@ -807,8 +838,8 @@ public:
                 score_t * __restrict si_iter = si_.base();
 //                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
 //                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
-                score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_start * W));
-                score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size + block_end * W));
+                score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_start * W));
+                score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_end * W));
 
                 _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
 
@@ -904,7 +935,7 @@ public:
                 }
 
 
-                done = block_start == a_size;
+                done = block_start == a_size_all;
 
                 if( done ) {
                     max_score = vu::max( max_score, last_sc );

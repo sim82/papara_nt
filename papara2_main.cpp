@@ -1,3 +1,4 @@
+#include "blast_partassign.h"
 #include "ivymike/getopt.h"
 #include "ivymike/time.h"
 
@@ -16,7 +17,7 @@ void print_banner( std::ostream &os ) {
     os << "|  __/ _` |  __/ _` |    // _` |\n";
     os << "| | | (_| | | | (_| | |\\ \\ (_| |\n";
     os << "\\_|  \\__,_\\_|  \\__,_\\_| \\_\\__,_|\n";
-    os << "  Version 2.2\n";
+    os << "  Version 2.3\n";
 
 }
 
@@ -94,13 +95,72 @@ void print_help( std::ostream &os ) {
 
 }
 
+
 template<typename pvec_t, typename seq_tag>
-void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, const bool ref_gaps, const papara_score_parameters &sp, bool write_fasta ) {
+std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_tag> &refs, queries<seq_tag> &qs, const partassign::part_assignment &part_assign ) {
+    std::vector<std::pair<size_t,size_t> > bounds;
+    
+    for( size_t i = 0; i < qs.size(); ++i ) {
+        const std::string &qs_name = qs.name_at(i);
+        const partassign::blast_hit &hit = part_assign.get_blast_hit( qs_name );
+        
+         size_t ref_idx = refs.find_name( hit.ref_name );
+         
+         if( ref_idx == size_t(-1) ) {
+             throw std::runtime_error( "ref name of blast hit not found" );
+         }
+         const std::vector<int> &ng_map = refs.ng_map_at(ref_idx);
+         
+         if( size_t(hit.ref_start) >= ng_map.size() || size_t(hit.ref_end) >= ng_map.size() ) {
+             std::cerr << hit.ref_start << " " << hit.ref_end << " " << ng_map.size() << "\n";
+             throw std::runtime_error( "blast hit region outside of reference sequence" );
+         }
+         
+         // map position in (non-gappy) ref sequence onto alignment column
+         int col_start = ng_map.at(hit.ref_start);
+         int col_end = ng_map.at(hit.ref_end);
+         
+         int part_idx = -1;
+         
+         std::vector< partassign::partition > partitions = part_assign.partitions();
+         for ( size_t i = 0; i < partitions.size(); ++i ) {
+             const partassign::partition &part = partitions[i];
+             
+             if ( col_start >= part.start && col_end <= part.end ) {
+                 part_idx = int ( i );
+                 break;
+             }
+         }
+         
+         std::cout << "qs part: " << qs_name << " " << part_idx << "\n";
+        
+        
+         if ( part_idx == -1 ) {
+             std::cerr << "QS cannot be uniquely assigned to a single partition: " << qs_name << " [" << col_start << "-" << col_end << "]\n";
+           //  throw std::runtime_error ( "partitons incompatible with blast hits" );
+             
+             std::cerr << "falling back to full region\n";
+             bounds.push_back( std::make_pair( -1, -1 ));
+         } else {
+         
+             bounds.push_back( std::make_pair( partitions[part_idx].start, partitions[part_idx].end ));
+         }
+    }
+
+    
+    return bounds;
+}
+
+template<typename pvec_t, typename seq_tag>
+void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, bool ref_gaps, const papara_score_parameters &sp, bool write_fasta, partassign::part_assignment *part_assign ) {
 
     ivy_mike::perf_timer t1;
 
     queries<seq_tag> qs(qs_name.c_str());
 
+    
+    
+    
     t1.add_int();
     references<pvec_t,seq_tag> refs( tree_name.c_str(), alignment_name.c_str(), &qs );
 
@@ -109,15 +169,31 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     t1.add_int();
 
     qs.preprocess();
-
+   
     t1.add_int();
 
     refs.remove_full_gaps();
     refs.build_ref_vecs();
 
+    if( part_assign != 0 ) {
+        if( !ref_gaps ) {
+            std::cout << "REMARK: using per-gene alignment deactivates reference-side gaps!\n";
+            ref_gaps = true;
+        }
+        
+        
+        //qs.init_partition_assignments( *part_assign );
+        std::vector<std::pair<size_t,size_t> > qs_bounds = resolve_qs_bounds( refs, qs, *part_assign );
+        
+        
+        qs.set_per_qs_bounds( qs_bounds );
+        
+        
+    }
+    
     t1.add_int();
 
-    t1.print();
+//     t1.print();
 
     const size_t num_candidates = 0;
 
@@ -163,6 +239,8 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     
 }
 
+
+
 int main( int argc, char *argv[] ) {
 
 //     aligned_buffer<int> xxx(1024);
@@ -177,6 +255,9 @@ int main( int argc, char *argv[] ) {
     std::string opt_alignment_name;
     std::string opt_qs_name;
     std::string opt_user_parameters;
+    
+    std::string opt_blast_hits;
+    std::string opt_partitions;
     
     bool opt_use_cgap;
     int opt_num_threads;
@@ -201,6 +282,8 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'p', igo::value<std::string>(opt_user_parameters).set_default("") );
     igp.add_opt( 'h', igo::value<bool>(opt_print_help, true).set_default(false) );
     igp.add_opt( 'g', igo::value<bool>(opt_write_fasta, true).set_default(false) );
+    igp.add_opt( 'l', igo::value<std::string>(opt_blast_hits) );
+    igp.add_opt( 'x', igo::value<std::string>(opt_partitions) );
     
     igp.parse(argc,argv);
 
@@ -221,6 +304,34 @@ int main( int argc, char *argv[] ) {
         print_help( std::cerr );
         return 0;
     }
+    
+    // optional accelration by blast hits/partition file
+    std::auto_ptr<partassign::part_assignment> part_assignment;
+    
+    if( igp.opt_count('l') == 1 || igp.opt_count('x') == 1 ) {
+        if( igp.opt_count('l') != igp.opt_count('x') ) {
+            std::cerr << "options -b and -x have to be used together (or not at all)\n";
+            print_help( std::cerr );
+            return 0;
+        }
+        
+        std::ifstream blast_is( opt_blast_hits.c_str() );
+        if( !blast_is.good() ) {
+            std::cerr << "can not open blast hits file\n";
+            return 0;
+        }
+        
+        std::ifstream part_is( opt_partitions.c_str() );
+        if( !part_is.good() ) {
+            std::cerr << "can not open partition file\n";
+            return 0;
+        }
+        
+        
+        part_assignment.reset( new partassign::part_assignment( blast_is, part_is ));
+    }
+    
+    
     ivy_mike::timer t;
 
 //    const char *qs_name = 0;
@@ -260,15 +371,15 @@ int main( int argc, char *argv[] ) {
     if( opt_use_cgap ) {
 
         if( opt_aa ) {
-            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
+            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
         } else {
-            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
+            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
         }
     } else {
         if( opt_aa ) {
-            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
+            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
         } else {
-            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta );
+            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
         }
     }
 

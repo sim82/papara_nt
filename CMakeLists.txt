@@ -4,7 +4,7 @@ project(papara_nt)
 set( CMAKE_NO_VERBOSE yes )
 add_subdirectory(ivy_mike)
 add_subdirectory(ublasJama-1.0.2.3)
-
+add_subdirectory(genassign_blast)
 
 IF( NOT IVYMIKE_INCLUDE )
 SET( IVYMIKE_INCLUDE ./ivy_mike )
@@ -39,7 +39,7 @@ ENDIF()
 ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
-add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
+add_executable(papara papara2_main.cpp blast_partassign.cpp ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp ${ALL_HEADERS} )

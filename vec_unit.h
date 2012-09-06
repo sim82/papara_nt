@@ -65,7 +65,7 @@
 //#include <immintrin.h>
 #endif
 
-const size_t required_alignment = 32;
+const size_t required_alignment = 16;
 
 template<class T, size_t W> 
 struct vector_unit {
