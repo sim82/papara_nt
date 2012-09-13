@@ -17,6 +17,7 @@
  *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#error aligned_buffer
 
 #ifndef __aligned_buffer_h
 #define __aligned_buffer_h

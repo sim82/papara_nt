@@ -16,6 +16,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
+#error fasta_h
+
 
 #ifndef __fasta_h
 #define __fasta_h
