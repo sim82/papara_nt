@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <iterator>
 
-#include "fasta.h"
+#include "ivymike/fasta.h"
 #include "stepwise_align.h"
 
 
@@ -35,7 +35,7 @@ void process_fasta( std::istream &is )
     std::vector<std::string> names;
     std::vector<std::vector<uint8_t> > data;
     
-    read_fasta( is, names, data, false );
+    ivy_mike::read_fasta( is, names, data, false );
     
     const size_t n = names.size();
     assert( n == data.size());
@@ -47,13 +47,13 @@ void process_fasta( std::istream &is )
     
     std::random_shuffle( rind.begin(), rind.end() );
     
-    const size_t target_size = 5;
+    const size_t target_size = 10;
     
     size_t num_written = 0;
     
     
     int match_score = 5;
-    scoring_matrix sm(5, -3);
+    ivy_mike::scoring_matrix sm(5, -3);
     
     
     while( num_written < target_size && !rind.empty()) {

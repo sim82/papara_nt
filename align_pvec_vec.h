@@ -25,16 +25,16 @@
 #include <vector>
 #include <algorithm>
 
-#include "aligned_buffer.h"
+#include "ivymike/aligned_buffer.h"
 #include "vec_unit.h"
 
 template<typename score_t, size_t W>
 class align_pvec_score{
-    aligned_buffer<score_t> m_a_prof;
-    aligned_buffer<score_t> m_cgap_prof;
+    ivy_mike::aligned_buffer<score_t> m_a_prof;
+    ivy_mike::aligned_buffer<score_t> m_cgap_prof;
     
-    mutable aligned_buffer<score_t> m_s;
-    mutable aligned_buffer<score_t> m_out_score;
+    mutable ivy_mike::aligned_buffer<score_t> m_s;
+    mutable ivy_mike::aligned_buffer<score_t> m_out_score;
     
     
     const score_t m_mismatch_score;
@@ -78,14 +78,14 @@ class align_pvec_score{
         }
     }
 public:
-    align_pvec_score( const aligned_buffer<score_t> &a_prof, const aligned_buffer<score_t> &a_aux_prof, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend )
+    align_pvec_score( const ivy_mike::aligned_buffer<score_t> &a_prof, const ivy_mike::aligned_buffer<score_t> &a_aux_prof, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend )
      : m_mismatch_score(mismatch_score),m_match_cgap(match_cgap), m_gap_open(gap_open), m_gap_extend( gap_extend )
     {
         m_a_prof = a_prof;
        
         
         m_cgap_prof.reserve( a_aux_prof.size());
-        for( typename aligned_buffer<score_t>::const_iterator it = a_aux_prof.begin(); it != a_aux_prof.end(); ++it ) {
+        for( typename ivy_mike::aligned_buffer<score_t>::const_iterator it = a_aux_prof.begin(); it != a_aux_prof.end(); ++it ) {
             
             m_cgap_prof.push_back( map_cgap(*it));
         }
@@ -204,15 +204,15 @@ public:
 template<size_t W>
 class align_pvec_gapp_score{
 
-	typedef int32_t pstate_t;
-	typedef float score_t;
+    typedef int32_t pstate_t;
+    typedef float score_t;
 
 
-    aligned_buffer<pstate_t> m_a_prof;
-    aligned_buffer<score_t> m_gapp_prof;
+    ivy_mike::aligned_buffer<pstate_t> m_a_prof;
+    ivy_mike::aligned_buffer<score_t> m_gapp_prof;
 
-    mutable aligned_buffer<score_t> m_s;
-    mutable aligned_buffer<score_t> m_out_score;
+    mutable ivy_mike::aligned_buffer<score_t> m_s;
+    mutable ivy_mike::aligned_buffer<score_t> m_out_score;
 
 
     const score_t m_mismatch_score;
@@ -231,7 +231,7 @@ class align_pvec_gapp_score{
 //        }
 //    }
 public:
-    align_pvec_gapp_score( const aligned_buffer<pstate_t> &a_prof, const aligned_buffer<score_t> &a_gapp_prof, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend )
+    align_pvec_gapp_score( const ivy_mike::aligned_buffer<pstate_t> &a_prof, const ivy_mike::aligned_buffer<score_t> &a_gapp_prof, score_t mismatch_score, score_t match_cgap, score_t gap_open, score_t gap_extend )
      : m_mismatch_score(mismatch_score),m_match_cgap(match_cgap), m_gap_open(gap_open), m_gap_extend( gap_extend )
     {
         m_a_prof = a_prof;

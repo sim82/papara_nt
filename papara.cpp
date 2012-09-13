@@ -18,20 +18,24 @@
  */
 
 
+#include <iomanip>
+#include <boost/bind.hpp>
+#include <boost/dynamic_bitset.hpp>
+#include <iterator>
+
+#include "ivymike/fasta.h"
+#include "ivymike/demangle.h"
+#include "ivymike/time.h"
+
 #include "papara.h"
-#include "fasta.h"
 #include "vec_unit.h"
 #include "align_pvec_vec.h"
 #include "stepwise_align.h"
 #include "align_utils.h"
 
-#include "ivymike/demangle.h"
-#include "ivymike/time.h"
 
-#include <iomanip>
-#include <boost/bind.hpp>
-#include <boost/dynamic_bitset.hpp>
-#include <iterator>
+
+
 
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;

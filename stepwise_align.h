@@ -26,11 +26,12 @@
 #include <iterator>
 #include <cassert>
 
-#include "aligned_buffer.h"
+#include "ivymike/aligned_buffer.h"
+#include "ivymike/fasta.h"
+#include "ivymike/cycle.h"
 #include "vec_unit.h"
 #include "parsimony.h"
-#include "fasta.h"
-#include "ivymike/cycle.h"
+
 
 
 namespace {
@@ -45,8 +46,8 @@ namespace {
 
 template<typename score_t>
 struct align_arrays {
-    aligned_buffer<score_t> s;
-    aligned_buffer<score_t> si;
+    ivy_mike::aligned_buffer<score_t> s;
+    ivy_mike::aligned_buffer<score_t> si;
 };
 
 template<typename score_t,bool global>
@@ -327,8 +328,8 @@ void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score
 
 template<typename score_t>
 struct align_vec_arrays {
-    aligned_buffer<score_t> s;
-    aligned_buffer<score_t> si;
+    ivy_mike::aligned_buffer<score_t> s;
+    ivy_mike::aligned_buffer<score_t> si;
 };
 
 
@@ -410,7 +411,7 @@ inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start,
 //
 //    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
 
-    typedef aligned_buffer<score_t,4096> block_vec;
+    typedef ivy_mike::aligned_buffer<score_t,4096> block_vec;
     block_vec block_sdiag(bsize * W, 0);
     block_vec block_sl(bsize * W, SMALL);
     block_vec block_sc(bsize * W, 0);
@@ -584,7 +585,7 @@ inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start,
 }
 
 template<typename score_t, size_t W, bool global, typename bstate_t>
-inline void align_pvec_score_vec( aligned_buffer<score_t> &a_prof, aligned_buffer<score_t> &a_aux_prof, const std::vector<bstate_t> &b, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
+inline void align_pvec_score_vec( ivy_mike::aligned_buffer<score_t> &a_prof, ivy_mike::aligned_buffer<score_t> &a_aux_prof, const std::vector<bstate_t> &b, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, ivy_mike::aligned_buffer<score_t> &out, align_vec_arrays<score_t> &arr ) {
     assert( !global );
     align_pvec_score_vec<score_t, W>( a_prof.begin(), a_prof.end(), a_aux_prof.begin(), b.begin(), b.end(), match_score_sc, match_cgap_sc, gap_open_sc, gap_extend_sc, out.begin(), arr );
 }
@@ -619,8 +620,8 @@ public:
     {
 
 
-        typename aligned_buffer<score_t>::iterator it = pvec_prof_.begin();
-        typename aligned_buffer<score_t>::iterator ait = aux_prof_.begin();
+        typename ivy_mike::aligned_buffer<score_t>::iterator it = pvec_prof_.begin();
+        typename ivy_mike::aligned_buffer<score_t>::iterator ait = aux_prof_.begin();
 //        typename aligned_buffer<score_t>::iterator oit = gap_open_cgap_prof_.begin();
 //        typename aligned_buffer<score_t>::iterator eit = gap_extend_cgap_prof_.begin();
 
@@ -645,10 +646,10 @@ public:
         assert( match_cgap_sc + match_score_sc < 0 );
 //        assert( W == 8 );
         for( size_t i = 0; i < nstates; i++ ) {
-            typename aligned_buffer<score_t>::iterator it = sm_inc_prof_.begin() + i * reflen * W;
+            typename ivy_mike::aligned_buffer<score_t>::iterator it = sm_inc_prof_.begin() + i * reflen * W;
 
-            typename aligned_buffer<score_t>::iterator pit = pvec_prof_.begin();
-            typename aligned_buffer<score_t>::iterator ait = aux_prof_.begin();
+            typename ivy_mike::aligned_buffer<score_t>::iterator pit = pvec_prof_.begin();
+            typename ivy_mike::aligned_buffer<score_t>::iterator ait = aux_prof_.begin();
             score_t bc = map(i);
             for( size_t j = 0; j < reflen * W; ++j, ++it, ++pit, ++ait ) {
                 bool match = (bc & *pit) != 0;
@@ -672,7 +673,7 @@ public:
 
     template<typename biter, typename oiter>
     inline void align( biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start, size_t a_start_idx = -1, size_t a_end_idx = -1 ) {
-        typedef typename aligned_buffer<score_t>::iterator aiter;
+        typedef typename ivy_mike::aligned_buffer<score_t>::iterator aiter;
         
 //         aiter a_start, a_end, a_aux_start;
 //         
@@ -771,7 +772,7 @@ public:
     //
     //    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
 
-        typedef aligned_buffer<score_t,4096> block_vec;
+        typedef ivy_mike::aligned_buffer<score_t,4096> block_vec;
         block_vec block_sdiag(bsize * W, 0);
         block_vec block_sl(bsize * W, SMALL);
         block_vec block_sc(bsize * W, 0);
@@ -991,12 +992,12 @@ private:
         vec_t last_sc;
     };
 
-    aligned_buffer<score_t> s_;
-    aligned_buffer<score_t> si_;
+    ivy_mike::aligned_buffer<score_t> s_;
+    ivy_mike::aligned_buffer<score_t> si_;
 
-    aligned_buffer<score_t> pvec_prof_;
-    aligned_buffer<score_t> aux_prof_;
-    aligned_buffer<score_t> sm_inc_prof_;
+    ivy_mike::aligned_buffer<score_t> pvec_prof_;
+    ivy_mike::aligned_buffer<score_t> aux_prof_;
+    ivy_mike::aligned_buffer<score_t> sm_inc_prof_;
     const size_t num_cstates_;
 
     uint64_t ticks_all_;
@@ -1024,8 +1025,8 @@ private:
 
 template<typename score_t>
 struct align_arrays_traceback {
-    aligned_buffer<score_t> s;
-    aligned_buffer<score_t> si;  
+    ivy_mike::aligned_buffer<score_t> s;
+    ivy_mike::aligned_buffer<score_t> si;  
     
     std::vector<uint8_t> tb;
 };
@@ -1455,13 +1456,13 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
 }
 
 
-float align_freeshift( const scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
+float align_freeshift( const ivy_mike::scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
 
  
     typedef float score_t;
     
-    aligned_buffer<score_t> s;
-    aligned_buffer<score_t> si;
+    ivy_mike::aligned_buffer<score_t> s;
+    ivy_mike::aligned_buffer<score_t> si;
     
     
     

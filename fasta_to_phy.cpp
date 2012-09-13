@@ -21,7 +21,7 @@
 #include <iostream>
 #include <iterator>
 #include <iomanip>
-#include "fasta.h"
+#include "ivymike/fasta.h"
 
 
 int main( int argc, char *argv[] ) {
@@ -37,7 +37,7 @@ int main( int argc, char *argv[] ) {
 //     return 0;
     
 //     std::cerr << "goodx: " << std::cin.good() << std::endl;
-    read_fasta( std::cin, names, data, false );
+    ivy_mike::read_fasta( std::cin, names, data, false );
     std::cerr << "num: " << data.size() << "\n";
     size_t max_name_len = 0;
     const size_t num_col = data.at(0).size();
