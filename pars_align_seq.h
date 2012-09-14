@@ -42,7 +42,7 @@ public:
     enum {
         BT_STAY = 0x1,
         BT_STAY_L = 0x2,
-        BT_UP = 0x4,
+        BT_UP = 0x4
     };
 
     class arrays {

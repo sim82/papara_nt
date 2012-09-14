@@ -449,9 +449,13 @@ struct vector_unit<float, 4> {
 
     const static int SIGN_MASK_INT = 0x7FFFFFFF;
     
-    const static T LARGE_VALUE  = 1e8;
-    const static T SMALL_VALUE = -1e8;
-    const static T BIAS = 0;
+//     const static T LARGE_VALUE  = 1e8;
+//     const static T SMALL_VALUE = -1e8;
+//     const static T BIAS = 0;
+     const static T LARGE_VALUE;
+     const static T SMALL_VALUE;
+     const static T BIAS;
+    
     const static size_t W = 4;
     
     static inline vec_t cast_from_int( const __m128i &iv ) {
@@ -543,12 +547,13 @@ struct vector_unit<float, 4> {
         return bit_and(sub(a,b), set1(SIGN_MASK) ); // TODO: could this case any alignment problems?
         //return bit_and(sub(a,b), set1(*((float*)&SIGN_MASK_INT) )); // TODO: could this case any alignment problems?
         
-        //return bit_and(sub(a,b), load((float*)SIGN_MASK ));
-        
-    }
-    
-
+        //return bit_and(sub(a,b), load((float*)SIGN_MASK ));        
+    }    
 };
+
+const vector_unit<float,4>::T vector_unit<float,4>::LARGE_VALUE  = 1e8;
+const vector_unit<float,4>::T vector_unit<float,4>::SMALL_VALUE = -1e8;
+const vector_unit<float,4>::T vector_unit<float,4>::BIAS = 0;
 
 template<>
 struct vector_unit<double, 2> {
@@ -560,9 +565,9 @@ struct vector_unit<double, 2> {
 
 //    const static uint64_t SIGN_MASK_U64 = 0x7FFFFFFFFFFFFFFF;
 
-    const static T LARGE_VALUE  = 1e8;
-    const static T SMALL_VALUE = -1e8;
-    const static T BIAS = 0;
+    const static T LARGE_VALUE;//  = 1e8;
+    const static T SMALL_VALUE;// = -1e8;
+    const static T BIAS;// = 0;
     const static size_t W = 2;
 
     static inline vec_t cast_from_int( const __m128i &iv ) {
@@ -645,7 +650,8 @@ struct vector_unit<double, 2> {
     static inline const vec_t max( const vec_t &a, const vec_t &b ) {
         return _mm_max_pd( a, b );
     }
-
+     // deactivated for now, beacuse of the missing ULL suffix in pre c++11
+#if 0
     static inline const vec_t abs_diff( const vec_t &a, const vec_t &b ) {
         // i don't really like this function, as ideally this would just be abs(sub(a,b)),
         // but there doesn't seem to be a fast way to implement abs on pre SSSSSSE3.
@@ -658,14 +664,14 @@ struct vector_unit<double, 2> {
 
         const double *SIGN_MASK_PTR = (double*)&SIGN_MASK_U64x;
         double SIGN_MASK = *SIGN_MASK_PTR;
-        return bit_and(sub(a,b), set1(SIGN_MASK) ); // TODO: could this case any alignment problems?
+        return bit_and(sub(a,b), set1(SIGN_MASK) ); // TODO: could this cause any alignment problems?
         //return bit_and(sub(a,b), set1(*((float*)&SIGN_MASK_INT) )); // TODO: could this case any alignment problems?
 
         //return bit_and(sub(a,b), load((float*)SIGN_MASK ));
 
 
     }
-
+#endif
     static inline const vec_t abs( const vec_t &a ) {
 //        const uint64_t SIGN_MASK_U64x = 0x7fffffffffffffff;
 //
@@ -687,6 +693,11 @@ struct vector_unit<double, 2> {
 
 
 };
+
+
+const double vector_unit<double,2>::LARGE_VALUE  = 1e8;
+const double vector_unit<double,2>::SMALL_VALUE = -1e8;
+const double vector_unit<double,2>::BIAS = 0;
 
 
 #ifdef __clang__

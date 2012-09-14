@@ -4,7 +4,7 @@ project(papara_nt)
 set( CMAKE_NO_VERBOSE yes )
 add_subdirectory(ivy_mike)
 add_subdirectory(ublasJama-1.0.2.3)
-add_subdirectory(genassign_blast)
+# add_subdirectory(genassign_blast)
 
 IF( NOT IVYMIKE_INCLUDE )
 SET( IVYMIKE_INCLUDE ./ivy_mike )
@@ -27,7 +27,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_SCL_SECURE_NO_WARNINGS") 
 file(GLOB ALL_HEADERS *.h)
 
 ELSE()
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -march=native")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++98 -pedantic -Wall -march=native")
 set( BOOST_LIBS boost_thread boost_program_options)
 set(SYSDEP_LIBS pthread)
 #LINK_DIRECTORIES( ${LINK_DIRECTORIES} /usr/lib64/atlas-sse2 )
@@ -36,7 +36,7 @@ set( ALL_HEADERS )
 ENDIF()
 
 
-ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp )
+ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp align_utils.cpp )
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
 add_executable(papara papara2_main.cpp blast_partassign.cpp ${ALL_HEADERS})

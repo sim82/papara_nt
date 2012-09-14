@@ -656,6 +656,11 @@ public:
 
     ref_gap_collector( size_t ref_len ) : ref_gaps_(ref_len + 1) {}
 
+    template <typename Tmax>
+    static inline Tmax wrap_max( const Tmax& a, const Tmax& b ) {
+        return std::max(a,b);
+    }
+    
     void add_trace( const std::vector<uint8_t> &gaps ) {
 
         size_t ptr  = ref_gaps_.size() - 1;
@@ -678,8 +683,16 @@ public:
             }
         }
 
+        
+        
         // update the _global_ maximum 'gaps-per-ref-position' map
-        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> );
+        // FIXME: because std::max is now has an overloaded for initializer_list, this does not work without wrapper on gnuc++11.
+        // For me, this is a flaw in the standard as it is a redundant feature, that breaks functioning 
+        // code (i.e., *max_element(list.begin(),list.end() would already do the trick, and is actually what std::max(list) 
+        // does internally on gnu c++. Why make an exception for initializer_list but not other containers?).
+        
+//        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), std::max<size_t> ); 
+        std::transform( ref_gaps_.begin(), ref_gaps_.end(), ref_gaps.begin(), ref_gaps_.begin(), wrap_max<size_t> );
     }
 
     // TODO: shouldn't it be possible to infer the state_type from oiter?

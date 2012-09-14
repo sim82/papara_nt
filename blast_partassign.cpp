@@ -42,7 +42,8 @@ blast_hit partassign::next_hit( std::istream &is ) {
     
     std::string qs, ref;
     float ident;
-    int len, mismatch, gap_open, qs_start, qs_end, ref_start, ref_end;
+    int len, mismatch, gap_open;
+    
     std::string evalue;
     blast_hit hit;
     
