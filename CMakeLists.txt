@@ -2,13 +2,20 @@ cmake_minimum_required(VERSION 2.8)
 
 project(papara_nt)
 set( CMAKE_NO_VERBOSE yes )
-add_subdirectory(ivy_mike)
+
 add_subdirectory(ublasJama-1.0.2.3)
 # add_subdirectory(genassign_blast)
 
-IF( NOT IVYMIKE_INCLUDE )
-SET( IVYMIKE_INCLUDE ./ivy_mike )
-ENDIF()
+
+# FIXME: the hack does not work, because IVYMIKE_INCLUDE can be cached...
+# IF( NOT IVYMIKE_INCLUDE )
+# SET( IVYMIKE_INCLUDE ./ivy_mike )
+
+# this is a hack: only add subdirectories if IVYMIKE_INCLUDE is not already set.
+# IVYMIKE_INCLUDE is abused as a flag indicating that papara should be build in 'library-only' mode...
+add_subdirectory(ivy_mike)
+# add_subdirectory(genassign_blast)
+# ENDIF()
 
 include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2.3 )
 
@@ -36,10 +43,10 @@ set( ALL_HEADERS )
 ENDIF()
 
 
-ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp align_utils.cpp )
+ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp align_utils.cpp blast_partassign.cpp )
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
-add_executable(papara papara2_main.cpp blast_partassign.cpp ${ALL_HEADERS})
+add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 
