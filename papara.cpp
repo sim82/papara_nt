@@ -37,6 +37,7 @@
 
 
 
+
 using namespace ivy_mike;
 using namespace ivy_mike::tree_parser_ms;
 
@@ -495,12 +496,12 @@ const std::vector<int> &references<pvec_t,seq_tag>::ng_map_at( size_t i ) {
     //std::vector<int> map;
     
     std::vector< uint8_t > &seq = m_ref_seqs.at(i);
-    
+	assert( seq.size() < std::numeric_limits<int>::max() );
     for( size_t i = 0; i < seq.size(); ++i ) {
         bool is_gap = seq_model::pstate_is_gap( seq_model::s2p(seq[i]));
         
         if( !is_gap ) {
-            ng_map.push_back(i);
+            ng_map.push_back(int(i));
         }
     }
     

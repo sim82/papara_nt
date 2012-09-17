@@ -17,17 +17,24 @@
  *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// FIXME: someone tries to sabotage us on windows by sneaking in the awful min/max macros. Strangely it only happens in this source file... 
 
+
+
+#include "ivymike/disable_shit.h" 
 #include <iostream>
 #include <algorithm>
 #include <iterator>
 
+
+
 #include "ivymike/fasta.h"
 #include "stepwise_align.h"
 
-
 void process_fasta( std::istream &is )
 {
+
+	
     std::vector<std::string> primers;
     primers.push_back("CTTGGTCATTTAGAGGAAGT");
     primers.push_back("CGATGAAGAACGCAG");

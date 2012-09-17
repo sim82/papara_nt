@@ -26,6 +26,8 @@
 #include <cstdio>
 #include <stdint.h>
 
+
+
 // the convenient x86intrin.h is not available on ancient gcc/msvc, so pull in the best manually.
 // sse3 is the absolute baseline. sssssssse3 and sse4.666 are nice to have (abs and 32bit min)
 // and AVX is a completely different beast...
@@ -81,6 +83,15 @@
 #ifdef __AVX__
 #define HAVE_AVX
 //#include <immintrin.h>
+#endif
+
+
+#ifdef min
+#error min defined as macro. this is evil. Please #define NOMINMAX before including any windows headers.
+#endif
+
+#ifdef max
+#error max defined as macro. this is evil. Please #define NOMINMAX before including any windows headers.
 #endif
 
 const size_t required_alignment = 16;
