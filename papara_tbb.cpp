@@ -24,6 +24,7 @@
 #include <iterator>
 #include <tbb/concurrent_vector.h>
 #include <tbb/pipeline.h>
+#include <tbb/parallel_for.h>
 #include <array>
 
 #include "ivymike/fasta.h"
@@ -586,233 +587,6 @@ bool scoring_results::candidate::operator<(const scoring_results::candidate& oth
 ////////////////////////////////////////////////////////
 
 template<typename seq_tag>
-class worker {
-
-
-
-    const static size_t VW = vu_config<seq_tag>::width;
-    typedef typename vu_config<seq_tag>::scalar vu_scalar_t;
-    typedef typename block_queue<seq_tag>::block_t block_t;
-    typedef model<seq_tag> seq_model;
-
-
-
-    block_queue<seq_tag> &block_queue_;
-    scoring_results &results_;
-
-    const queries<seq_tag> &qs_;
-
-    const size_t rank_;
-
-    const papara_score_parameters sp_;
-
-public:
-    static void copy_to_profile( const block_t &block, aligned_buffer<vu_scalar_t> *prof, aligned_buffer<vu_scalar_t> *aux_prof ) {
-        size_t reflen = block.ref_len;
-
-
-
-        assert( reflen * VW == prof->size() );
-        assert( reflen * VW == aux_prof->size() );
-
-        typename aligned_buffer<vu_scalar_t>::iterator it = prof->begin();
-        typename aligned_buffer<vu_scalar_t>::iterator ait = aux_prof->begin();
-    //         std::cout << "reflen: " << reflen << " " << size_t(&(*it)) << "\n";
-
-        for( size_t i = 0; i < reflen; ++i ) {
-            for( size_t j = 0; j < VW; ++j ) {
-    //                 std::cout << "ij: " << i << " " << j << " " << pvecs[j].size() <<  "\n";
-
-
-                *it = vu_scalar_t(block.seqptrs[j][i]);
-                *ait = (block.auxptrs[j][i] == AUX_CGAP) ? vu_scalar_t(-1) : 0;
-
-                ++it;
-                ++ait;
-            }
-        }
-
-
-        assert( it == prof->end());
-        assert( ait == aux_prof->end());
-
-    }
-
-public:
-    worker( block_queue<seq_tag> *bq, scoring_results *res, const queries<seq_tag> &qs, size_t rank, const papara_score_parameters &sp ) 
-      : block_queue_(*bq), results_(*res), qs_(qs), rank_(rank), sp_(sp) {}
-    void operator()() {
-
-
-
-        ivy_mike::timer tstatus;
-        ivy_mike::timer tprint;
-
-        uint64_t cups_per_ref = -1;
-
-
-        uint64_t ncup = 0;
-
-        uint64_t inner_iters = 0;
-        uint64_t ticks_all = 0;
-
-        uint64_t ncup_short = 0;
-
-        uint64_t inner_iters_short = 0;
-        uint64_t ticks_all_short = 0;
-
-
-        aligned_buffer<vu_scalar_t> pvec_prof;
-        aligned_buffer<vu_scalar_t> aux_prof;
-        align_vec_arrays<vu_scalar_t> arrays;
-        aligned_buffer<vu_scalar_t> out_scores(VW);
-        aligned_buffer<vu_scalar_t> out_scores2(VW);
-        
-        size_t queue_size;
-        size_t init_queue_size = -1;
-        
-        while( true ) {
-            block_t block;
-
-            if( !block_queue_.get_block(&block, &queue_size)) {
-                break;
-            }
-
-            if( init_queue_size == size_t(-1) ) {
-                init_queue_size = queue_size;
-            }
-            
-            if( cups_per_ref == uint64_t(-1) ) {
-                cups_per_ref = qs_.calc_cups_per_ref(block.ref_len );
-            }
-
-#if 1
-       //     assert( VW == 8 );
-
-            pvec_prof.resize( VW * block.ref_len );
-            aux_prof.resize( VW * block.ref_len );
-
-            copy_to_profile(block, &pvec_prof, &aux_prof );
-
-            pvec_aligner_vec<vu_scalar_t,VW> pav( block.seqptrs, block.auxptrs, block.ref_len, sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, seq_model::c2p, seq_model::num_cstates() );
-
-//            const align_pvec_score<vu_scalar_t,VW> aligner( block.seqptrs, block.auxptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
-            for( unsigned int i = 0; i < qs_.size(); i++ ) {
-
-                //align_pvec_score_vec<vu_scalar_t, VW, false, typename seq_model::pars_state_t>( pvec_prof, aux_prof, qs_.pvec_at(i), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores, arrays );
-
-
-                std::pair<size_t,size_t> bounds = qs_.get_per_qs_bounds( i );
-                // if no bounds are available, get_per_qs_bounds will return [size_t(-1),size_t(-1)], which align is supposed to interpret as 'full range'
-                pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, out_scores.begin(), bounds.first, bounds.second );
-
-                //aligner.align(qs_.pvec_at(i).begin(), qs_.pvec_at(i).end());
-                //const vu_scalar_t *score_vec = aligner.get_scores();
-
-
-
-                //ncup += block.num_valid * block.ref_len * qs_.pvec_at(i).size();
-#if 0 // test against old version
-                align_pvec_score_vec<vu_scalar_t, VW>( pvec_prof.begin(), pvec_prof.end(), aux_prof.begin(), qs_.pvec_at(i).begin(), qs_.pvec_at(i).end(), score_match, score_match_cgap, score_gap_open, score_gap_extend, out_scores2.begin(), arrays );
-                bool eq = std::equal( out_scores.begin(), out_scores.end(), out_scores2.begin() );
-
-
-                if( !eq ) {
-                    std::cout << "meeeeeeep!\n";
-                }
-                //std::cout << "eq: " << eq << "\n";
-#endif
-
-//                 std::cout << "scores: ";
-//                 std::copy( out_scores.begin(), out_scores.end(), std::ostream_iterator<int>(std::cout, "\n" ) );
-//                 std::cout << "\n";
-                results_.offer( i, block.edges, block.edges + block.num_valid, out_scores.begin() );
-
-            }
-
-            ncup += block.num_valid * cups_per_ref;
-            ncup_short += block.num_valid * cups_per_ref;
-
-            ticks_all += pav.ticks_all();
-            ticks_all_short += pav.ticks_all();
-
-            inner_iters += pav.inner_iters_all();
-            inner_iters_short += pav.inner_iters_all();
-
-            if( rank_ == 0 &&  tprint.elapsed() > 10 ) {
-
-                //std::cout << "thread " << rank_ << " " << ncup << " in " << tstatus.elapsed() << " : "
-                
-                float fdone = (init_queue_size - queue_size) / float(init_queue_size);
-                
-                lout << fdone * 100 << "% done. ";
-                lout << ncup / (tstatus.elapsed() * 1e9) << " gncup/s, " << ticks_all / double(inner_iters) << " tpili (short: " << ncup_short / (tprint.elapsed() * 1e9) << ", " << ticks_all_short / double(inner_iters_short) << ")" << std::endl;
-
-                ncup_short = 0;
-                ticks_all_short = 0;
-                inner_iters_short = 0;
-
-                tprint = ivy_mike::timer();
-            }
-
-        }
-#else
-
-//        assert( block.gapp_ptrs[0] != 0 );
-//        assert( VW == 4 );
-//        const align_pvec_gapp_score<4> aligner( block.seqptrs, block.gapp_ptrs, block.ref_len, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend );
-//        for( unsigned int i = 0; i < m_pnt.m_qs_names.size(); i++ ) {
-//
-//            size_t stride = 1;
-//            size_t aux_stride = 1;
-//
-//            aligner.align(m_pnt.m_qs_pvecs[i]);
-//            const float *score_vec = aligner.get_scores();
-//
-//            ncup += block.num_valid * block.ref_len * m_pnt.m_qs_pvecs[i].size();
-//            {
-//                ivy_mike::lock_guard<ivy_mike::mutex> lock( m_pnt.m_qmtx );
-//
-//                for( int k = 0; k < block.num_valid; k++ ) {
-//
-//
-//
-//                    if( score_vec[k] < m_pnt.m_qs_bestscore[i] || (score_vec[k] == m_pnt.m_qs_bestscore[i] && block.edges[k] < m_pnt.m_qs_bestedge[i] )) {
-//                        const bool validate = false;
-//                        if( validate ) {
-//                            const int *seqptr = block.seqptrs[k];
-//                            const double *gapp_ptr = block.gapp_ptrs[k];
-//
-////                                std::vector<double> gapp_tmp(gapp_ptr, gapp_ptr + block.ref_len);
-//
-//
-//                            pars_align_gapp_seq pas( seqptr, m_pnt.m_qs_pvecs[i].data(), block.ref_len, m_pnt.m_qs_pvecs[i].size(), stride, gapp_ptr, aux_stride, seq_arrays_gapp, 0, score_gap_open, score_gap_extend, score_mismatch, score_match_cgap );
-//                            int res = pas.alignFreeshift(INT_MAX);
-//
-//                            if( res != score_vec[k] ) {
-//
-//
-//                                std::cout << "meeeeeeep! score: " << score_vec[k] << " " << res << "\n";
-//                            }
-//                        }
-//
-//                        m_pnt.m_qs_bestscore[i] = score_vec[k];
-//                        m_pnt.m_qs_bestedge[i] = block.edges[k];
-//                    }
-//                }
-//            }
-//        }
-//    }
-
-#endif
-        {
-            ivy_mike::lock_guard<ivy_mike::mutex> lock( *block_queue_.hack_mutex() );
-            lout << "thread " << rank_ << ": " << ncup / (tstatus.elapsed() * 1e9) << " gncup/s" << std::endl;
-        }
-    }
-};
-
-template<typename seq_tag>
 struct block_result {
     const static size_t VW = vu_config<seq_tag>::width;
     typedef typename vu_config<seq_tag>::scalar scalar;
@@ -845,8 +619,31 @@ block_result<seq_tag> execute_block( const typename block_queue<seq_tag>::block_
 
     pvec_prof.resize( VW * block.ref_len );
     aux_prof.resize( VW * block.ref_len );
+   
     
-    worker<seq_tag>::copy_to_profile(block, &pvec_prof, &aux_prof );
+    // create interleaved 'profiles' from the raw ref/aux sequences in the block
+    size_t reflen = block.ref_len;
+
+    auto it = pvec_prof.begin();
+    auto ait = aux_prof.begin();
+    
+
+    for( size_t i = 0; i < reflen; ++i ) {
+        for( size_t j = 0; j < VW; ++j ) {
+            *it = vu_scalar_t(block.seqptrs[j][i]);
+            *ait = (block.auxptrs[j][i] == AUX_CGAP) ? vu_scalar_t(-1) : 0;
+            
+            ++it;
+            ++ait;
+        }
+    }
+    
+
+    assert( it == pvec_prof.end());
+    assert( ait == aux_prof.end());
+    
+    /////////
+    
     
     pvec_aligner_vec<vu_scalar_t,VW> pav( block.seqptrs, block.auxptrs, block.ref_len, sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, seq_model::c2p, seq_model::num_cstates() );
     
@@ -1112,6 +909,78 @@ void driver<pvec_t,seq_tag>::print_best_scores(std::ostream& os, const my_querie
     }
 }
 
+
+
+#if 1
+template <typename pvec_t,typename seq_tag>
+std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(std::ostream& os_quality, std::ostream& os_cands, const my_queries& qs, const my_references& refs, const scoring_results& res, const papara_score_parameters& sp) {
+
+
+    typedef typename queries<seq_tag>::pars_state_t pars_state_t;
+    typedef model<seq_tag> seq_model;
+
+
+    lout << "generating best scoring alignments\n";
+    ivy_mike::timer t1;
+
+
+
+    std::vector<pars_state_t> out_qs_ps;
+    
+
+    tbb::concurrent_vector<std::vector<uint8_t> > qs_traces( qs.size() );
+
+    std::vector<uint8_t> cand_trace;
+
+    std::deque<size_t> bounded_bad_scores;
+    
+    
+    tbb::parallel_for( tbb::blocked_range<size_t>(0, qs.size()), [&qs,&refs,&sp,&qs_traces,&res]( const tbb::blocked_range<size_t> &r ) { 
+   
+        align_arrays_traceback<int> arrays;
+        
+        
+        for( size_t i = r.begin(); i != r.end(); ++i ) {
+            size_t best_edge = res.bestedge_at(i);
+            
+            assert( size_t(best_edge) < refs.num_pvecs() );
+            
+            int score = -1;
+            
+            
+            
+            const std::vector<pars_state_t> &qp = qs.pvec_at(i);
+            
+            score = align_freeshift_pvec<int>(
+                refs.pvec_at(best_edge).begin(), refs.pvec_at(best_edge).end(),
+                                              refs.aux_at(best_edge).begin(),
+                                              qp.begin(), qp.end(),
+                                              sp.match, sp.match_cgap, sp.gap_open, sp.gap_extend, qs_traces.at(i), arrays
+            );
+            
+            if( score != res.bestscore_at(i) ) {
+                std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
+                throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels.");
+            }
+            
+            //         std::cout << "scores: " << score << " " << res.bestscore_at(i) << "\n";
+            
+         
+        }
+      
+
+    
+
+    } );
+
+    // move traces from concurrent to normal vector
+    std::vector<std::vector<uint8_t> > qs_traces_vec( qs.size() );
+    std::swap_ranges( qs_traces.begin(), qs_traces.end(), qs_traces_vec.begin() );
+
+    return qs_traces_vec;
+}
+
+#else
 template <typename pvec_t,typename seq_tag>
 std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(std::ostream& os_quality, std::ostream& os_cands, const my_queries& qs, const my_references& refs, const scoring_results& res, const papara_score_parameters& sp) {
 
@@ -1238,6 +1107,9 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
 
     return qs_traces;
 }
+
+#endif
+
 
 template <typename pvec_t,typename seq_tag>
 void driver<pvec_t,seq_tag>::align_best_scores2(std::ostream& os, std::ostream& os_quality, std::ostream& os_cands, const my_queries& qs, const my_references& refs, const scoring_results& res, size_t pad, const bool ref_gaps, const papara_score_parameters& sp) {
@@ -1399,11 +1271,15 @@ void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const m
     std::ofstream os_cands;
     
     
+    
+    ivy_mike::perf_timer t1;
     // create the best alignment traces per qs
     std::vector<std::vector<uint8_t> > qs_traces = generate_traces(os_quality, os_cands, qs, refs, res, sp );
 
+    t1.add_int();
+    
 
-    // collect ref gaps introduiced by qs
+    // collect ref gaps introduced by qs
     ref_gap_collector rgc( refs.pvec_size() );
     for( std::vector<std::vector<uint8_t> >::iterator it = qs_traces.begin(); it != qs_traces.end(); ++it ) {
         rgc.add_trace(*it);
@@ -1438,6 +1314,8 @@ void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const m
         
     }
 
+    t1.add_int();
+    
     std::deque<size_t> overhang_qs;
 
     for( size_t i = 0; i < qs.size(); i++ ) {
@@ -1541,6 +1419,10 @@ void driver<pvec_t,seq_tag>::align_best_scores_oa( output_alignment *oa, const m
 
 
     }
+    
+    t1.add_int();
+    t1.print();
+    
 }
 void output_alignment_phylip::write_seq_phylip(const std::string& name, const out_seq& seq) {
     size_t pad = std::max( max_name_len_, name.size() + 1 );
