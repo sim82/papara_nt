@@ -607,7 +607,7 @@ public:
 
 
     template<typename mapf>
-    pvec_aligner_vec( const int *seqptrs[W], const unsigned int *auxptrs[W], size_t reflen, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, mapf map, size_t nstates )
+    pvec_aligner_vec( const int * const * seqptrs, const unsigned int * const *auxptrs, size_t reflen, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, mapf map, size_t nstates )
      : pvec_prof_( W * reflen ),
        aux_prof_( W * reflen ),
        sm_inc_prof_( W * reflen * nstates ),

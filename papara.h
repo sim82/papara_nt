@@ -489,9 +489,11 @@ private:
 
 template<typename seq_tag>
 class block_queue {
-    const static size_t VW = vu_config<seq_tag>::width;
+    
 
 public:
+    const static size_t VW = vu_config<seq_tag>::width;
+    
     struct block_t {
         block_t() {
             memset( this, 0, sizeof( block_t )); // FIXME: hmm, this is still legal?
@@ -542,6 +544,11 @@ public:
     ivy_mike::mutex *hack_mutex() {
         return &m_qmtx;
     }
+    
+    const std::deque<block_t> &raw_blockqueue() const {
+        return m_blockqueue;
+    }
+        
 private:
     ivy_mike::mutex m_qmtx; // mutex for the block queue and the qs best score/edge arrays
     std::deque<block_t> m_blockqueue;
@@ -605,10 +612,8 @@ public:
 
 
     template<typename idx_iter, typename score_iter>
-    void offer( size_t qs, idx_iter ref_start, idx_iter ref_end, score_iter score_start ) {
-        ivy_mike::lock_guard<ivy_mike::mutex> lock(mtx_);
-
-
+    void offer_nolock( size_t qs, idx_iter ref_start, idx_iter ref_end, score_iter score_start ) {
+        
         while( ref_start != ref_end ) {
             candss_.at( qs ).offer( *score_start, *ref_start );
 
@@ -622,6 +627,14 @@ public:
             ++ref_start;
             ++score_start;
         }
+
+    }
+    
+    template<typename idx_iter, typename score_iter>
+    void offer( size_t qs, idx_iter ref_start, idx_iter ref_end, score_iter score_start ) {
+        ivy_mike::lock_guard<ivy_mike::mutex> lock(mtx_);
+
+        offer_nolock( qs, ref_start, ref_end, score_start );
 
     }
 
