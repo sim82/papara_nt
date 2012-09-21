@@ -44,8 +44,8 @@ void process_fasta( std::istream &is )
     
     ivy_mike::read_fasta( is, names, data, false );
     
-    const size_t n = names.size();
-    assert( n == data.size());
+    
+    assert( names.size() == data.size());
     
     std::vector<size_t> rind;
     for( size_t i = 0; i < names.size(); ++i ) {
