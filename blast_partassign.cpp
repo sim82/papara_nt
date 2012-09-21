@@ -24,7 +24,7 @@ blast_hit partassign::next_hit( std::istream &is ) {
     
     std::getline( is, line );
     
-    std::istringstream ss(line);
+
     // TODO: ok returning an default constructed blast_hit to signal EOF is not the best idea... I actually planned that EOF 
     // should be checked _before_ calling this function, but it didn't turn out to work...
     
@@ -48,8 +48,8 @@ blast_hit partassign::next_hit( std::istream &is ) {
     blast_hit hit;
     
     //bool valid = ss >> hit.qs_name >> hit.ref_name >> ident >> len >> mismatch >> gap_open >> hit.qs_start >> hit.qs_end >> hit.ref_start >> hit.ref_end >> evalue >> hit.bit_score;
-    
-	bool valid = !(std::istringstream(line) >> hit.qs_name >> hit.ref_name >> ident >> len >> mismatch >> gap_open >> hit.qs_start >> hit.qs_end >> hit.ref_start >> hit.ref_end >> evalue >> hit.bit_score).fail();
+    std::istringstream ss(line);
+    bool valid = !(ss >> hit.qs_name >> hit.ref_name >> ident >> len >> mismatch >> gap_open >> hit.qs_start >> hit.qs_end >> hit.ref_start >> hit.ref_end >> evalue >> hit.bit_score).fail();
 
     // convert indices into proper form
     hit.ref_start -= 1;

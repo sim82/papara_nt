@@ -14,7 +14,7 @@ add_subdirectory(ublasJama-1.0.2.3)
 # this is a hack: only add subdirectories if IVYMIKE_INCLUDE is not already set.
 # IVYMIKE_INCLUDE is abused as a flag indicating that papara should be build in 'library-only' mode...
 add_subdirectory(ivy_mike)
-# add_subdirectory(genassign_blast)
+add_subdirectory(genassign_blast)
 # ENDIF()
 
 include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2.3 )
@@ -49,11 +49,13 @@ ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_alig
 add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
+add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
 
 # add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
 # target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
 target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
+target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
 # target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 
 
