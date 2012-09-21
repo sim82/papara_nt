@@ -496,7 +496,7 @@ const std::vector<int> &references<pvec_t,seq_tag>::ng_map_at( size_t i ) {
     //std::vector<int> map;
     
     std::vector< uint8_t > &seq = m_ref_seqs.at(i);
-	assert( seq.size() < std::numeric_limits<int>::max() );
+    assert( seq.size() < size_t(std::numeric_limits<int>::max()) );
     for( size_t i = 0; i < seq.size(); ++i ) {
         bool is_gap = seq_model::pstate_is_gap( seq_model::s2p(seq[i]));
         
