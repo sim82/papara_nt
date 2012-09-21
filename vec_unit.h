@@ -903,9 +903,9 @@ struct vector_unit<double, 4> {
 
 //    const static uint64_t SIGN_MASK_U64 = 0x7FFFFFFFFFFFFFFF;
 
-    const static T LARGE_VALUE  = 1e8;
-    const static T SMALL_VALUE = -1e8;
-    const static T BIAS = 0;
+    const static T LARGE_VALUE;//  = 1e8;
+    const static T SMALL_VALUE; //= -1e8;
+    const static T BIAS;// = 0;
     const static size_t W = 2;
 
 
@@ -1027,7 +1027,9 @@ struct vector_unit<double, 4> {
 
 
 };
-
+const double vector_unit<double,4>::LARGE_VALUE  = 1e8;
+const double vector_unit<double,4>::SMALL_VALUE = -1e8;
+const double vector_unit<double,4>::BIAS = 0;
 
 #endif
 
