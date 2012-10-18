@@ -473,10 +473,10 @@ inline void align_pvec_score_vec( aiter a_start, aiter a_end, aiter a_aux_start,
             score_t * __restrict s_iter = arr.s.base();
             score_t * __restrict si_iter = arr.si.base();
 
-            _mm_prefetch( &(*ptr_block.a_prof_iter), _MM_HINT_T0 );
-            _mm_prefetch( &(*ptr_block.a_aux_prof_iter), _MM_HINT_T0 );
-            _mm_prefetch( s_iter, _MM_HINT_T0 );
-            _mm_prefetch( si_iter, _MM_HINT_T0 );
+//             _mm_prefetch( &(*ptr_block.a_prof_iter), _MM_HINT_T0 );
+//             _mm_prefetch( &(*ptr_block.a_aux_prof_iter), _MM_HINT_T0 );
+//             _mm_prefetch( s_iter, _MM_HINT_T0 );
+//             _mm_prefetch( si_iter, _MM_HINT_T0 );
 
 
             vec_t last_sdiag = vu::load( &(*block_sdiag_it));
@@ -602,9 +602,11 @@ inline void align_pvec_score_vec( ivy_mike::aligned_buffer<score_t> &a_prof, ivy
 template<typename score_t, size_t W>
 class pvec_aligner_vec {
 public:
+    
     typedef vector_unit<score_t,W> vu;
     typedef typename vu::vec_t vec_t;
-
+    typedef ivy_mike::aligned_buffer<score_t,32> block_vec;
+    
 
     template<typename mapf>
     pvec_aligner_vec( const int *seqptrs[W], const unsigned int *auxptrs[W], size_t reflen, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, mapf map, size_t nstates )
@@ -724,7 +726,8 @@ public:
         // overall size of a whole row of vectors (=length of 'a' * vector width)
         const size_t av_size_all = pvec_prof_.size();
         const size_t a_size_all = av_size_all / W;
-        const size_t block_width = 512;
+        //const size_t block_width = 512;
+        const size_t block_width = 256;
 //         assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
 
         
@@ -772,10 +775,10 @@ public:
     //
     //    std::vector<ali_score_block_t<vec_t> > blocks( bsize, btemp ); // TODO: maybe put this into the persistent state, if sbrk mucks up again.
 
-        typedef ivy_mike::aligned_buffer<score_t,4096> block_vec;
-        block_vec block_sdiag(bsize * W, 0);
-        block_vec block_sl(bsize * W, SMALL);
-        block_vec block_sc(bsize * W, 0);
+        
+        block_sdiag.assign(bsize * W, 0);
+        block_sl.assign(bsize * W, SMALL);
+        block_sc.assign(bsize * W, 0);
 
 
 
@@ -793,7 +796,7 @@ public:
 
 
 
-        ticks ticks1 = getticks();
+//         ticks ticks1 = getticks();
         //size_t inner_iters = 0;
         while( !done ) {
 
@@ -848,7 +851,7 @@ public:
                 score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_start * W));
                 score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_end * W));
 
-                _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
+//                 _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
 
 
                 vec_t last_sdiag = vu::load( &(*block_sdiag_it));
@@ -965,8 +968,8 @@ public:
             block_start_outer = block_end;
         }
 
-        ticks ticks2 = getticks();
-        ticks_all_ += uint64_t(elapsed(ticks2, ticks1 ));
+//         ticks ticks2 = getticks();
+//         ticks_all_ += uint64_t(elapsed(ticks2, ticks1 ));
         //
 
         vu::store( max_score, &(*out_start) );
@@ -998,6 +1001,13 @@ private:
     ivy_mike::aligned_buffer<score_t> pvec_prof_;
     ivy_mike::aligned_buffer<score_t> aux_prof_;
     ivy_mike::aligned_buffer<score_t> sm_inc_prof_;
+    
+    
+    
+    block_vec block_sdiag;//(bsize * W, 0);
+    block_vec block_sl;//(bsize * W, SMALL);
+    block_vec block_sc;//(bsize * W, 0);
+    
     const size_t num_cstates_;
 
     uint64_t ticks_all_;

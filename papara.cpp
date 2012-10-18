@@ -19,7 +19,7 @@
 
 
 #include <iomanip>
-#include <boost/bind.hpp>
+// #include <boost/bind.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <iterator>
 
@@ -1048,18 +1048,22 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
         
         std::pair<size_t,size_t> bounds = qs.get_per_qs_bounds( i );
         
-        
+        bool bad_scores = false;
         if( bounds.first == size_t(-1) ) {
+//             papara::lout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << " " << " at " << res.bestedge_at(i) << "\n";
             if( score != res.bestscore_at(i) ) {
-                std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
-                throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels.");
+                papara::lout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
+                bad_scores = true;
+                
             }
         } else {
             if( score != res.bestscore_at(i) ) {
                 bounded_bad_scores.push_back(i);
             }
         }
-
+        if( bad_scores ) {
+            throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels. bailing out.");   
+        }
 
 
 

@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <iostream>
 
+
 //#define USE_CBLAS
 #ifdef USE_CBLAS
 extern "C" {
@@ -43,6 +44,8 @@ extern "C" {
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
 #include "sequence_model.h"
+#include "pan.h"
+
 namespace {
 //using ivy_mike::tip_case;
 using ivy_mike::TIP_TIP;
@@ -255,8 +258,8 @@ class probgap_model {
         }
 
         double rgap = double(ngaps) / nres;
-        std::cout << "gap rate: " << ngaps << " " << nres << "\n";
-        std::cout << "gap rate: " << rgap << "\n";
+        pan::lout << "gap rate: " << ngaps << " " << nres << "\n";
+        pan::lout << "gap rate: " << rgap << "\n";
         return rgap;
     }
 
@@ -283,7 +286,7 @@ public:
 		rate_matrix(1,0) = f[1];
 		rate_matrix(1,1) = -f[1];
 
-		std::cout << "rate matrix: " << rate_matrix << "\n";
+		pan::lout << "rate matrix: " << rate_matrix << "\n";
 
 		ublas::EigenvalueDecomposition ed(rate_matrix);
 

@@ -181,7 +181,7 @@ char num_to_ascii( int n ) {
 
 
 namespace {
-    typedef boost::iostreams::tee_device<std::ostream, std::ofstream> log_device;
+    typedef boost::iostreams::tee_device<std::ostream, std::ostream> log_device;
     typedef boost::iostreams::stream<log_device> log_stream;
     
     
@@ -757,8 +757,15 @@ public:
 class output_alignment_phylip : public output_alignment {
 public:
     output_alignment_phylip( const char *filename ) : num_rows_(0), num_cols_(0), max_name_len_(0), header_flushed_(false) {
+        
+        
         os_.open( filename );
-        assert( os_.good() );
+        
+        if( !os_.good() ) {
+            std::stringstream ss;
+            ss << "could not open output phylip file: " << filename;
+            throw std::runtime_error( ss.str() );
+        }
     }
     
     void set_size( size_t num_rows, size_t num_cols ) {

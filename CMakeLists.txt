@@ -25,7 +25,9 @@ IF( NOT BOOST_ROOT)
 set(BOOST_ROOT C:\\src\\boost_1_48_0)
 ENDIF()
 
-include_directories( ${BOOST_ROOT} )
+# set(BOOST_ROOT /space/android/boost_1_51_0)
+
+
 #LINK_DIRECTORIES( ${LINK_DIRECTORIES} ${BOOST_ROOT}\\stage\\lib)
 set( BOOST_LIBS )
 set( SYSDEP_LIBS )
@@ -34,28 +36,50 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_SCL_SECURE_NO_WARNINGS /I
 file(GLOB ALL_HEADERS *.h)
 
 ELSE()
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++98 -pedantic -Wall -march=native")
+SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -Wall -std=gnu++11 -mfpu=neon")
 set( BOOST_LIBS boost_thread boost_program_options)
 set(SYSDEP_LIBS pthread)
 #LINK_DIRECTORIES( ${LINK_DIRECTORIES} /usr/lib64/atlas-sse2 )
 
 set( ALL_HEADERS )
+
+ENDIF()
+
+IF( BOOST_ROOT )
+include_directories( ${BOOST_ROOT} )
 ENDIF()
 
 
 ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp align_utils.cpp blast_partassign.cpp )
 
+set( LIBRARY_DEPS EGL GLESv2 OpenSLES log android)
+
+set(MY_SRCS
+    android_native_app_glue.c
+#     gl_code.cpp #cpp files can be compiled to
+    pan_main.cpp
+    pan.cpp
+)
+
+
+add_library(native-activity SHARED ${MY_SRCS} )
+
+#link the module like any other
+target_link_libraries(native-activity ${LIBRARY_DEPS} papara_core ivymike ublas_jama )
+
+
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
-add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
-add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
-add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
-add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
+
+# add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
+# add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
+# add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
+# add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
 
 # add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
 # target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
-target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
-target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
+# target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
+# target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
 # target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 
 

@@ -28,6 +28,8 @@
 
 
 
+#if 0
+
 // the convenient x86intrin.h is not available on ancient gcc/msvc, so pull in the best manually.
 // sse3 is the absolute baseline. sssssssse3 and sse4.666 are nice to have (abs and 32bit min)
 // and AVX is a completely different beast...
@@ -96,10 +98,6 @@
 
 const size_t required_alignment = 16;
 
-template<class T, size_t W> 
-struct vector_unit {
-   
-};
 
 // vector unit specialization: SSE 8x16bit integer 
 
@@ -1211,4 +1209,270 @@ struct vector_unit<short, 1> {
 //         return std::min( a, b );
 //     }
 // };
+
+#endif
+
+#include <functional>
+#include <algorithm>
+#include <arm_neon.h>
+
+
+template<typename T,const size_t W>
+struct vector_unit {
+
+    const static bool do_checks = false;
+    
+    //typedef __m128i vec_t;
+    typedef struct {
+        short v[W];
+    } vec_t;
+    
+    
+    const static T POS_MAX_VALUE = 0x7fff;
+    const static T LARGE_VALUE = 32000;
+    const static T SMALL_VALUE = -32000;
+    const static T BIAS = 0;
+    const static size_t required_alignment = 32; // uhhm, what should I chose?
+    
+    static inline vec_t setzero() {
+        return set1(0);
+    }
+    
+    static inline vec_t set1( T val ) {
+        vec_t x;
+        std::fill( x.v, x.v + W, val );
+        return x;
+    }
+    
+    static inline void store( const vec_t &v, T *addr ) {
+
+        if( do_checks && addr == 0 ) {
+            throw std::runtime_error( "store: addr == 0" );
+        }
+        //std::cout << "store to: " << addr << "\n";
+        
+        std::copy( v.v, v.v + W, addr );
+        
+    }
+    
+    static inline const vec_t load( const T* addr ) {
+        vec_t x;
+        std::copy( addr, addr + W, x.v );
+        return x;
+    }
+    
+    static inline T x_bit_and( const T &a, const T &b ) {
+        return a & b;
+    }
+    static inline const vec_t bit_and( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_bit_and );
+        return x;
+    }
+
+    
+    static inline T x_bit_or( const T &a, const T &b ) {
+        return a | b;
+    }
+    static inline const vec_t bit_or( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_bit_or );
+        return x;
+    }
+    
+    static inline T x_bit_andnot( const T &a, const T &b ) {
+        return a & (~b); // FIXME: check if this is correct
+    }
+    static inline const vec_t bit_andnot( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_bit_andnot );
+        return x;
+    }
+    
+    
+    static inline T x_bit_invert( const T &a ) {
+        return ~a;
+        
+    }
+    static inline const vec_t bit_invert( const vec_t &a ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, x.v, x_bit_invert );
+        return x;
+    }
+    
+    
+//     static inline const vec_t bit_invert( const vec_t &a ) {
+//         //return _mm_andnot_pd(a, set1(0xffff));
+//     }
+    
+    static inline const vec_t add( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, std::plus<T>() );
+        return x;
+    }
+//     static inline const vec_t adds( const vec_t &a, const vec_t &b ) {
+//         return _mm_adds_epi16( a, b );
+//     }
+    
+    static inline const vec_t sub( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, std::minus<T>() );
+        return x;
+    }
+    
+    static inline const vec_t cmp_zero( const vec_t &a ) {
+        return cmp_eq( a, setzero() );
+    }
+    
+    
+    static inline T x_cmp_eq( const T &a, const T &b ) {
+        return (a == b) ? T(-1) : 0;
+    }
+    static inline const vec_t cmp_eq( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_cmp_eq );
+        return x;
+    }
+    
+
+    static inline T x_cmp_lt( const T &a, const T &b ) {
+        return (a < b) ? T(-1) : 0;
+    }
+    static inline const vec_t cmp_lt( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_cmp_lt );
+        return x;
+    }
+
+    // the same old problem using std::min and std::max as functors...
+    template <typename Tmax>
+    static inline Tmax x_min( const Tmax& a, const Tmax& b ) {
+        return std::min(a,b);
+    }
+    static inline const vec_t min( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_min<T> );
+        return x;
+    }
+    
+    template <typename Tmax>
+    static inline Tmax x_max( const Tmax& a, const Tmax& b ) {
+        return std::max(a,b);
+    }
+    static inline const vec_t max( const vec_t &a, const vec_t &b ) {
+        vec_t x;
+        std::transform( a.v, a.v + W, b.v, x.v, x_max<T> );
+        return x;
+    }
+    
+    static inline const vec_t abs_diff( const vec_t &a, const vec_t &b ) {
+        // i don't really like this function, as ideally this would just be abs(sub(a,b)), 
+        // but there doesn't seem to be a fast way to implement abs on pre SSSSSSE3.
+        // The max(sub(a,b),sub(b,a)) work-around seems to be the next-best thing in this special case.
+        
+        #ifdef __SSSE3__
+        return _mm_abs_epi16(sub(a,b));
+        #else
+        // FIXME: is there a faster method for boring old CPUs?
+        return max( sub(a,b), sub(b,a) );
+//         #error missing SSSSSSSSSE3
+        #endif
+    }
+
+    static inline void assert_alignment( T * p ) {
+        assert( size_t(p) % required_alignment == 0 );
+    }
+
+};
+
+
+#if 1
+template<>
+struct vector_unit<short,8> {
+    const static bool do_checks = false;
+
+    typedef int16x8_t vec_t;
+    typedef short T;
+    const static T POS_MAX_VALUE = 0x7fff;
+    const static T LARGE_VALUE = 32000;
+    const static T SMALL_VALUE = -32000;
+    const static T BIAS = 0;
+    //const static size_t W = 4;
+
+    static inline vec_t setzero() {
+        return set1(0);
+    }
+
+    static inline vec_t set1( T val ) {
+        return vdupq_n_s16(val);
+    }
+
+    static inline void store( vec_t v, T *addr ) {
+        vst1q_s16( addr, v );
+        
+    }
+
+    static inline const vec_t load( T* addr ) {
+        return vld1q_s16( addr );
+    }
+
+//    static inline const vec_t bit_and( const vec_t &a, const vec_t &b ) {
+//        return _mm_and_si128( a, b );
+//    }
+//
+   static inline const vec_t bit_andnot( const vec_t &a, const vec_t &b ) {
+       // WARNING: vec_unit::bit_andnot follows the intel SSE style: ~a & b. 
+       // ARM's BIC does the more intuitive a & ~b (despite using a slightly strange name...)
+       
+       return vbicq_s16( b, a ); // 'bit clear' (BIC) is (?) ARM's quirky british way of saying 'and not'? Seems kind of inconsequetial...
+   }
+
+//     static inline const vec_t bit_invert( const vec_t &a ) {
+//         //return _mm_andnot_pd(a, set1(0xffff));
+//     }
+
+    static inline const vec_t add( const vec_t &a, const vec_t &b ) {
+        return vaddq_s16( a, b );
+    }
+    static inline const vec_t adds( const vec_t &a, const vec_t &b ) {
+        // there is no saturating add for 32bit int. Just hope that nothing bad will happen.
+        // Treat saturation as kind of 'best effort hint'
+        return add( a, b );
+    }
+
+    static inline const vec_t sub( const vec_t &a, const vec_t &b ) {
+        return vsubq_s16( a, b );
+    }
+//    static inline const vec_t cmp_zero( const vec_t &a ) {
+//        return _mm_cmpeq_epi32( a, setzero() );
+//    }
+
+//    static inline const vec_t cmp_eq( const vec_t &a, const vec_t &b ) {
+//        return _mm_cmpeq_epi32( a, b );
+//    }
+//
+   static inline const vec_t cmp_lt( const vec_t &a, const vec_t &b ) {
+
+       return vec_t(vcltq_s16( a, b ));
+//        return _mm_cmplt_epi32( a, b );
+   }
+
+    static inline const vec_t min( const vec_t &a, const vec_t &b ) {
+        return vminq_s16( a, b );
+
+    }
+
+    static inline const vec_t max( const vec_t &a, const vec_t &b ) {
+        return vmaxq_s16( a, b );
+    }
+
+    static inline const vec_t abs_diff( const vec_t &a, const vec_t &b ) {
+        return vabsq_s16(sub(a,b));
+    }
+
+};
+
+#endif
+
+
 #endif
