@@ -703,10 +703,7 @@ public:
     // TODO: shouldn't it be possible to infer the state_type from oiter?
     template<typename iiter, typename oiter, typename state_type>
     void transform( iiter istart, iiter iend, oiter ostart, state_type gap ) const {
-
-        size_t s = std::distance(istart, iend);
-        assert( s == ref_gaps_.size() - 1 );
-
+        assert( std::distance(istart, iend) == ref_gaps_.size() - 1 );
 
         size_t i = 0;
         while( istart != iend ) {
