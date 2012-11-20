@@ -184,9 +184,9 @@ void queries<seq_tag>::preprocess() {
 
 
 template<typename seq_tag>
-void queries<seq_tag>::add(const std::string& name, std::vector< uint8_t >* qs) {
+void queries<seq_tag>::add( const std::string& name, std::vector< uint8_t >& qs ) {
     m_qs_names.push_back(name);
-    ivy_mike::push_back_swap(m_qs_seqs, *qs );
+    ivy_mike::push_back_swap(m_qs_seqs, qs );
 }
 template<typename seq_tag>
 void queries<seq_tag>::write_pvecs(const char* name) {
@@ -360,7 +360,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
                 name_to_lnode.erase(it);
 
             } else {
-                qs->add(ref_ma.names[i], &ref_ma.data[i]);
+                qs->add(ref_ma.names[i], ref_ma.data[i]); // REMARK: the second parameter is 'moved-from' (should be an rvalue-ref)
             }
         }
 
@@ -496,7 +496,7 @@ const std::vector<int> &references<pvec_t,seq_tag>::ng_map_at( size_t i ) {
     //std::vector<int> map;
     
     std::vector< uint8_t > &seq = m_ref_seqs.at(i);
-	assert( seq.size() < std::numeric_limits<int>::max() );
+    assert( seq.size() < std::numeric_limits<int>::max() );
     for( size_t i = 0; i < seq.size(); ++i ) {
         bool is_gap = seq_model::pstate_is_gap( seq_model::s2p(seq[i]));
         
@@ -699,6 +699,8 @@ public:
 
 
                 std::pair<size_t,size_t> bounds = qs_.get_per_qs_bounds( i );
+//		std::cout << "bounds: " << bounds.first << " " << bounds.second << "\n";
+
                 // if no bounds are available, get_per_qs_bounds will return [size_t(-1),size_t(-1)], which align is supposed to interpret as 'full range'
                 pav.align( qs_.cseq_at(i).begin(), qs_.cseq_at(i).end(), sp_.match, sp_.match_cgap, sp_.gap_open, sp_.gap_extend, out_scores.begin(), bounds.first, bounds.second );
 
@@ -1050,7 +1052,7 @@ std::vector< std::vector< uint8_t > > driver<pvec_t,seq_tag>::generate_traces(st
         
         
         if( bounds.first == size_t(-1) ) {
-            if( score != res.bestscore_at(i) ) {
+            if( true || score != res.bestscore_at(i) ) {
                 std::cout << "meeeeeeep! score: " << res.bestscore_at(i) << " " << score << "\n";
                 throw std::runtime_error( "alignment scores differ between the vectorized and sequential alignment kernels.");
             }

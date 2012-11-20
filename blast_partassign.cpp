@@ -152,6 +152,7 @@ partition partassign::next_partition( std::istream &is ) {
     partition part;
     part.start = from_string<int>(start_str) - 1;
     part.end = from_string<int>(end_str) - 1;
+    part.gene_name = gene_name;
     return part;
 }
 
@@ -348,6 +349,28 @@ std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( references<pvec_t,seq_
 
     
     return bounds;
+}
+
+
+std::pair<size_t,size_t> partition_bounds( std::istream &is, const std::string &name ) {
+    std::pair<size_t,size_t> bounds(-1,-1);
+    
+    while ( is.good() ) {
+     
+        partition p = partassign::next_partition ( is );
+        if ( p.start == -1 ) { // returning a partition with negaitve indices is next_partition's way of signalling EOF
+            break;
+        }
+        
+//         std::cout << "gene: " << p.gene_name << "\n";
+        
+        if( p.gene_name == name ) {
+            return std::pair<size_t,size_t>(p.start, p.end);
+        }
+        
+    }
+    return std::pair<size_t,size_t>(-1,-1);
+    
 }
 
 // combinatorial explosion hazard ahead... if another function comes along put it into a driver class just like papara::driver.

@@ -119,7 +119,7 @@ void print_help( std::ostream &os ) {
 
 
 template<typename pvec_t, typename seq_tag>
-void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, bool ref_gaps, const papara_score_parameters &sp, bool write_fasta, partassign::part_assignment *part_assign ) {
+void run_papara( const std::string &qs_name, const std::string &alignment_name, const std::string &tree_name, size_t num_threads, const std::string &run_name, bool ref_gaps, const papara_score_parameters &sp, bool write_fasta, partassign::part_assignment *part_assign, const std::pair<size_t,size_t> &fixed_qs_bounds ) {
 
     ivy_mike::perf_timer t1;
 
@@ -143,9 +143,9 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
     refs.build_ref_vecs();
 
     if( part_assign != 0 ) {
-        if( !ref_gaps ) {
+        if( ref_gaps ) {
             std::cout << "REMARK: using per-gene alignment deactivates reference-side gaps!\n";
-            ref_gaps = true;
+            ref_gaps = false;
         }
         
         
@@ -156,7 +156,15 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
         qs.set_per_qs_bounds( qs_bounds );
         
         
+    } else if( fixed_qs_bounds.first != size_t(-1) ) {
+	ref_gaps = false;
+	std::cout << "fixed bounds " << fixed_qs_bounds.first << " " << fixed_qs_bounds.second << "\n";
+        std::vector<std::pair<size_t,size_t> > qs_bounds( qs.size(), fixed_qs_bounds );
+        qs.set_per_qs_bounds( qs_bounds );
     }
+    
+    
+    
     
     t1.add_int();
 
@@ -225,6 +233,7 @@ int main( int argc, char *argv[] ) {
     
     std::string opt_blast_hits;
     std::string opt_partitions;
+    std::string opt_partition_name;
     
     bool opt_use_cgap;
     int opt_num_threads;
@@ -251,6 +260,7 @@ int main( int argc, char *argv[] ) {
     igp.add_opt( 'g', igo::value<bool>(opt_write_fasta, true).set_default(false) );
     igp.add_opt( 'l', igo::value<std::string>(opt_blast_hits) );
     igp.add_opt( 'x', igo::value<std::string>(opt_partitions) );
+    igp.add_opt( 'k', igo::value<std::string>(opt_partition_name) );
     
     igp.parse(argc,argv);
 
@@ -275,9 +285,11 @@ int main( int argc, char *argv[] ) {
     // optional accelration by blast hits/partition file
     std::auto_ptr<partassign::part_assignment> part_assignment;
     
-    if( igp.opt_count('l') == 1 || igp.opt_count('x') == 1 ) {
+    std::pair<size_t,size_t> fixed_qs_bounds(-1,-1);
+    
+    if( igp.opt_count('l') == 1  ) {
         if( igp.opt_count('l') != igp.opt_count('x') ) {
-            std::cerr << "options -b and -x have to be used together (or not at all)\n";
+            std::cerr << "options -l and -x have to be used together (or not at all)\n";
             print_help( std::cerr );
             return 0;
         }
@@ -296,7 +308,25 @@ int main( int argc, char *argv[] ) {
         
         
         part_assignment.reset( new partassign::part_assignment( blast_is, part_is ));
+    } else if(igp.opt_count('k') == 1 ) {
+        std::ifstream part_is( opt_partitions.c_str() );
+        if( !part_is.good() ) {
+            std::cerr << "can not open partition file\n";
+            return 0;
+        }
+        
+        fixed_qs_bounds = partassign::partition_bounds( part_is, opt_partition_name );
+        std::cout << fixed_qs_bounds.first << " " << fixed_qs_bounds.second << "\n";
+        if( fixed_qs_bounds.first == size_t(-1) || fixed_qs_bounds.second == size_t(-1) ) {
+            std::cerr << "partition not found: " + opt_partition_name + "\n";
+            return 0;
+        }
+    } else if( igp.opt_count('x') == 1 ) {
+        std::cerr << "options -x needs either -l or -k\n";
+        print_help( std::cerr );
+        return 0;
     }
+        
     
     
     ivy_mike::timer t;
@@ -338,15 +368,15 @@ int main( int argc, char *argv[] ) {
     if( opt_use_cgap ) {
 
         if( opt_aa ) {
-            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
+            run_papara<pvec_cgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get(), fixed_qs_bounds );
         } else {
-            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
+            run_papara<pvec_cgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get(), fixed_qs_bounds );
         }
     } else {
         if( opt_aa ) {
-            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
+            run_papara<pvec_pgap, tag_aa>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get(), fixed_qs_bounds );
         } else {
-            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get() );
+            run_papara<pvec_pgap, tag_dna>( opt_qs_name, opt_alignment_name, opt_tree_name, opt_num_threads, opt_run_name, ref_gaps, sp, opt_write_fasta, part_assignment.get(), fixed_qs_bounds );
         }
     }
 

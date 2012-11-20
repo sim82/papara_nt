@@ -43,6 +43,7 @@ set( ALL_HEADERS )
 ENDIF()
 
 
+
 ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp align_utils.cpp blast_partassign.cpp )
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
@@ -50,12 +51,14 @@ add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
+add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
 
 # add_executable(pw_dist pw_dist.cpp pairwise_seq_distance.cpp )
 
 # target_link_libraries(papara_nt ivymike ublas_jama ${SYSDEP_LIBS} )
 target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
 target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
+target_link_libraries(phy_cut_partition papara_core ublas_jama ivymike ${SYSDEP_LIBS} )
 # target_link_libraries(pw_dist ivymike ${BOOST_LIBS} ${SYSDEP_LIBS})
 
 

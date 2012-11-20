@@ -318,8 +318,7 @@ public:
 
 
 
-    // WARNING: unsafe move semantics on qs
-    void add( const std::string &name, std::vector<uint8_t> *qs ) ;
+    
 
     void preprocess() ;
 
@@ -377,9 +376,15 @@ public:
 
 
     size_t calc_cups_per_ref( size_t ref_len ) const ;
-
-
+    
+    // TEST: trying to make interconnection between queries and references more explicit.
+    template<typename pvec_t_, typename seq_tag_>
+    friend class references;
+    
 private:
+    // WARNING: unsafe move semantics on qs
+    void add( const std::string &name, std::vector<uint8_t> &qs ) ;
+    
     std::vector <std::string> m_qs_names;
     std::vector <std::vector<uint8_t> > m_qs_seqs;
 

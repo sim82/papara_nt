@@ -812,8 +812,8 @@ public:
 
             size_t block_end = block_start_outer + block_width;
 
-            if( block_end > a_size_all ) {
-                block_end = a_size_all;
+            if( block_end > a_end_idx ) {
+                block_end = a_end_idx;
             }
 
 
@@ -942,7 +942,7 @@ public:
                 }
 
 
-                done = block_start == a_size_all;
+                done = block_start == a_end_idx;
 
                 if( done ) {
                     max_score = vu::max( max_score, last_sc );
@@ -1661,6 +1661,7 @@ float align_freeshift( const ivy_mike::scoring_matrix &sm, std::vector<uint8_t> 
         --ib;
     }
     
+    // FIXME: this code must be quite old... why didn't I use a.assign? There does not seem to be any reason
     a.resize( a_tb.size() );
     std::copy( a_tb.rbegin(), a_tb.rend(), a.begin() );
     
@@ -1674,5 +1675,140 @@ float align_freeshift( const ivy_mike::scoring_matrix &sm, std::vector<uint8_t> 
     
     return max_score;
 }
+
+
+
+float align_freeshift_score( const ivy_mike::scoring_matrix &sm, const std::vector<uint8_t> &a, const std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
+
+ 
+    typedef float score_t;
+    
+    ivy_mike::aligned_buffer<score_t> s;
+    ivy_mike::aligned_buffer<score_t> si;
+    
+    
+    
+    if( s.size() < a.size()  ) {
+        s.resize( a.size() );
+        si.resize( a.size() );
+    }
+    
+    std::fill( s.begin(), s.end(), score_t(0) );
+    std::fill( si.begin(), si.end(), score_t(0) );
+    const score_t SMALL = -1e8;
+
+    score_t max_score = SMALL;
+    int max_a = 0;
+    int max_b = 0;
+    
+    std::vector<bool> sl_stay( a.size() * b.size() );
+    std::vector<bool> su_stay( a.size() * b.size() );
+    std::vector<bool> s_l( a.size() * b.size() );
+    std::vector<bool> s_u( a.size() * b.size() );
+    
+    struct index_calc {
+        const size_t as, bs;
+        index_calc( size_t as_, size_t bs_ ) : as(as_), bs(bs_) {}
+        
+        size_t operator()(size_t ia, size_t ib ) {
+            assert( ia < as );
+            assert( ib < bs );
+            
+            //return ia * bs + ib;
+            return ib * as + ia;
+        }
+        
+    };
+    
+    index_calc ic( a.size(), b.size() );
+    
+    
+    for( size_t ib = 0; ib < b.size(); ib++ ) {
+        char bc = b[ib];
+        
+        score_t last_sl = SMALL;
+        score_t last_sc = 0.0;
+        score_t last_sdiag = 0.0;
+//         cout << "sbm: " << m.state_backmap(bc) << " " << (W * asize) << endl;
+       // sscore_t *qpp_iter = qprofile(m.state_backmap(bc) * W * asize);
+        
+        score_t * __restrict s_iter = s.base();
+        score_t * __restrict si_iter = si.base();
+        score_t * __restrict s_end = s_iter + a.size();
+        bool lastrow = ib == (b.size() - 1);
+        
+        //for( ; s_iter != s_end; s_iter += W, si_iter += W, qpp_iter += W ) {
+        for( size_t ia = 0; ia < a.size(); ++ia, ++s_iter, ++si_iter ) {  
+            score_t match = sm.get_score( a[ia], bc );
+            
+//             getchar();
+            score_t sm = last_sdiag + match;
+            
+            last_sdiag = *s_iter;
+
+            score_t sm_zero = sm;
+
+            
+            score_t last_sc_OPEN = last_sc + gap_open; 
+            
+            
+            score_t sl_score_stay = last_sl + gap_extend;
+            score_t sl;
+            if( sl_score_stay > last_sc_OPEN ) {
+                sl = sl_score_stay;
+                sl_stay[ic(ia,ib)] = true;
+            } else {
+                sl = last_sc_OPEN;
+            }
+            
+            last_sl = sl;
+
+            score_t su_gap_open = last_sdiag + gap_open;
+            score_t su_GAP_EXTEND = *si_iter + gap_extend;
+            
+            score_t su;// = max( su_GAP_EXTEND,  );
+            if( su_GAP_EXTEND > su_gap_open ) {
+                su = su_GAP_EXTEND;
+                su_stay[ic(ia,ib)] = true;
+            } else {
+                su = su_gap_open;
+            }
+            
+            *si_iter = su;
+            
+            score_t sc;
+            if( (su > sl) && su > sm_zero ) {
+                sc = su;
+                s_u[ic(ia,ib)] = true;
+            } else if( ( sl >= su ) && sl > sm_zero ) {
+                sc = sl;
+                s_l[ic(ia,ib)] = true;
+            } else { // implicit: sm_zero > sl && sm_zero > su
+                sc = sm_zero;
+            }
+
+            
+            last_sc = sc;
+            *s_iter = sc;
+            
+            
+            if( s_iter == s_end - 1 || lastrow ) {
+                if( sc > max_score ) {
+                    max_a = int(ia);
+                    max_b = int(ib);
+                    max_score = sc;
+                }
+                
+                
+            }
+        }
+        
+    }
+
+    
+    
+    return max_score;    
+}
+
 } // end of anonymous namespace
 #endif

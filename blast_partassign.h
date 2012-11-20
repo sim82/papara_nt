@@ -39,6 +39,7 @@ public:
     partition() : start(-1), end(-1) {}
     int start;
     int end;
+    std::string gene_name;
 };
 
 
@@ -75,6 +76,9 @@ private:
 
 template<typename pvec_t, typename seq_tag>
 std::vector<std::pair<size_t,size_t> > resolve_qs_bounds( papara::references<pvec_t,seq_tag> &refs, papara::queries<seq_tag> &qs, const partassign::part_assignment &part_assign ); 
+
+
+std::pair<size_t,size_t> partition_bounds( std::istream &is, const std::string &name );
 
 
 }
