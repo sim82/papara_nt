@@ -723,7 +723,7 @@ public:
         
         // overall size of a whole row of vectors (=length of 'a' * vector width)
         const size_t av_size_all = pvec_prof_.size();
-        const size_t a_size_all = av_size_all / W;
+//         const size_t a_size_all = av_size_all / W;
         const size_t block_width = 512;
 //         assert( av_size >= block_width * W ); // the code below should handle this case, but is untested
 
@@ -1698,8 +1698,8 @@ float align_freeshift_score( const ivy_mike::scoring_matrix &sm, const std::vect
     const score_t SMALL = -1e8;
 
     score_t max_score = SMALL;
-    int max_a = 0;
-    int max_b = 0;
+//     int max_a = 0;
+//     int max_b = 0;
     
     std::vector<bool> sl_stay( a.size() * b.size() );
     std::vector<bool> su_stay( a.size() * b.size() );
@@ -1794,8 +1794,8 @@ float align_freeshift_score( const ivy_mike::scoring_matrix &sm, const std::vect
             
             if( s_iter == s_end - 1 || lastrow ) {
                 if( sc > max_score ) {
-                    max_a = int(ia);
-                    max_b = int(ib);
+//                     max_a = int(ia);
+//                     max_b = int(ib);
                     max_score = sc;
                 }
                 

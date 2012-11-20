@@ -10,7 +10,7 @@ static bool nogap( char c ) {
     return c != '-' && c != 'N';
 }
 
-#if __cplusplus >= 199711L
+#if __cplusplus <= 199711L
 namespace std {
 // OH NOES, copy_if is c++11... rip it from gnu
  template<typename _InputIterator, typename _OutputIterator,

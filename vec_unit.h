@@ -445,12 +445,19 @@ struct vector_unit<int, 4> {
     }
 
 };
-#ifndef WIN32
+
+#define VEC_UNIT_ENABLE_FLOAT
+#ifdef VEC_UNIT_ENABLE_FLOAT
+
+
 
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu"
 #endif
+
+
+
 
 template<>
 struct vector_unit<float, 4> {
@@ -462,13 +469,9 @@ struct vector_unit<float, 4> {
 
     const static int SIGN_MASK_INT = 0x7FFFFFFF;
     
-//     const static T LARGE_VALUE  = 1e8;
-//     const static T SMALL_VALUE = -1e8;
-//     const static T BIAS = 0;
-     const static T LARGE_VALUE;
-     const static T SMALL_VALUE;
-     const static T BIAS;
-    
+//     const static T LARGE_VALUE;
+//     const static T SMALL_VALUE;
+//     const static T BIAS;
     const static size_t W = 4;
     
     static inline vec_t cast_from_int( const __m128i &iv ) {
@@ -564,9 +567,7 @@ struct vector_unit<float, 4> {
     }    
 };
 
-const vector_unit<float,4>::T vector_unit<float,4>::LARGE_VALUE  = 1e8;
-const vector_unit<float,4>::T vector_unit<float,4>::SMALL_VALUE = -1e8;
-const vector_unit<float,4>::T vector_unit<float,4>::BIAS = 0;
+
 
 template<>
 struct vector_unit<double, 2> {
@@ -578,9 +579,9 @@ struct vector_unit<double, 2> {
 
 //    const static uint64_t SIGN_MASK_U64 = 0x7FFFFFFFFFFFFFFF;
 
-    const static T LARGE_VALUE;//  = 1e8;
-    const static T SMALL_VALUE;// = -1e8;
-    const static T BIAS;// = 0;
+//     const static T LARGE_VALUE;
+//     const static T SMALL_VALUE;
+//     const static T BIAS;
     const static size_t W = 2;
 
     static inline vec_t cast_from_int( const __m128i &iv ) {
@@ -708,16 +709,26 @@ struct vector_unit<double, 2> {
 };
 
 
-const double vector_unit<double,2>::LARGE_VALUE  = 1e8;
-const double vector_unit<double,2>::SMALL_VALUE = -1e8;
-const double vector_unit<double,2>::BIAS = 0;
+
+
+// const vector_unit<float,4>::T vector_unit<float,4>::LARGE_VALUE  = 1e8;
+// const vector_unit<float,4>::T vector_unit<float,4>::SMALL_VALUE = -1e8;
+// const vector_unit<float,4>::T vector_unit<float,4>::BIAS = 0;
+// 
+// const double vector_unit<double,2>::LARGE_VALUE  = 1e8;
+// const double vector_unit<double,2>::SMALL_VALUE = -1e8;
+// const double vector_unit<double,2>::BIAS = 0;
+
 
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
-#endif
+#endif // !VEC_UNIT_ENABLE_FLOAT
+
+
+
 #ifdef HAVE_AVX
 // AVX is the most pointless thing in the world, as far as integers are concerned.
 // waiting for AVX5.7

@@ -21,8 +21,11 @@
 #define __align_vec_h
 
 #include "vec_unit.h"
-#include "aligned_buffer.h"
-#include "fasta.h"
+#include "ivymike/aligned_buffer.h"
+#include "ivymike/fasta.h"
+
+using ivy_mike::aligned_buffer;
+using ivy_mike::scoring_matrix;
 
 template <class score_t>
 struct persistent_state {

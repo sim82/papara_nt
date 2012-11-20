@@ -17,6 +17,9 @@
  *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
+#include <fstream>
+
 
 #include <algorithm>
 #include <deque>
@@ -40,6 +43,8 @@ namespace timpl = ivy_mike;
 #include "ivymike/time.h"
 #include "ivymike/write_png.h"
 #include "ivymike/tdmatrix.h"
+#include "ivymike/fasta.h"
+#include "ivymike/aligned_buffer.h"
 
 #ifndef PWDIST_INLINE 
 // this means this file is not included by pairwise_seq_distance.h itself...
@@ -52,6 +57,10 @@ namespace timpl = ivy_mike;
 #ifndef PSD_DECLARE_INLINE
 #define PSD_DECLARE_INLINE
 #endif
+
+
+using ivy_mike::scoring_matrix;
+using ivy_mike::aligned_buffer;
 
 //typedef boost::multi_array<int,2> pw_score_matrix;
 typedef ivy_mike::tdmatrix<int> pw_score_matrix;

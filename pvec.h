@@ -267,6 +267,10 @@ public:
     	reset( seqs );
     }
 
+    probgap_model( double gap_freq ) : m_valid( false ) {
+        reset( gap_freq );
+    }
+    
     void reset( const std::vector< std::vector<uint8_t> > &seqs ) {
 	   // initialize probgap model from input sequences
     	reset( calc_gap_freq( seqs ) );
@@ -342,13 +346,14 @@ class pvec_pgap {
     
     
 public:
+    // WARNING WARNING WARNING: this is the stupid_pointer, used to inject a global probgap_model into class pvec_pgap
     static ivy_mike::stupid_ptr<probgap_model> pgap_model;
 
-    inline const std::vector<parsimony_state> &get_v() {
+    inline const std::vector<parsimony_state> &get_v() const {
         return v;
     }
 
-    inline const boost::numeric::ublas::matrix<double> &get_gap_prob() {
+    inline const boost::numeric::ublas::matrix<double> &get_gap_prob() const {
         return gap_prob;
     }
 

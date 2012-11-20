@@ -350,7 +350,7 @@ void optimize_branch_lengths( ivy_mike::tree_parser_ms::lnode *tree, const std::
 	perf_timer.print();
 }
 
-
+#if 0
 lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const std::map<std::string, const std::vector<uint8_t> * const> &name_to_seq, ln_pool &pool ) {
 	ivy_mike::perf_timer perf_timer(!true);
 
@@ -374,7 +374,7 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	std::map<std::string, sptr::shared_ptr<lnode> > tip_map;
 
 	for( std::vector<lnode *>::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
-		tip_map.insert( std::make_pair( (*it)->m_data->tipName, (*it)->get_smart_ptr() ) );
+		tip_map.insert( std::make_pair( (*it)->m_data->tipName, (*it)->get_smart_ptr().lock() ) );
 	}
 
 
@@ -501,7 +501,7 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	assert( ret_node->back->back != 0 );
 	return ret_node;
 }
-
+#endif
 //size_t file_size( const char *name ) {
 //	std::ifstream is(name);
 //
@@ -550,7 +550,7 @@ std::string digest_files( const std::vector<std::string> &files ) {
 namespace ublas = boost::numeric::ublas;
 
 void launch_or_not( const std::string &raxml, Poco::Process::Args args, const std::string &digest, std::vector<std::string> *out_files ) {
-	std::string temp_name = "/tmp/";
+	std::string temp_name = "/space/tmp/";
 	temp_name += "propara_";
 	temp_name += digest;
 
@@ -630,6 +630,45 @@ void launch_or_not( const std::string &raxml, Poco::Process::Args args, const st
 
 }
 
+std::vector<ublas::matrix<double> > read_binary_anc_probs( std::istream &pis ) {
+    std::vector<ublas::matrix<double> > pvecs;
+    
+    
+
+    while( !pis.eof() ) {
+        int32_t counter;
+        pis.read((char*)&counter, 4 );
+
+
+
+        if( counter == -1 ) {
+            break;
+        }
+
+        assert( size_t(counter) == pvecs.size() );
+
+        int32_t width;
+        pis.read((char*)&width, 4 );
+
+//      std::cout << "width: " << width << "\n";
+        assert( width > 0 );
+
+
+
+        //pvecs->push_back(ublas::matrix<double>(width, 4));
+        //ublas::matrix<double> &mat = pvecs->back();
+        ublas::matrix<double> mat( width, 4 );
+        
+        // the underlying unbounded_array seems to be guaranteed to have a sensible memory layout. read straight into it.
+        // TODO: get fancy and directly back the boost::matrix with the mmaped binary file ;-)
+        pis.read((char*)mat.data().begin(), width * 4 * 8 );
+        
+        pvecs.emplace_back( ublas::trans(mat) );
+    }    
+    
+    return pvecs;
+}
+
 lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string &tree_name, const std::string &ali_name, std::vector<ublas::matrix<double> > *pvecs ) {
 	ivy_mike::perf_timer perf_timer(!true);
 
@@ -696,41 +735,11 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 	// this is a huge improvement over the text file stuff (below) and now reads at 1200Mb/s
 	// from warm disk-cache instead of 20 Mb/s...
 
-	pvecs->clear();
+	//pvecs->clear();
+    *pvecs = read_binary_anc_probs( pis );
 	ivy_mike::timer t1;
 
-	std::vector<double> tmp;
-	std::string line;
-	std::vector<double> token;
-	std::stringstream strstr;
 
-	while( !pis.eof() ) {
-		int32_t counter;
-		pis.read((char*)&counter, 4 );
-
-
-
-		if( counter == -1 ) {
-			break;
-		}
-
-		assert( size_t(counter) == pvecs->size() );
-
-		int32_t width;
-		pis.read((char*)&width, 4 );
-
-//		std::cout << "width: " << width << "\n";
-		assert( width > 0 );
-
-
-
-		pvecs->push_back(ublas::matrix<double>(width, 4));
-		ublas::matrix<double> &mat = pvecs->back();
-
-		// the underlying unbounded_array seems to be guaranteed to have a sensible memory layout. read straight into it.
-		// TODO: get fancy and directly back the boost::matrix with the mmaped binary file ;-)
-		pis.read((char*)mat.data().begin(), width * 4 * 8 );
-	}
 
 	size_t s = -1;
 	for( size_t i = 0; i < pvecs->size(); ++i ) {
@@ -903,3 +912,4 @@ lnode *generate_marginal_ancestral_state_pvecs( ln_pool &pool, const std::string
 
 }
 #endif
+

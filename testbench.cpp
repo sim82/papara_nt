@@ -102,7 +102,9 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
        
         last_sdiag = *s_iter;
         
-        
+        for( size_t i = 0; i < astart; ++i ) {
+            std::cout << "   ";
+        }
         for( size_t ia = astart; ia <= ib + band_width; ++ia, ++s_iter ) {  
             score_t ac = a[ia];
             const bool cgap = int(a_aux[ia]) == aux_cgap;
@@ -137,9 +139,10 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
 
             score_t su = last_sdiag + mismatch_score;
             
-//             std::cout << "x: " << sm << " " << su << " " << sl << "  ";
-            score_t sc = std::min( sm, std::min( su, sl ) );
+            //std::cout << "x: " << sm << " " << su << " " << sl << "  ";
             
+            score_t sc = std::min( sm, std::min( su, sl ) );
+            std::cout << std::setw(3) << sc;
             last_sc = sc;
             *s_iter = sc;
             
@@ -152,7 +155,7 @@ static score_t align_pvec_score_seq( std::vector<int> &a, std::vector<unsigned i
 //             }
            
         }
-        
+        std::cout << "\n";
         
         
         
@@ -533,9 +536,48 @@ public:
 };
 
 
+void mini_test() {
+    align_arrays arr;
+//     const static int score_gap_open = 1;
+//     const static int score_gap_extend = 1;
+//     const static int score_mismatch = 1;
+//     const static int score_match_cgap = 1;    
+        
+// //     const static int score_gap_open = 3;
+// //     const static int score_gap_extend = 1;
+// //     const static int score_mismatch = 3;
+// //     const static int score_match_cgap = 0;
+            
+    
+    
+    const static int score_gap_open = 3;
+    const static int score_gap_extend = 1;
+    const static int score_mismatch = 3;
+    const static int score_match_cgap = 3;
+//     
+            
+    std::vector<int> ref_pvec = { 2, 4, 1, 5, 8, 4, 4, 2, 4, 1, 8, 1, 1, 2, 2 };
+    std::vector<uint> ref_aux = {  0, 0, 0, 1, 0, 0, 0, 0 ,0 ,0, 0, 0, 0, 0, 0 };
+    
+    std::vector<uint8_t> qs_pvec = { 4, 2, 1, 8, 2 };
+//     std::vector<uint8_t> qs_pvec = { 1, 4, 8, 1, 4 };
+    //                int score2 = 0;
+    int score = align_pvec_score_seq( ref_pvec, ref_aux, qs_pvec, score_mismatch, score_match_cgap, score_gap_open, score_gap_extend, arr );
+    //std::cout << "score " << i << " " << j << " = " << score << " " << score2 << "\n";
+    //                 if( score != score2 ) {
+        //                 std::cout << "score " << i << " " << j << " = " << score << "\n";
+    //                 }
+    
+    
+}
 
 int main( int argc, char *argv[] ) {
 
+    if( true ) {
+        mini_test();
+        return 0;
+    }
+    
 	size_t num_refs = atoi(argv[1] );
 	size_t num_qs = atoi(argv[2] );
 	size_t num_threads = atoi(argv[3] );

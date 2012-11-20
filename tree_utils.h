@@ -43,7 +43,6 @@ enum tip_case {
 template<class lnode>
 struct rooted_bifurcation {
     
-    
     lnode * parent;
     lnode * child1;
     lnode * child2;
@@ -109,6 +108,11 @@ void rooted_traveral_order_rec( lnode *n, container &cont, bool incremental = fa
 
     assert( n1 != 0 && n2 != 0 );
 
+    // STUPID: this just bit me in a non-debug build (assertions disabled), so make it a real runtime error (but keep in assertion, because it is better for debugging)
+    if( n1 == 0 || n2 == 0 ) {
+        throw std::runtime_error( "n1 == 0 || n2 == 0" );
+    }
+    
     n->towards_root = true;
     n->next->towards_root = false;
     n->next->next->towards_root = false;
@@ -505,6 +509,33 @@ void iterate_lnode( lnode *n, oiter start, bool go_back = true ) {
     	iterate_lnode( n->next->next->back, start, false );
     }
 };
+
+template <typename lnode, typename Tfunc>
+void apply_lnode( lnode *n, Tfunc func, bool go_back = true ) {
+    //*(start++) = n;
+    func(n);
+    
+    //outer++;
+
+    if( go_back && n->back != 0 ) {
+        apply_lnode( n->back, func, false );
+    }
+    if( n->next->back != 0 ) {
+        apply_lnode( n->next->back, func, false );
+    }
+
+    if( n->next->next->back != 0 ) {
+        apply_lnode( n->next->next->back, func, false );
+    }
+};
+
+// TEST" implement interate_node in terms of the more generic lnode_apply
+template <typename lnode, typename oiter>
+void iterate_lnode_test( lnode *n, oiter start, bool go_back = true ) {
+    // call recurseve apply with a 'iterator inserter' lambda
+    apply_lnode(n, [&start](lnode *n) {*(start++)=n;}, go_back );
+};
+
 
 
 // UNTESTED: back_insert_iterator that only only inserts if predicate is true (TDD is for pussies)
