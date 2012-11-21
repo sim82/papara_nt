@@ -4,6 +4,8 @@ project(papara_nt)
 set( CMAKE_NO_VERBOSE yes )
 
 add_subdirectory(ublasJama-1.0.2.3)
+
+set( USE_CPP11 yes CACHE BOOL "use c++11 compiler" FORCE )
 # add_subdirectory(genassign_blast)
 
 
@@ -19,7 +21,7 @@ add_subdirectory(ivy_mike)
 
 include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2.3 )
 
-set( USE_CPP11 yes )
+
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)

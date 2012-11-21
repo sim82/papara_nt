@@ -750,6 +750,10 @@ public:
             
             lnode *remove_node = tip->back;
             
+            
+//             ivy_mike::tree_parser_ms::prune_with_rollback pwr(remove_node);
+//             pwr_stack_.push_back( std::move(pwr));
+             
             pwr_stack_.emplace_back(remove_node);
             
         }
