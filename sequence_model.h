@@ -226,7 +226,7 @@ public:
 
     
     static inline uint8_t gap_cstate() {
-        return inverse_meaning.size() - 1;
+        return uint8_t(inverse_meaning.size() - 1);
     }
     
     static inline bool cstate_is_gap( uint8_t cs) {
