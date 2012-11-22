@@ -439,9 +439,9 @@ public:
 
 
         // init first rows
-        std::fill( m_.begin(), m_.end(), 0.0 );
-        std::fill( d_.begin(), d_.end(), 0.0 );
-        std::fill( i_.begin(), i_.end(), 0.0 /*neg_inf_*/ );
+        std::fill( m_.begin(), m_.end(), lof_t(0.0) );
+        std::fill( d_.begin(), d_.end(), lof_t(0.0) );
+        std::fill( i_.begin(), i_.end(), lof_t(0.0) /*neg_inf_*/ );
 
         // init first columns
         m_[0] = 0.0;
@@ -727,14 +727,14 @@ public:
         // matrix organization: ref->cols, q->rows
 
         // init first rows
-        std::fill( m_.begin1().begin(), m_.begin1().end(), 0.0 );
-        std::fill( d_.begin1().begin(), d_.begin1().end(), 0.0 );
+        std::fill( m_.begin1().begin(), m_.begin1().end(), lof_t(0.0) );
+        std::fill( d_.begin1().begin(), d_.begin1().end(), lof_t(0.0) );
         std::fill( i_.begin1().begin(), i_.begin1().end(), neg_inf_ );
 
         // init first columns
-        std::fill( m_.begin2().begin(), m_.begin2().end(), 0.0 );
+        std::fill( m_.begin2().begin(), m_.begin2().end(), lof_t(0.0) );
         std::fill( d_.begin2().begin(), d_.begin2().end(), neg_inf_ );
-        std::fill( i_.begin2().begin(), i_.begin2().end(), 0.0 );
+        std::fill( i_.begin2().begin(), i_.begin2().end(), lof_t(0.0) );
 
 
     }
@@ -1672,7 +1672,7 @@ std::string filename( const std::string &run_name, const char *type ) {
 bool file_exists(const char *filename)
 {
     std::ifstream is(filename);
-    return is;
+    return is.good();
 }
 
 
@@ -1739,7 +1739,7 @@ struct scoring_results {
         }
         
         for( size_t i = 0; i < best_score_.size(); ++i ) {
-            float other_score = other.best_score_[i];
+            double other_score = other.best_score_[i];
             size_t other_ref = other.best_ref_[i];
             
             if( best_score_[i] < other_score || (delta_equal(best_score_[i], other_score) && other_ref < best_ref_[i])) {

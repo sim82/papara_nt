@@ -160,8 +160,8 @@ public:
       d_(state.size2() + 1),
       i_(state.size2() + 1),
       max_matrix_height_(0),
-      delta_(log(0.01)),
-      epsilon_(log(0.1))
+      delta_(lof_t(log(0.01))),
+      epsilon_(lof_t(log(0.1)))
     {
         ref_gap_prob_log_ = ref_gap_prob_;
         {

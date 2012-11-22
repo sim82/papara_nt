@@ -5,7 +5,9 @@ set( CMAKE_NO_VERBOSE yes )
 
 add_subdirectory(ublasJama-1.0.2.3)
 
-set( USE_CPP11 yes CACHE BOOL "use c++11 compiler" FORCE )
+if( NOT DEFINED USE_CPP11 )
+  set( USE_CPP11 no CACHE BOOL "use c++11 compiler" FORCE )
+endif()
 # add_subdirectory(genassign_blast)
 
 
