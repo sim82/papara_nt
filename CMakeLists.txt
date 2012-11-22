@@ -19,7 +19,7 @@ add_subdirectory(ivy_mike)
 
 include_directories( ${include_directories} ${IVYMIKE_INCLUDE} . ublasJama-1.0.2.3 )
 
-set( USE_CPP11 no )
+set( USE_CPP11 yes )
 
 # handle the stupid autolinking shit of visualc++
 IF(WIN32)
@@ -29,7 +29,9 @@ IF(WIN32)
   ENDIF()
 
   include_directories( ${BOOST_ROOT} )
-  #LINK_DIRECTORIES( ${LINK_DIRECTORIES} ${BOOST_ROOT}\\stage\\lib)
+  LINK_DIRECTORIES(C:/src/poco-1.4.5/lib )
+  include_directories(C:/src/poco-1.4.5/Foundation/include) 
+
   set( BOOST_LIBS )
   set( SYSDEP_LIBS )
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_SCL_SECURE_NO_WARNINGS /INCREMENTAL:NO") # as long as there is no support for std::array, these warnings are plain stupid!

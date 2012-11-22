@@ -19,6 +19,10 @@
 
 // #include "pch.h"
 
+// someone down the line tries to sabotage us by including a windows header, 
+// which will clutter the whole namespace with macros. I don't know who it is, 
+// but disable_shit.h takes care of restricting the damage...
+#include "ivymike/disable_shit.h"
 #include <cctype>
 
 #include <algorithm>
@@ -27,10 +31,12 @@
 #include <iostream>
 #include <fstream>
 #include <iterator>
-
+#include <deque>
+#include <thread>
+#include <iomanip>
 #define BOOST_UBLAS_NDEBUG
 
-#include <boost/thread.hpp>
+
 #include <boost/bind.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
@@ -50,6 +56,7 @@
 #include "ivymike/tree_split_utils.h"
 #include "ivymike/flat_map.h"
 #include "ivymike/fasta.h"
+#include "ivymike/thread.h"
 
 namespace tree_parser = ivy_mike::tree_parser_ms;
 
@@ -159,8 +166,8 @@ public:
         ref_gap_prob_log_ = ref_gap_prob_;
         {
             auto &d = ref_gap_prob_log_.data();
-            std::transform( d.begin(), d.end(), d.begin(), log );
-            
+            //std::transform( d.begin(), d.end(), d.begin(), log );
+			std::transform( d.begin(), d.end(), d.begin(), [](double v){ return log(v); } );
             
         }
         
@@ -955,7 +962,7 @@ public:
         if( !sorted_ ) {
             throw std::runtime_error( "flat_map::get on unsorted map" );
         }
-        auto lb = std::lower_bound( pairs_.begin(), pairs_.end(), ipair{key, V()} );
+        auto lb = std::lower_bound( pairs_.begin(), pairs_.end(), ipair(key, V()) );
         
         if( lb == pairs_.end() || lb->key_ != key ) {
             return nullptr;
@@ -992,7 +999,7 @@ private:
 class sequences {
 
 public:
-    sequences() = delete;
+    //sequences() = delete;
     
     sequences( std::istream &is ) : pw_scoring_matrix_( 3, 0 ) {
         assert( is.good() );
@@ -1574,7 +1581,7 @@ public:
             ivy_mike::tree_parser_ms::splice_with_rollback swr( np, virtual_root );
             
             
-            std::deque<rooted_bifurcation<lnode>> rto;
+            std::deque<rooted_bifurcation<lnode> > rto;
             rooted_traveral_order_rec( virtual_root, rto, false );
 //             incremental = true;
             for( auto it = rto.begin(); it != rto.end(); ++it ) {
@@ -2278,7 +2285,8 @@ int main( int argc, char *argv[] ) {
     ivy_mike::getopt::parser igp;
     std::string opt_seq_file;
 
-    int num_cores = boost::thread::hardware_concurrency();
+	
+    int num_cores = std::thread::hardware_concurrency();
 
     int opt_num_ali_threads;
     int opt_num_nv_threads;

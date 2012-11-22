@@ -16,7 +16,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
-
+#include "ivymike/disable_shit.h"
 
 #include <Poco/Process.h>
 #include <Poco/File.h>
@@ -30,6 +30,8 @@
 #include <deque>
 #include <vector>
 #include <cassert>
+#include <array>
+//#include <unordered_map>
 
 #include "ivymike/time.h"
 
@@ -38,14 +40,18 @@
 
 #include <boost/shared_ptr.hpp>
 #include <boost/dynamic_bitset.hpp>
-#include <boost/tr1/unordered_map.hpp>
-#include <boost/tr1/array.hpp>
+//#include <boost/tr1/unordered_map.hpp>
+//#include <boost/tr1/array.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
 #include <boost/lexical_cast.hpp>
 #include "raxml_interface.h"
 #include "ivymike/tree_traversal_utils.h"
 #include "ivymike/tree_split_utils.h"
 
+
+//#ifdef max
+//#undef max
+//#endif
 
 using ivy_mike::tree_parser_ms::lnode;
 using ivy_mike::tree_parser_ms::adata;
@@ -110,7 +116,7 @@ void pipe_into_deque( Poco::Pipe &pipe, std::deque<char> &deq ) {
 	// i don't trust the complicated implementation for std::vector, so use this...
 
 	//std::vector<char> buf(4096);
-	std::tr1::array<char,4096> buf;
+	std::array<char,4096> buf;
 	size_t readsize = -1;
 
 	while( (readsize = pipe.readBytes( buf.data(), buf.size())) != 0 ) {

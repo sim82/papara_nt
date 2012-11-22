@@ -409,7 +409,8 @@ struct vector_unit<int, 4> {
 #ifdef __SSE4_1__
         return _mm_min_epi32( a, b );
 #else
-	#error "probably untested code!"
+		//#warning "probably untested code!"
+		assert(0);
         const vec_t ma = _mm_cmplt_epi32( a, b );
         return _mm_or_si128( _mm_and_si128( ma, a ), _mm_andnot_si128( ma, b ) );
 #endif
@@ -420,7 +421,8 @@ struct vector_unit<int, 4> {
 #ifdef __SSE4_1__
         return _mm_max_epi32( a, b );
 #else      
-	#error "probably untested code!"
+	//#warning "probably untested code!"
+		assert(0);
         const vec_t ma = _mm_cmpgt_epi32( a, b );
         return _mm_or_si128( _mm_and_si128( ma, a ), _mm_andnot_si128( ma, b ) );
 #endif

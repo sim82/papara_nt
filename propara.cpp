@@ -21,11 +21,11 @@
 #define BOOST_UBLAS_NDEBUG 1
 
 
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/syscall.h>
+//#include <sys/time.h>
+//#include <sys/resource.h>
+//#include <sys/syscall.h>
 #include <sys/types.h>
-#include <unistd.h>
+//#include <unistd.h>
 
 #include <stdexcept>
 #include <iostream>
@@ -36,14 +36,15 @@
 #include <functional>
 #include <cstring>
 #include <limits>
-
+#include <cmath>
 
 #include <boost/io/ios_state.hpp>
 #include <boost/iostreams/tee.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/bind.hpp>
 #include <boost/array.hpp>
-#include <boost/thread.hpp>
+//#include <boost/thread.hpp>
+#include "ivymike/thread.h"
 
 
 #include "parsimony.h"
@@ -565,7 +566,8 @@ public:
                     //                     std::cout << std::setw(10) << match_log_odds;
                 }
 
-                assert( std::isfinite(*m0) );
+               // assert( std::isfinite(*m0) );
+				assert( *m0 == *m0 ); // FIXME: is this a valid replacement for std::isfinite?
 #if 0
                 std::cout << i << " " << j << " " << m_(i,j) << " : " << m_(i-1, j-1) + ngap_log_odds
                         << " " << d_(i-1, j-1) + gap_log_odds << " " << i_(i-1, j-1) + gap_log_odds << " " << match_log_odds << " " << gap_log_odds << " " << ngap_log_odds << " max: " << m_max << "\n";
@@ -1724,7 +1726,7 @@ struct scoring_results {
 //     }
 
     void merge( const scoring_results &other ) {
-        boost::lock_guard<boost::mutex> lock(mtx_);
+        ivy_mike::lock_guard<ivy_mike::mutex> lock(mtx_);
         
         const size_t size = best_score_.size();
         assert( size == best_ref_.size() );
@@ -1754,7 +1756,7 @@ struct scoring_results {
 
     std::ofstream os_;
 
-    boost::mutex mtx_;
+    ivy_mike::mutex mtx_;
 
 };
 
@@ -1952,7 +1954,7 @@ int main( int argc, char *argv[] ) {
 
     scoring_worker w0(qs, refs, &res, 0, opt_num_threads );
 
-    boost::thread_group tg;
+    ivy_mike::thread_group tg;
     for( int i = 1; i < opt_num_threads; ++i ) {
         std::cout << "starting additional thread: " << i << "\n";
         tg.create_thread(scoring_worker(qs, refs, &res, i, opt_num_threads ));
