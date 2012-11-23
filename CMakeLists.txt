@@ -44,6 +44,7 @@ IF(WIN32)
 
 ELSE(WIN32)
 
+  include_directories( ${BOOST_ROOT} )
   if( USE_CPP11 )
     SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -std=c++11 -pedantic -Wall -march=native")
   else()
@@ -65,11 +66,14 @@ add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
-add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
+
 
 target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
 target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
-target_link_libraries(phy_cut_partition papara_core ublas_jama ivymike ${SYSDEP_LIBS} )
+
+
+#add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
+#target_link_libraries(phy_cut_partition papara_core ublas_jama ivymike ${SYSDEP_LIBS} )
 
 
 if( USE_CPP11 ) 
