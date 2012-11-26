@@ -17,7 +17,7 @@
  *  along with papara.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
+#include <stdint.h>
 #include <iomanip>
 #include <boost/bind.hpp>
 #include <boost/dynamic_bitset.hpp>

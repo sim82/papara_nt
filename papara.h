@@ -66,7 +66,7 @@ using namespace ivy_mike;
 
 namespace im_tree_parser = ivy_mike::tree_parser_ms;
 
-using namespace boost::numeric;
+//using namespace boost::numeric;
 
 using sequence_model::tag_aa;
 using sequence_model::tag_dna;
