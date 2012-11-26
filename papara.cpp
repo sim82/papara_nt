@@ -45,6 +45,187 @@ using namespace papara;
 
 bool papara::g_dump_aux = false;
 
+
+class log_stream_buffer : public std::streambuf
+{
+
+public:
+    
+    log_stream_buffer() : buffer_(120) {
+        
+    }
+
+    void post( char overflow, char *start, char *end ) {
+        for( std::vector< std::ostream* >::iterator it = log_tees.begin(); it != log_tees.end(); ++it ) {
+            std::copy( start, end, std::ostream_iterator<char>( *(*it) ));
+            
+            if( overflow != 0 ) {
+                (*it)->put(overflow);
+            }
+        }
+        
+        
+        for( std::vector< log_sink* >::iterator it = log_sinks.begin(); it != log_sinks.end(); ++it ) {
+            (*it)->post( overflow, start, end );
+        }
+    }
+    
+    int_type overflow(int c) {
+
+
+        post( c, pbase(), epptr() );
+
+        setp(&buffer_.front(), (&buffer_.back()) + 1);
+
+        return 1;
+    }
+
+    int sync() {
+        //            std::cout << "sync:";
+        //            std::copy( pbase(), pptr(), std::ostream_iterator<char>(std::cout));
+        //            std::cout << std::endl;
+        
+        post( 0, pbase(), pptr() );
+        setp(&buffer_.front(), (&buffer_.back()) + 1);
+        return 0;
+    }
+    
+    void add_tee( std::ostream *os ) {
+        log_tees.push_back(os);
+    }
+    void remove_tee( std::ostream *os ) {
+        std::vector<std::ostream *>::iterator it = std::find( log_tees.begin(), log_tees.end(), os );
+        if( it != log_tees.end() ) {
+            log_tees.erase(it);
+        }
+    }
+    
+    void add_sink( log_sink *s ) {
+        log_sinks.push_back(s);
+    }
+    void remove_sink( log_sink *s ) {
+        std::vector<log_sink *>::iterator it = std::find( log_sinks.begin(), log_sinks.end(), s );
+        if( it != log_sinks.end() ) {
+            log_sinks.erase(it);
+        }
+    }
+    
+private:
+   // copy ctor and assignment not implemented;
+    // copying not allowed
+    log_stream_buffer(const log_stream_buffer &);
+    log_stream_buffer &operator= (const log_stream_buffer &);
+
+    std::vector<char> buffer_;
+    std::vector<std::ostream *> log_tees;
+    std::vector<log_sink *> log_sinks;
+};
+
+// // lifted from http://www.horstmann.com/cpp/iostreams.html
+// class log_stream_buffer : public std::filebuf
+// {
+//     std::vector<std::ostream *> log_tees;
+//     
+// public:
+//     log_stream_buffer() { 
+//         //filebuf::open("NUL", ios::out); 
+//     }
+//     
+//     void open(const char *fname);
+// //     void close() { 
+// // //         _win.close(); filebuf::close();
+// //         
+// //     } 
+//     virtual int sync();
+//     
+//     void add_tee( std::ostream *os ) {
+//         log_tees.push_back(os);
+//     }
+//     void remove_tee( std::ostream *os ) {
+//         std::vector<std::ostream *>::iterator it = std::find( log_tees.begin(), log_tees.end(), os );
+//         if( it != log_tees.end() ) {
+//             log_tees.erase(it);
+//         }
+//     }
+// private:
+//     
+// };
+// void log_stream_buffer::open(const char *fname)
+// {  
+//     std::filebuf::close();
+//     if( fname != 0 ) {
+//         std::cerr << "log file: " << fname << "\n";
+//         std::filebuf::open(fname, std::ios::out | std::ios::app | std::ios::trunc );
+//         assert(std::filebuf::is_open());
+//     }
+// 
+// } 
+// int log_stream_buffer::sync()
+// {  
+//     //     pbase();
+//     //     pptr()
+//     //     
+//     //     int count = std::filebuf::out_waiting();
+//     // _win.append(pbase(), count);
+//     std::cerr << "sync: " << std::distance(pbase(), pptr()) << "\n";
+//     for( std::vector< std::ostream* >::iterator it = log_tees.begin(); it != log_tees.end(); ++it ) {
+//         std::copy( pbase(), pptr(), std::ostream_iterator<char>( *(*it) ));
+//     }
+//     return std::filebuf::sync(); 
+// }
+      
+
+static log_stream_buffer ls_buf;
+std::ostream papara::lout(&ls_buf);
+
+static ivy_mike::mutex log_buffer_mutex;
+
+
+// open_log_file::open_log_file( const char *filename ) {
+//     
+//     ivy_mike::lock_guard<ivy_mike::mutex> lock( log_buffer_mutex );
+//     if( log_is_open ) {
+//         std::cerr << "papara logfile is already open." << std::endl;
+//         abort();
+//     }
+//     
+//     
+//     ls_buf.open(filename);
+//     log_is_open = true;
+// }
+
+// open_log_file::~open_log_file() {
+//     ivy_mike::lock_guard<ivy_mike::mutex> lock( log_buffer_mutex );
+//     if( !log_is_open ) {
+//         std::cerr << "papara logfile is already closed. (This should be impossible) " << std::endl;
+//         abort();
+//     }
+//     ls_buf.close();
+//     log_is_open = false;
+// }
+
+
+add_log_tee::add_log_tee( std::ostream &os ) : os_(os) {
+    ivy_mike::lock_guard<ivy_mike::mutex> lock( log_buffer_mutex );
+    ls_buf.add_tee(&os);
+}
+
+add_log_tee::~add_log_tee() {
+    ivy_mike::lock_guard<ivy_mike::mutex> lock( log_buffer_mutex );
+    ls_buf.remove_tee(&os_);
+}
+
+
+add_log_sink::add_log_sink( log_sink *s ) : s_(s) {
+    ivy_mike::lock_guard<ivy_mike::mutex> lock( log_buffer_mutex );
+    ls_buf.add_sink(s);
+}
+
+add_log_sink::~add_log_sink() {
+    ivy_mike::lock_guard<ivy_mike::mutex> lock( log_buffer_mutex );
+    ls_buf.remove_sink(s_);
+}
+
 template<typename seq_tag>
 queries<seq_tag>::queries( const std::string &opt_qs_name ) {
 

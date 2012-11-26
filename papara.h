@@ -72,6 +72,31 @@ using sequence_model::tag_aa;
 using sequence_model::tag_dna;
 using sequence_model::model;
 
+
+class log_sink {
+public:
+    virtual void post( char overflow, char *start, char *end ) = 0;
+};
+
+// RAII guard for adding/removing a 'tee stream' to the papara log
+class add_log_tee {
+public:
+    add_log_tee( std::ostream &os );
+    ~add_log_tee();
+private:
+    std::ostream &os_;
+};
+
+// RAII guard for adding/removing a 'sink' to the papara log
+class add_log_sink {
+public:
+    add_log_sink( log_sink *s );
+    ~add_log_sink();
+private:
+    log_sink *s_;
+};
+
+
 template<typename seq_model>
 class vu_config {
 };
@@ -181,27 +206,31 @@ char num_to_ascii( int n ) {
 
 
 namespace {
-    typedef boost::iostreams::tee_device<std::ostream, std::ofstream> log_device;
-    typedef boost::iostreams::stream<log_device> log_stream;
-    
-    
-    
-    template<typename stream_, typename device_>
-    class bios_open_guard {
-        stream_ &m_stream;
-    public:
-        bios_open_guard( stream_ &stream, device_ &device ) : m_stream(stream) {
-            m_stream.open( device );
-        }
-        ~bios_open_guard() {
-            m_stream.close();
-        }
-    };
-    
-    typedef bios_open_guard<log_stream, log_device> log_stream_guard;
+//     typedef boost::iostreams::tee_device<std::ostream, std::ofstream> log_device;
+//     typedef boost::iostreams::stream<log_device> log_stream;
+//     
+//     
+//     
+//     template<typename stream_, typename device_>
+//     class bios_open_guard {
+//         stream_ &m_stream;
+//     public:
+//         bios_open_guard( stream_ &stream, device_ &device ) : m_stream(stream) {
+//             m_stream.open( device );
+//         }
+//         ~bios_open_guard() {
+//             m_stream.close();
+//         }
+//     };
+//     
+//     typedef bios_open_guard<log_stream, log_device> log_stream_guard;
+
+
 }
 
-extern log_stream lout;
+//extern log_stream lout;
+
+extern std::ostream lout;
 
 class ostream_test {
     std::ostream &m_os;

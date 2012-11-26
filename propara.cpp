@@ -68,9 +68,7 @@
 #include "papara.h"
 #include "sequence_model.h"
 
-namespace papara {
-log_stream lout;
-}
+
 
 using ivy_mike::tree_parser_ms::lnode;
 using ivy_mike::tree_parser_ms::ln_pool;
@@ -84,28 +82,6 @@ using ivy_mike::iterate_lnode;
 
 namespace ublas = boost::numeric::ublas;
 
-namespace {
-typedef boost::iostreams::tee_device<std::ostream, std::ofstream> log_device;
-typedef boost::iostreams::stream<log_device> log_stream;
-
-//log_stream lout;
-
-using papara::lout;
-
-template<typename stream_, typename device_>
-class bios_open_guard {
-    stream_ &m_stream;
-public:
-    bios_open_guard( stream_ &stream, device_ &device ) : m_stream(stream) {
-        m_stream.open( device );
-    }
-    ~bios_open_guard() {
-        m_stream.close();
-    }
-};
-
-typedef bios_open_guard<log_stream, log_device> log_stream_guard;
-}
 
 
 
@@ -1922,14 +1898,17 @@ int main( int argc, char *argv[] ) {
         std::cout << "log file already exists for run '" << opt_run_name << "'\n";
         return 0;
     }
+    
+    papara::add_log_tee log_cout(std::cout);
     std::ofstream logs(log_filename.c_str());
     if(!logs){
         std::cout << "could not open logfile for writing: " << log_filename << std::endl;
         return 0;
     }
-    log_device ldev(std::cout, logs);
-    log_stream_guard lout_guard(lout, ldev);
-    lout << "bla\n";
+    
+    papara::add_log_tee log_file(logs);
+    
+    
     sptr::shared_ptr<ln_pool> pool(new ln_pool(ln_pool::fact_ptr_type(new my_fact)));
     queries qs;
     if(qs_name != 0){
@@ -2144,7 +2123,7 @@ int main( int argc, char *argv[] ) {
     }
 
     std::cout << t.elapsed() << std::endl;
-    lout << "SUCCESS " << t.elapsed() << std::endl;
+    papara::lout << "SUCCESS " << t.elapsed() << std::endl;
 
     std::cout << "mean quality: " << qual / num_qual << "\n";
 

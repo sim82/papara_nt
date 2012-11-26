@@ -26,9 +26,9 @@
 
 using namespace papara;
 
-namespace papara {
-log_stream lout;
-}
+// namespace papara {
+// log_stream lout;
+// }
 
 void print_banner( std::ostream &os ) {
     os << "______    ______    ______        ___\n";
@@ -343,15 +343,18 @@ int main( int argc, char *argv[] ) {
         return 0;
     }
     
+    
+    papara::add_log_tee papara_log_cout( std::cout );
+    
     std::ofstream logs( log_filename.c_str());
     if( !logs ) {
         std::cout << "could not open logfile for writing: " << log_filename << std::endl;
         return 0;
     }
     
-    log_device ldev( std::cout, logs );
-    log_stream_guard lout_guard( lout, ldev );
     
+    papara::add_log_tee papara_log_file( logs );
+
     
 
     const bool ref_gaps = !opt_no_ref_gaps;

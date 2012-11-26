@@ -8,12 +8,6 @@
 #include "papara.h"
 
 using ivy_mike::large_phylip;
-namespace papara {
-log_stream lout;
-}
-
-
-
 
 int main( int argc, char *argv[] ) {
     const char *in_phylip = argv[1];
