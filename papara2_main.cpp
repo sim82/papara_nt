@@ -37,7 +37,7 @@ void print_banner( std::ostream &os ) {
     os << "|  __/ _` |  __/ _` |    // _` |\n";
     os << "| | | (_| | | | (_| | |\\ \\ (_| |\n";
     os << "\\_|  \\__,_\\_|  \\__,_\\_| \\_\\__,_|\n";
-    os << "  Version 2.3\n";
+	os << "  papara_core version " << papara::get_version_string() << "\n";
 
 }
 
@@ -219,8 +219,10 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 int main( int argc, char *argv[] ) {
 
 //     aligned_buffer<int> xxx(1024);
-    
-
+    char *xargv[9] = {"xxx", "-t", "C:/2012_robert_454/RAxML_bestTree.cora_Sanger_reference_alignment.tre", "-s", "C:/2012_robert_454/cora_Sanger_reference_alignment.phy",
+		"-q", "C:/2012_robert_454/cluster_52_72_cora_inversa_squamiformis_DIC_148_149.fas", "-j", "2" };
+	argv = (char**) xargv;
+	argc = 9;
     
     namespace igo = ivy_mike::getopt;
 

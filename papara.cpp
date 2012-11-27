@@ -226,6 +226,11 @@ add_log_sink::~add_log_sink() {
     ls_buf.remove_sink(s_);
 }
 
+
+std::string papara::get_version_string() {
+	return std::string( "2.3" );
+}
+
 template<typename seq_tag>
 queries<seq_tag>::queries( const std::string &opt_qs_name ) {
 
@@ -442,7 +447,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
 {
 
     //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
-    lout << "papara_nt instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
+    lout << "references container instantiated as: " << ivy_mike::demangle(typeid(*this).name()) << "\n";
 
 
 
@@ -1008,6 +1013,7 @@ void driver<pvec_t,seq_tag>::calc_scores(size_t n_threads, const my_references& 
     //
     ivy_mike::timer t1;
     ivy_mike::thread_group tg;
+	lout << "papara_core version " << papara::get_version_string() << std::endl;
     lout << "start scoring, using " << n_threads <<  " threads" << std::endl;
 
     typedef worker<seq_tag> worker_t;
