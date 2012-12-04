@@ -215,14 +215,16 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 }
 
 
+void print_commandline( std::ostream &os, char **argv, int argc ) {
+
+	std::stringstream ss;
+	std::copy( argv, argv + argc, std::ostream_iterator<char *>( os, " " ) );
+	os << std::endl;
+}
+
 
 int main( int argc, char *argv[] ) {
 
-//     aligned_buffer<int> xxx(1024);
-    char *xargv[9] = {"xxx", "-t", "C:/2012_robert_454/RAxML_bestTree.cora_Sanger_reference_alignment.tre", "-s", "C:/2012_robert_454/cora_Sanger_reference_alignment.phy",
-		"-q", "C:/2012_robert_454/cluster_52_72_cora_inversa_squamiformis_DIC_148_149.fas", "-j", "2" };
-	argv = (char**) xargv;
-	argc = 9;
     
     namespace igo = ivy_mike::getopt;
 
@@ -357,7 +359,8 @@ int main( int argc, char *argv[] ) {
     
     papara::add_log_tee papara_log_file( logs );
 
-    
+    papara::lout << "papara called as:\n";
+    print_commandline( papara::lout, argv, argc ); 
 
     const bool ref_gaps = !opt_no_ref_gaps;
 
