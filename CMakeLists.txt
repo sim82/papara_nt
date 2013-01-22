@@ -17,7 +17,10 @@ endif()
 
 # this is a hack: only add subdirectories if IVYMIKE_INCLUDE is not already set.
 # IVYMIKE_INCLUDE is abused as a flag indicating that papara should be build in 'library-only' mode...
-add_subdirectory(ivy_mike)
+
+if( NOT PAPARA_NO_IVYMIKE )
+  add_subdirectory(ivy_mike)
+endif()
 # add_subdirectory(genassign_blast)
 # ENDIF()
 
@@ -88,3 +91,4 @@ if( USE_CPP11 )
   target_link_libraries(dump_anc_probs ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
 endif()
 
+install_targets( /bin papara )

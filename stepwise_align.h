@@ -790,7 +790,7 @@ public:
         size_t block_start_outer = a_start_idx;
         //ptr_block_outer.s_iter = s_.base();
         //ptr_block_outer.si_iter = si_.base();
-
+		//std::cerr << "sm_inc: " << &(*sm_inc_prof_.begin()) << std::endl;
 
 
         ticks ticks1 = getticks();
@@ -841,14 +841,16 @@ public:
 
                 //aiter a_aux_end_this = ptr_block.a_aux_prof_iter + W * block_width;
 
-                score_t * __restrict s_iter = s_.base();
-                score_t * __restrict si_iter = si_.base();
+                score_t * s_iter = s_.base();
+                score_t * si_iter = si_.base();
 //                score_t * __restrict a_aux_prof_iter = &(*(a_aux_start + block_start * W));
 //                score_t * __restrict a_aux_prof_end = &(*(a_aux_start + block_end * W));
-                score_t * __restrict sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_start * W));
-                score_t * __restrict sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_end * W));
+                score_t * sm_inc_iter = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_start * W));
+                score_t * sm_inc_end = &(*(sm_inc_prof_.begin() + (*it_b) * av_size_all + block_end * W));
 
-                _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
+			
+
+               // _mm_prefetch( (const char *)sm_inc_iter, _MM_HINT_T0 );
 
 
                 vec_t last_sdiag = vu::load( &(*block_sdiag_it));

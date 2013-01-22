@@ -1073,7 +1073,7 @@ bool file_exists(const char *filename)
 } // end anonymous namespace for inline util functions (move to impl file!)
 
 
-
+std::string get_version_string();
 } // end of namespace papara
 
 #endif
