@@ -1740,10 +1740,10 @@ struct scoring_results {
 
 
 
-class scoring_worker {
+class ScoringWorker {
 public:
 
-    scoring_worker( const queries &qs, const references &refs, scoring_results *res, size_t rank, size_t num_workers )
+    ScoringWorker( const queries &qs, const references &refs, scoring_results *res, size_t rank, size_t num_workers )
     : qs_(qs),
       refs_(refs),
       res_(res),
@@ -1931,12 +1931,12 @@ int main( int argc, char *argv[] ) {
 
     scoring_results res( qs.size() );
 
-    scoring_worker w0(qs, refs, &res, 0, opt_num_threads );
+    ScoringWorker w0(qs, refs, &res, 0, opt_num_threads );
 
     ivy_mike::thread_group tg;
     for( int i = 1; i < opt_num_threads; ++i ) {
         std::cout << "starting additional thread: " << i << "\n";
-        tg.create_thread(scoring_worker(qs, refs, &res, i, opt_num_threads ));
+        tg.create_thread(ScoringWorker(qs, refs, &res, i, opt_num_threads ));
     }
 
     w0();

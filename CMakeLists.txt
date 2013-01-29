@@ -17,7 +17,7 @@ endif()
 
 # this is a hack: only add subdirectories if IVYMIKE_INCLUDE is not already set.
 # IVYMIKE_INCLUDE is abused as a flag indicating that papara should be build in 'library-only' mode...
-add_subdirectory(ivy_mike)
+#add_subdirectory(ivy_mike)
 # add_subdirectory(genassign_blast)
 # ENDIF()
 
