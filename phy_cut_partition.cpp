@@ -56,7 +56,8 @@ int main( int argc, char *argv[] ) {
     std::ostream &os = std::cout;
     
     size_t name_width = lp.max_name_len() + 1;
-    
+   
+    os << lp.size() << " " << col_max - col_min << "\n"; 
     for( int i = 0, size = lp.size(); i < size; ++i ) {
         std::string name = lp.name_at(i);
         

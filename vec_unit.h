@@ -422,12 +422,26 @@ struct vector_unit<int, 4> {
         return _mm_max_epi32( a, b );
 #else      
 	//#warning "probably untested code!"
-		assert(0);
         const vec_t ma = _mm_cmpgt_epi32( a, b );
-        return _mm_or_si128( _mm_and_si128( ma, a ), _mm_andnot_si128( ma, b ) );
+        const vec_t ret = _mm_or_si128( _mm_and_si128( ma, a ), _mm_andnot_si128( ma, b ) );
+#if 0
+	println( a );
+	println( b );
+	println( ret );
+
+	assert(0);
+#endif
+	return ret;
 #endif
     }
-    
+   
+    static inline void println( const vec_t & v ) {
+
+        T tmp[W];
+        _mm_storeu_si128( (vec_t*)tmp, v );
+        printf( "%d %d %d %d\n", tmp[0], tmp[1], tmp[2], tmp[3] );
+    }
+ 
     static inline const vec_t abs_diff( const vec_t &a, const vec_t &b ) {
         // i don't really like this function, as ideally this would just be abs(sub(a,b)), 
         // but there doesn't seem to be a fast way to implement abs on pre SSSSSSE3.
