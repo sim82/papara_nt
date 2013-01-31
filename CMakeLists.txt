@@ -69,12 +69,10 @@ add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
 add_executable(fasta_random_sample2 fasta_random_sample2.cpp  ${ALL_HEADERS})
 add_executable(fasta_to_phy fasta_to_phy.cpp  ${ALL_HEADERS})
 add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
-add_executable(phy_megamerge phy_megamerge.cpp  ${ALL_HEADERS})
 
 
 target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
 target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
-target_link_libraries(phy_megamerge ivymike ${SYSDEP_LIBS} )
 
 
 add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
@@ -85,6 +83,10 @@ if( USE_CPP11 )
   add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp ${ALL_HEADERS} )
   add_executable(propara propara.cpp pvec.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
   add_executable(dump_anc_probs dump_anc_probs.cpp raxml_interface.cpp tree_similarity.cpp )
+
+  add_executable(phy_megamerge phy_megamerge.cpp  ${ALL_HEADERS})
+  target_link_libraries(phy_megamerge ivymike ${SYSDEP_LIBS} )
+
 
   target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
   target_link_libraries(propara papara_core ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
