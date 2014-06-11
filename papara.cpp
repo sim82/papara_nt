@@ -228,7 +228,7 @@ add_log_sink::~add_log_sink() {
 
 
 std::string papara::get_version_string() {
-	return std::string( "2.3" );
+    return std::string( "2.4" );
 }
 
 template<typename seq_tag>

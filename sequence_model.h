@@ -92,6 +92,7 @@ public:
             return 'T';
         case 'N':
         case '?':
+        case '.':
             return '-';
         default:
             return c;
@@ -189,6 +190,7 @@ public:
             return 'T';
         case 'N':
         case '?':
+        case '.':
             return '-';
         default:
             return c;
