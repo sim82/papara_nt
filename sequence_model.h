@@ -56,7 +56,11 @@ inline size_t popcount( unsigned int v ) {
 
 namespace sequence_model {
 
-
+class illegal_character : public std::runtime_error {
+public:
+    illegal_character( const char *msg, int c ) : runtime_error(msg), c_(c) {}
+    int c_;
+};
 
 class tag_dna;
 class tag_dna4;
@@ -106,8 +110,8 @@ public:
         assert( idx >= 0 );
 
         if( size_t(idx) >= inverse_meaning.size() ) {
-            std::cerr << "illegal character: " << int(c) << "\n";
-            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+            //std::cerr << "illegal character: " << int(c) << "\n";
+            throw illegal_character( "illegal character in DNA/RNA sequence", int(c));
         }
 
         return pars_state_t(idx);
@@ -121,8 +125,7 @@ public:
         assert( idx >= 0 );
 
         if( size_t(idx) >= inverse_meaning.size() ) {
-            std::cerr << "illegal character: " << int(c) << "\n";
-            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+            throw illegal_character( "illegal character in DNA/RNA sequence", int(c));
         }
 
         return uint8_t(idx); // safe because of the check above
@@ -212,8 +215,7 @@ public:
         assert( idx >= 0 );
 
         if( size_t(idx) >= inverse_meaning.size() ) {
-            std::cerr << "illegal character: " << int(c) << "\n";
-            throw std::runtime_error( "illegal character in DNA/RNA sequence");
+            throw illegal_character( "illegal character in DNA/RNA sequence", int(c));
         }
 
         return uint8_t(idx); // safe because of the check above
@@ -288,8 +290,7 @@ public:
         assert( idx >= 0 );
 
         if( size_t(idx) >= inverse_meaning.size() ) {
-            std::cerr << "illegal character: " << int(c) << "\n";
-            throw std::runtime_error( "illegal character in protein sequence");
+            throw illegal_character( "illegal character in DNA/RNA sequence", int(c));
         }
 
         return uint8_t(idx);

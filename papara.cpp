@@ -539,7 +539,15 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
 
 
                 for( size_t j = 0, e = seq.size(); j != e; ++j ) {
-                    unmasked[j] |= !seq_model::pstate_is_gap( seq_model::s2p(seq[j]));
+                    try {
+                        unmasked[j] |= !seq_model::pstate_is_gap( seq_model::s2p(seq[j]));
+
+                    } catch( sequence_model::illegal_character x ) {
+                        std::cerr << "illegal character in file '" << opt_alignment_name << "'" << std::endl;
+                        std::cerr << "row: " << i + 1 << " (name: " << m_ref_names.back() << ")" << std::endl;
+                        std::cerr << "col: " << j + 1 << " (char: '" << seq[j] << "')" << std::endl;
+                        abort();
+                    }
                 }
 
                 // erase it from the name to lnode* map, so that it can be used to ideantify tree-taxa without corresponding entries in the alignment
