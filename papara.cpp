@@ -228,7 +228,7 @@ add_log_sink::~add_log_sink() {
 
 
 std::string papara::get_version_string() {
-    return std::string( "2.4" );
+    return std::string( "2.5" );
 }
 
 template<typename seq_tag>
@@ -443,7 +443,7 @@ void queries<seq_tag>::normalize_name(std::string& str) {
 //////////////////////////////////////////////////////////////
 
 template<typename pvec_t, typename seq_tag>
-references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* opt_alignment_name, queries<seq_tag>* qs) : m_ln_pool(new ln_pool( std::auto_ptr<node_data_factory>(new my_fact<my_adata>) )), spg_(pvec_pgap::pgap_model, &pm_)
+references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* opt_alignment_name, queries<seq_tag>* qs) : m_ln_pool(new ln_pool( std::unique_ptr<node_data_factory>(new my_fact<my_adata>) )), spg_(pvec_pgap::pgap_model, &pm_)
 {
 
     //std::cerr << "papara_nt instantiated as: " << typeid(*this).name() << "\n";
@@ -468,7 +468,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
     
     n = towards_tree( n );
     
-    tree_ = sptr::shared_ptr<im_tree_parser::lnode>(n->get_smart_ptr());
+    tree_ = std::shared_ptr<im_tree_parser::lnode>(n->get_smart_ptr());
     
     //
     // create map from tip names to tip nodes
@@ -482,9 +482,9 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
 
 
 
-    std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
+    std::map<std::string, std::shared_ptr<lnode> > name_to_lnode;
 
-    for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+    for( std::vector< std::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
 //             std::cout << (*it)->m_data->tipName << "\n";
         name_to_lnode[(*it)->m_data->tipName] = *it;
     }
@@ -502,7 +502,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
 
         for( unsigned int i = 0; i < ref_ma.names.size(); i++ ) {
 
-            std::map< std::string, sptr::shared_ptr<lnode> >::iterator it = name_to_lnode.find(ref_ma.names[i]);
+            std::map< std::string, std::shared_ptr<lnode> >::iterator it = name_to_lnode.find(ref_ma.names[i]);
 
             // process sequences from the ref_ma depending on, if they are contained in the tree.
             // if they are, they are 'swapped' into m_ref_seqs
@@ -513,7 +513,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
             if( it != name_to_lnode.end() ) {
 
 
-                sptr::shared_ptr< lnode > ln = it->second;
+                std::shared_ptr< lnode > ln = it->second;
                 //      adata *ad = ln->m_data.get();
 
                 assert( ivy_mike::isa<my_adata>(ln->m_data.get()) ); //typeid(*ln->m_data.get()) == typeid(my_adata ) );
@@ -561,7 +561,7 @@ references<pvec_t,seq_tag>::references(const char* opt_tree_name, const char* op
         if( !name_to_lnode.empty() ) {
             std::cerr << "error: there are " << name_to_lnode.size() << " taxa in the tree with no corresponding sequence in the reference alignment. names:\n";
 
-            for( std::map< std::string, sptr::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
+            for( std::map< std::string, std::shared_ptr< lnode > >::iterator it = name_to_lnode.begin(); it != name_to_lnode.end(); ++it ) {
                 std::cout << it->first << "\n";
             }
 
@@ -1654,6 +1654,64 @@ void output_alignment_fasta::push_back(const std::string& name, const out_seq& s
     os_ << "\n";
 }
 output_alignment::~output_alignment() {}
+
+double alignment_quality_very_strict(const std::vector<uint8_t> &s1, const std::vector<uint8_t> &s2, bool debug) {
+    size_t nident = 0;
+    size_t ngap1 = 0;
+    size_t ngap2 = 0;
+
+
+    for( std::vector< uint8_t >::const_iterator it1 = s1.begin(), it2 = s2.begin(); it1 != s1.end(); ++it1, ++it2 ) {
+
+        if( dna_parsimony_mapping::is_gap( *it1 ) ) {
+            ngap1++;
+        }
+
+        if( dna_parsimony_mapping::is_gap( *it2 ) ) {
+            ngap2++;
+        }
+        if( debug ) {
+            std::cerr << ngap1 << " " << ngap2 << " " << *it1 << " " << *it2 << "\n";
+        }
+
+        if( ngap1 == ngap2 ) {
+            nident++;
+        }
+    }
+
+    return double(nident) / s1.size();
+
+}
+
+double alignment_quality(const std::vector<uint8_t> &s1, const std::vector<uint8_t> &s2, bool debug) {
+    size_t nident = 0;
+
+    //         size_t nident_nongap = 0;
+    //         size_t n_nongap = 0;
+
+    for( std::vector< uint8_t >::const_iterator it1 = s1.begin(), it2 = s2.begin(); it1 != s1.end(); ++it1, ++it2 ) {
+        if( dna_parsimony_mapping::d2p(*it1) == dna_parsimony_mapping::d2p(*it2) ) {
+            nident++;
+        }
+    }
+
+    return double(nident) / s1.size();
+
+}
+
+std::string filename(const std::string &run_name, const char *type) {
+    std::stringstream ss;
+
+    ss << "papara_" << type << "." << run_name;
+
+    return ss.str();
+}
+
+bool file_exists(const char *filename)
+{
+    std::ifstream is(filename);
+    return is.good();
+}
 
 }
 

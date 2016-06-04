@@ -33,6 +33,7 @@
 #include <cstring>
 #include <algorithm>
 #include <numeric>
+#include <memory>
 
 #include <boost/io/ios_state.hpp>
 #include <boost/iostreams/tee.hpp>
@@ -56,7 +57,6 @@
 #include "ivymike/thread.h"
 #include "ivymike/stupid_ptr.h"
 #include "ivymike/algorithm.h"
-#include "ivymike/smart_ptr.h"
 #include "ivymike/multiple_alignment.h"
 
 
@@ -190,7 +190,7 @@ namespace {
 //
 //    return seq_model::normalize(c);
 //}
-
+#if 0
 char num_to_ascii( int n ) {
     if( n >= 0 && n <= 9 ) {
         return '0' + n;
@@ -200,7 +200,7 @@ char num_to_ascii( int n ) {
         throw std::runtime_error( "not a single digit (hex) number" );
     }
 }
-
+#endif
 
 }
 
@@ -500,15 +500,15 @@ public:
 //        }
 //    }
     
-    sptr::shared_ptr<im_tree_parser::lnode> tree() const {
+    std::shared_ptr<im_tree_parser::lnode> tree() const {
         return tree_;
     }
 private:
     std::vector <std::string > m_ref_names;
     std::vector <std::vector<uint8_t> > m_ref_seqs;
-    std::auto_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
+    std::unique_ptr<ivy_mike::tree_parser_ms::ln_pool> m_ln_pool;
     edge_collector<im_tree_parser::lnode> m_ec;
-    sptr::shared_ptr<im_tree_parser::lnode> tree_;
+    std::shared_ptr<im_tree_parser::lnode> tree_;
     
     
     std::vector<std::vector <int> > m_ref_pvecs;
@@ -894,6 +894,7 @@ void traverse_rec( lnode *n ) {
 
 
 
+#if 0
 uint8_t to_hex( double v ) {
     int vi = int(fabs(v));
 
@@ -906,7 +907,7 @@ uint8_t to_hex( double v ) {
     }
 
 }
-
+#endif
 
 template<typename state_t>
 void gapstream_to_alignment( const std::vector<uint8_t> &gaps, const std::vector<state_t> &raw, std::vector<state_t> *out, state_t gap_char, const ref_gap_collector &rgc ) {
@@ -1002,75 +1003,12 @@ void gapstream_to_alignment_no_ref_gaps( const std::vector<uint8_t> &gaps, const
 
     std::reverse( out->begin(), out->end() );
 }
-
-
-// void gapstream_to_position_map( const std::vector< uint8_t >& gaps, std::vector< int > &map) {
-//     align_utils::trace_to_position_map( gaps, &map );
-// 
-// }
-
-    
-double alignment_quality_very_strict ( const std::vector< uint8_t > &s1, const std::vector< uint8_t >& s2, bool debug = false ) {
-    size_t nident = 0;
-    size_t ngap1 = 0;
-    size_t ngap2 = 0;
-
-
-    for( std::vector< uint8_t >::const_iterator it1 = s1.begin(), it2 = s2.begin(); it1 != s1.end(); ++it1, ++it2 ) {
-
-        if( dna_parsimony_mapping::is_gap( *it1 ) ) {
-            ngap1++;
-        }
-
-        if( dna_parsimony_mapping::is_gap( *it2 ) ) {
-            ngap2++;
-        }
-        if( debug ) {
-            std::cerr << ngap1 << " " << ngap2 << " " << *it1 << " " << *it2 << "\n";
-        }
-
-        if( ngap1 == ngap2 ) {
-            nident++;
-        }
-    }
-
-    return double(nident) / s1.size();
-
-}
-double alignment_quality ( const std::vector< uint8_t > &s1, const std::vector< uint8_t >& s2, bool debug = false ) {
-    size_t nident = 0;
-
-//         size_t nident_nongap = 0;
-//         size_t n_nongap = 0;
-
-    for( std::vector< uint8_t >::const_iterator it1 = s1.begin(), it2 = s2.begin(); it1 != s1.end(); ++it1, ++it2 ) {
-        if( dna_parsimony_mapping::d2p(*it1) == dna_parsimony_mapping::d2p(*it2) ) {
-            nident++;
-        }
-    }
-
-    return double(nident) / s1.size();
-
 }
 
-
-
-std::string filename( const std::string &run_name, const char *type ) {
-    std::stringstream ss;
-    
-    ss << "papara_" << type << "." << run_name;
-    
-    return ss.str();
-}
-
-
-
-bool file_exists(const char *filename)
-{
-    std::ifstream is(filename);
-    return is.good();
-}
-} // end anonymous namespace for inline util functions (move to impl file!)
+double alignment_quality_very_strict ( const std::vector< uint8_t > &s1, const std::vector< uint8_t >& s2, bool debug = false );
+double alignment_quality ( const std::vector< uint8_t > &s1, const std::vector< uint8_t >& s2, bool debug = false );
+std::string filename( const std::string &run_name, const char *type );
+bool file_exists(const char *filename);
 
 
 std::string get_version_string();

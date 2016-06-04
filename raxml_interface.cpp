@@ -377,7 +377,7 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 	visit_lnode(tree, tc );
 
 
-	std::map<std::string, sptr::shared_ptr<lnode> > tip_map;
+	std::map<std::string, std::shared_ptr<lnode> > tip_map;
 
 	for( std::vector<lnode *>::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
 		tip_map.insert( std::make_pair( (*it)->m_data->tipName, (*it)->get_smart_ptr().lock() ) );
@@ -472,10 +472,10 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 
 		std::string name = (*it)->m_data->tipName;
 
-		std::map<std::string, sptr::shared_ptr<lnode> >::iterator op = tip_map.find( name );
+		std::map<std::string, std::shared_ptr<lnode> >::iterator op = tip_map.find( name );
 
 		assert( op != tip_map.end() && "could not find tip from new tree in old tree");
-//		sptr::shared_ptr<adata> old_adata( op->second->m_data );
+//		std::shared_ptr<adata> old_adata( op->second->m_data );
 
 		lnode *old_node = op->second.get();
 
@@ -496,7 +496,7 @@ lnode *optimize_branch_lengths2( ivy_mike::tree_parser_ms::lnode *tree, const st
 		old_node->backLen = new_node->backLen;
 
 		new_node->back = 0;
-		//sptr::shared_ptr<lnode> old_node =
+		//std::shared_ptr<lnode> old_node =
 	}
 
 	perf_timer.add_int();

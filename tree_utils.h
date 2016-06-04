@@ -304,7 +304,7 @@ void visit_lnode_postorder( typename visitor::lnode *n, visitor &v, bool go_back
     
 };
 
-template <class LNODE, class CONT = std::vector<sptr::shared_ptr<LNODE> > >
+template <class LNODE, class CONT = std::vector<std::shared_ptr<LNODE> > >
 struct tip_collector {
     typedef LNODE lnode;
     typedef CONT container;

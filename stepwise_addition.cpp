@@ -907,7 +907,7 @@ class step_add {
 	const static int score_gap_extend = -1;
     const static bool align_global = false;
 
-    sptr::shared_ptr<ln_pool> m_ln_pool;
+    std::shared_ptr<ln_pool> m_ln_pool;
     //string m_seq_file_name;
     vector<string> m_qs_names;
     vector<vector<uint8_t> > m_qs_seqs;
@@ -1350,7 +1350,7 @@ class step_add {
 
 
 public:
-    step_add( sptr::shared_ptr<ln_pool> ln_pool, size_t num_ali_threads, size_t num_nv_threads )
+    step_add( std::shared_ptr<ln_pool> ln_pool, size_t num_ali_threads, size_t num_nv_threads )
     : m_ln_pool( ln_pool ),
     m_pw_scoring_matrix(3,0),
     m_seq_arrays(true),
@@ -2151,7 +2151,7 @@ public:
 
         visit_lnode(m_tree_root, tc );
 
-        for( vector< sptr::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        for( vector< std::shared_ptr< ivy_mike::tree_parser_ms::lnode > >::const_iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
             my_adata *adata = (*it)->m_data->get_as<my_adata>();
 
             assert( msa.find( adata->tipName ) == msa.end() );
@@ -2273,7 +2273,7 @@ int main3( int argc, char **argv ) {
 
 
 	std::map<std::string, std::vector<uint8_t> >out_msa1;
-	sptr::shared_ptr<ln_pool> pool(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
+	std::shared_ptr<ln_pool> pool(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
 
 	//lnode *last_tree;
 	{
@@ -2343,7 +2343,7 @@ int main( int argc, char **argv ) {
 
 
     std::map<std::string, std::vector<uint8_t> >out_msa1;
-    sptr::shared_ptr<ln_pool> pool(new ln_pool(ln_pool::fact_ptr_type(new my_fact()) ));
+    std::shared_ptr<ln_pool> pool(new ln_pool(ln_pool::fact_ptr_type(new my_fact()) ));
 
     lnode *last_tree;
     {

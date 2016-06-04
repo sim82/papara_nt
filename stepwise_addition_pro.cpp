@@ -2324,7 +2324,7 @@ int main( int argc, char *argv[] ) {
 
 
     std::map<std::string, std::vector<uint8_t> >out_msa1;
-//    sptr::shared_ptr<ln_pool> pool;//(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
+//    std::shared_ptr<ln_pool> pool;//(new ln_pool(std::auto_ptr<node_data_factory>(new my_fact()) ));
 
     ln_pool pool( ln_pool::fact_ptr_type(new my_fact<my_adata>));
 

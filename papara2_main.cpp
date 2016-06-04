@@ -201,7 +201,7 @@ void run_papara( const std::string &qs_name, const std::string &alignment_name, 
 
 
 
-    std::auto_ptr<papara::output_alignment> oa;
+    std::unique_ptr<papara::output_alignment> oa;
     if( write_fasta ) {
         oa.reset( new papara::output_alignment_fasta( score_file.c_str() ));
     } else {
@@ -287,7 +287,7 @@ int main( int argc, char *argv[] ) {
     }
     
     // optional accelration by blast hits/partition file
-    std::auto_ptr<partassign::part_assignment> part_assignment;
+    std::unique_ptr<partassign::part_assignment> part_assignment;
     
     std::pair<size_t,size_t> fixed_qs_bounds(-1,-1);
     

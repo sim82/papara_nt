@@ -673,7 +673,6 @@ public:
 
     template<typename biter, typename oiter>
     inline void align( biter b_start, biter b_end, const score_t match_score_sc, const score_t match_cgap_sc, const score_t gap_open_sc, const score_t gap_extend_sc, oiter out_start, size_t a_start_idx = -1, size_t a_end_idx = -1 ) {
-        typedef typename ivy_mike::aligned_buffer<score_t>::iterator aiter;
         
 //         aiter a_start, a_end, a_aux_start;
 //         
@@ -1457,7 +1456,7 @@ score_t align_global_pvec( std::vector<uint8_t> &a, std::vector<uint8_t> &a_aux,
     return max_score;
 }
 
-
+#if 0
 float align_freeshift( const ivy_mike::scoring_matrix &sm, std::vector<uint8_t> &a, std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
 
  
@@ -1678,9 +1677,10 @@ float align_freeshift( const ivy_mike::scoring_matrix &sm, std::vector<uint8_t> 
     return max_score;
 }
 
+#endif
 
 
-float align_freeshift_score( const ivy_mike::scoring_matrix &sm, const std::vector<uint8_t> &a, const std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
+inline float align_freeshift_score( const ivy_mike::scoring_matrix &sm, const std::vector<uint8_t> &a, const std::vector<uint8_t> &b, float gap_open, float gap_extend, bool traceback = true ) {
 
  
     typedef float score_t;

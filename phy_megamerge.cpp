@@ -27,6 +27,7 @@
 #include <string>
 #include <set>
 #include <map>
+#include <iterator>
 
 #include "ivymike/large_phylip.h"
 

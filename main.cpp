@@ -900,9 +900,9 @@ public:
 
         visit_lnode( n, tc );
 
-        std::map<std::string, sptr::shared_ptr<lnode> > name_to_lnode;
+        std::map<std::string, std::shared_ptr<lnode> > name_to_lnode;
 
-        for( std::vector< sptr::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
+        for( std::vector< std::shared_ptr<lnode> >::iterator it = tc.m_nodes.begin(); it != tc.m_nodes.end(); ++it ) {
 //             std::cout << (*it)->m_data->tipName << "\n";
             name_to_lnode[(*it)->m_data->tipName] = *it;
         }
@@ -919,14 +919,14 @@ public:
 
             for( unsigned int i = 0; i < ref_ma.names.size(); i++ ) {
 
-                std::map< std::string, sptr::shared_ptr<lnode> >::iterator it = name_to_lnode.find(ref_ma.names[i]);
+                std::map< std::string, std::shared_ptr<lnode> >::iterator it = name_to_lnode.find(ref_ma.names[i]);
 
                 // process sequences fomr the ref_ma depending on, if they are contained in the tree.
                 // if they are, they are 'swapped' into m_ref_seqs
                 // if they are not, into m_qs_seqs. (gaps in the QS are removed later)
                 
                 if( it != name_to_lnode.end() ) {
-                    sptr::shared_ptr< lnode > ln = it->second;
+                    std::shared_ptr< lnode > ln = it->second;
                     //      adata *ad = ln->m_data.get();
 
                     assert( ivy_mike::isa<my_adata>(ln->m_data.get()) ); //typeid(*ln->m_data.get()) == typeid(my_adata ) );

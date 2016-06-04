@@ -1352,7 +1352,7 @@ class references {
 public:
     typedef sequence_model::model<sequence_model::tag_dna4> seq_model;
     
-    references( sptr::shared_ptr<ln_pool> pool, const std::string &tree_name, const std::string &ali_name )
+    references( std::shared_ptr<ln_pool> pool, const std::string &tree_name, const std::string &ali_name )
     : pool_(pool), tree_name_(tree_name), ali_name_(ali_name)
     {}
 
@@ -1618,7 +1618,7 @@ private:
 //         return false;
 //     }
     
-    sptr::shared_ptr<ln_pool> pool_;
+    std::shared_ptr<ln_pool> pool_;
 
     const std::string tree_name_;
     const std::string ali_name_;
@@ -1909,7 +1909,7 @@ int main( int argc, char *argv[] ) {
     papara::add_log_tee log_file(logs);
     
     
-    sptr::shared_ptr<ln_pool> pool(new ln_pool(ln_pool::fact_ptr_type(new my_fact)));
+    std::shared_ptr<ln_pool> pool(new ln_pool(ln_pool::fact_ptr_type(new my_fact)));
     queries qs;
     if(qs_name != 0){
         qs.load_fasta(qs_name);

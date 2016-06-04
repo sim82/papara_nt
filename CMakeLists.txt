@@ -5,11 +5,6 @@ set( CMAKE_NO_VERBOSE yes )
 
 add_subdirectory(ublasJama-1.0.2.3)
 
-if( NOT DEFINED USE_CPP11 )
-  set( USE_CPP11 no CACHE BOOL "use c++11 compiler" FORCE )
-endif()
-# add_subdirectory(genassign_blast)
-
 
 # FIXME: the hack does not work, because IVYMIKE_INCLUDE can be cached...
 # IF( NOT IVYMIKE_INCLUDE )
@@ -63,6 +58,7 @@ ENDIF(WIN32)
 
 
 ADD_LIBRARY( papara_core STATIC papara.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp sequence_model.cpp align_utils.cpp blast_partassign.cpp )
+set_property(TARGET papara_core PROPERTY CXX_STANDARD 11)
 
 # add_executable(papara_nt main.cpp pvec.cpp pars_align_seq.cpp pars_align_gapp_seq.cpp parsimony.cpp ${ALL_HEADERS})
 add_executable(papara papara2_main.cpp  ${ALL_HEADERS})
@@ -72,25 +68,29 @@ add_executable(phy_to_fasta phy_to_fasta.cpp  ${ALL_HEADERS})
 
 
 target_link_libraries(papara papara_core ivymike ublas_jama ${SYSDEP_LIBS} )
+set_property(TARGET papara PROPERTY CXX_STANDARD 11)
+
 target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
+set_property(TARGET phy_to_fasta PROPERTY CXX_STANDARD 11)
 
 
 add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
 target_link_libraries(phy_cut_partition papara_core ublas_jama ivymike ${SYSDEP_LIBS} )
+set_property(TARGET phy_cut_partition PROPERTY CXX_STANDARD 11)
 
+#add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp ${ALL_HEADERS} )
+#add_executable(propara propara.cpp pvec.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
+#add_executable(dump_anc_probs dump_anc_probs.cpp raxml_interface.cpp tree_similarity.cpp )
 
-if( USE_CPP11 ) 
-  add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp ${ALL_HEADERS} )
-  add_executable(propara propara.cpp pvec.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
-  add_executable(dump_anc_probs dump_anc_probs.cpp raxml_interface.cpp tree_similarity.cpp )
+add_executable(phy_megamerge phy_megamerge.cpp  ${ALL_HEADERS})
+target_link_libraries(phy_megamerge ivymike ${SYSDEP_LIBS} )
+set_property(TARGET phy_megamerge PROPERTY CXX_STANDARD 11)
 
-  add_executable(phy_megamerge phy_megamerge.cpp  ${ALL_HEADERS})
-  target_link_libraries(phy_megamerge ivymike ${SYSDEP_LIBS} )
-
-
-  target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
-  target_link_libraries(propara papara_core ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
-  target_link_libraries(dump_anc_probs ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
-endif()
+#target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
+#set_property(TARGET stepwise_addition_pro PROPERTY CXX_STANDARD 11)
+#target_link_libraries(propara papara_core ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
+#set_property(TARGET propara PROPERTY CXX_STANDARD 11)
+#target_link_libraries(dump_anc_probs ivymike ublas_jama ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation)
+#set_property(TARGET dump_anc_probs PROPERTY CXX_STANDARD 11)
 
 install_targets( /bin papara )
