@@ -21,6 +21,7 @@
 #include <iostream>
 #include <iterator>
 #include <iomanip>
+#include <algorithm>
 #include "ivymike/fasta.h"
 
 

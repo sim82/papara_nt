@@ -73,18 +73,22 @@ set_property(TARGET papara PROPERTY CXX_STANDARD 11)
 target_link_libraries(phy_to_fasta ivymike ${SYSDEP_LIBS} )
 set_property(TARGET phy_to_fasta PROPERTY CXX_STANDARD 11)
 
+if(NOT WIN32)
+# these two seem to imply a lib dependency to boost_date_time. NOPE, won't build that...
+	add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
+	target_link_libraries(phy_cut_partition papara_core ublas_jama ivymike ${SYSDEP_LIBS} )
+	set_property(TARGET phy_cut_partition PROPERTY CXX_STANDARD 11)
 
-add_executable(phy_cut_partition phy_cut_partition.cpp ${ALL_HEADERS})
-target_link_libraries(phy_cut_partition papara_core ublas_jama ivymike ${SYSDEP_LIBS} )
-set_property(TARGET phy_cut_partition PROPERTY CXX_STANDARD 11)
+	add_executable(phy_megamerge phy_megamerge.cpp  ${ALL_HEADERS})
+	target_link_libraries(phy_megamerge ivymike ${SYSDEP_LIBS} )
+	set_property(TARGET phy_megamerge PROPERTY CXX_STANDARD 11)
+endif()
 
 #add_executable(stepwise_addition_pro stepwise_addition_pro.cpp pvec.cpp pairwise_seq_distance.cpp tree_similarity.cpp parsimony.cpp raxml_interface.cpp sequence_model.cpp ${ALL_HEADERS} )
 #add_executable(propara propara.cpp pvec.cpp raxml_interface.cpp tree_similarity.cpp parsimony.cpp )
 #add_executable(dump_anc_probs dump_anc_probs.cpp raxml_interface.cpp tree_similarity.cpp )
 
-add_executable(phy_megamerge phy_megamerge.cpp  ${ALL_HEADERS})
-target_link_libraries(phy_megamerge ivymike ${SYSDEP_LIBS} )
-set_property(TARGET phy_megamerge PROPERTY CXX_STANDARD 11)
+
 
 #target_link_libraries(stepwise_addition_pro ivymike ${BOOST_LIBS} ${SYSDEP_LIBS} PocoFoundation ublas_jama)
 #set_property(TARGET stepwise_addition_pro PROPERTY CXX_STANDARD 11)

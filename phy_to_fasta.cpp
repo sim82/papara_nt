@@ -1,5 +1,6 @@
 #include <iostream>
 #include <algorithm>
+#include <iterator>
 #include "ivymike/fasta.h"
 #include "ivymike/multiple_alignment.h"
 #include "ivymike/algorithm.h"
