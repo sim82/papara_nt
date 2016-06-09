@@ -1715,22 +1715,23 @@ bool file_exists(const char *filename)
 
 }
 
+namespace papara
+{
+    // explicit template instantiations of the queries/references classes for the different supported data types and gap models,
+    // i.e., controlled combinatorial detonation happens here...
+    template class queries<tag_dna>;
+    template class queries<tag_aa>;
 
-// explicit template instantiations of the queries/references classes for the different supported data types and gap models,
-// i.e., controlled combinatorial detonation happens here...
-template class queries<tag_dna>;
-template class queries<tag_aa>;
+    template class references<pvec_pgap,tag_dna>;
+    template class references<pvec_cgap,tag_dna>;
 
-template class references<pvec_pgap,tag_dna>;
-template class references<pvec_cgap,tag_dna>;
-
-template class references<pvec_cgap,tag_aa>;
-template class references<pvec_pgap,tag_aa>;
+    template class references<pvec_cgap,tag_aa>;
+    template class references<pvec_pgap,tag_aa>;
 
 
-template class driver<pvec_pgap,tag_dna>;
-template class driver<pvec_cgap,tag_dna>;
+    template class driver<pvec_pgap,tag_dna>;
+    template class driver<pvec_cgap,tag_dna>;
 
-template class driver<pvec_cgap,tag_aa>;
-template class driver<pvec_pgap,tag_aa>;
-
+    template class driver<pvec_cgap,tag_aa>;
+    template class driver<pvec_pgap,tag_aa>;
+}
